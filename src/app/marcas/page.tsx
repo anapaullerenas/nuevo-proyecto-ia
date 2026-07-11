@@ -38,6 +38,9 @@ export default async function MarcasPage() {
                     <dd>{brand.creative_goal || "Sin objetivo"}</dd>
                   </div>
                 </dl>
+                <Link href={`/marcas/${brand.id}/editar`} className="inline-action">
+                  Editar memoria
+                </Link>
               </article>
             ))}
           </div>

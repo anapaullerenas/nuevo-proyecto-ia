@@ -1,6 +1,6 @@
 import { Brain, Clapperboard, ImageUp } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
-import { getAiStatus, getWorkspace } from "@/lib/workspace";
+import { getWorkspace } from "@/lib/workspace";
 
 const sections = [
   "Score ganador",
@@ -16,8 +16,6 @@ const sections = [
 export default async function AnalisisCreativosPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
-
-  const ai = getAiStatus();
 
   return (
     <AppFrame active="/analisis-creativos" brand={workspace.activeBrand} credits={workspace.walletBalance}>
@@ -49,11 +47,7 @@ export default async function AnalisisCreativosPage() {
                   <span key={section}>{section}</span>
                 ))}
               </div>
-              <p className={ai.openai || ai.anthropic ? "status-ok" : "status-warn"}>
-                {ai.openai || ai.anthropic
-                  ? "Modelo configurado para implementar el analisis."
-                  : "Falta OPENAI_API_KEY o ANTHROPIC_API_KEY para analizar."}
-              </p>
+              <p className="status-warn">El motor de analisis se activara cuando conectemos el servicio de IA.</p>
             </div>
           </div>
         </div>

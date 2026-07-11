@@ -43,6 +43,12 @@ export default async function OnboardingPage() {
             analisis creativos y generacion de estaticos. No hay datos
             precargados: todo empieza con lo que guardes aqui.
           </p>
+          <div className="onboarding-links">
+            <Link href="/" className="secondary-action">Cancelar y volver</Link>
+            <a className="secondary-action" href="/brand-template.txt" download>
+              Descargar plantilla
+            </a>
+          </div>
         </div>
         <BrandOnboardingForm />
       </section>

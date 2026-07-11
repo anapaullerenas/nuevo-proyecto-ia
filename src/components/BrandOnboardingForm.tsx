@@ -4,8 +4,15 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import type { WorkspaceBrand } from "@/lib/workspace";
 
-export function BrandOnboardingForm() {
+export function BrandOnboardingForm({
+  initialBrand,
+  submitLabel = "Guardar marca madre",
+}: {
+  initialBrand?: WorkspaceBrand;
+  submitLabel?: string;
+}) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -25,7 +32,7 @@ export function BrandOnboardingForm() {
       return;
     }
 
-    const { error } = await supabase.from("brands").insert({
+    const payload = {
       owner_id: userData.user.id,
       name: String(formData.get("name") || ""),
       website: String(formData.get("website") || ""),
@@ -35,7 +42,11 @@ export function BrandOnboardingForm() {
       voice: String(formData.get("voice") || ""),
       content_owner: String(formData.get("content_owner") || "owner"),
       creative_goal: String(formData.get("creative_goal") || ""),
-    });
+    };
+
+    const { error } = initialBrand
+      ? await supabase.from("brands").update(payload).eq("id", initialBrand.id)
+      : await supabase.from("brands").insert(payload);
 
     if (error) {
       setIsLoading(false);
@@ -56,19 +67,29 @@ export function BrandOnboardingForm() {
       <div className="form-grid">
         <label>
           Nombre de marca
-          <input name="name" placeholder="Ej. marca de skincare, agencia, tienda..." required />
+          <input
+            name="name"
+            defaultValue={initialBrand?.name || ""}
+            placeholder="Ej. marca de skincare, agencia, tienda..."
+            required
+          />
         </label>
         <label>
           Sitio o Instagram
-          <input name="website" placeholder="https:// o @usuario" />
+          <input name="website" defaultValue={initialBrand?.website || ""} placeholder="https:// o @usuario" />
         </label>
         <label>
           Categoria
-          <input name="category" placeholder="Belleza, moda, cursos, ecommerce..." required />
+          <input
+            name="category"
+            defaultValue={initialBrand?.category || ""}
+            placeholder="Belleza, moda, cursos, ecommerce..."
+            required
+          />
         </label>
         <label>
           Quien crea el contenido
-          <select name="content_owner" defaultValue="owner">
+          <select name="content_owner" defaultValue={initialBrand?.content_owner || "owner"}>
             <option value="owner">La persona/duena lo crea</option>
             <option value="team">Tiene equipo interno</option>
             <option value="agency">Lo delega a agencia/freelancer</option>
@@ -79,26 +100,51 @@ export function BrandOnboardingForm() {
 
       <label>
         Audiencia
-        <textarea name="audience" placeholder="A quien le vende, que desea, que objeciones tiene..." required />
+        <textarea
+          name="audience"
+          defaultValue={initialBrand?.audience || ""}
+          placeholder="A quien le vende, que desea, que objeciones tiene..."
+          required
+        />
       </label>
       <label>
         Oferta principal
-        <textarea name="offer" placeholder="Producto, promesa, precio, bonus, garantia, mecanismo..." required />
+        <textarea
+          name="offer"
+          defaultValue={initialBrand?.offer || ""}
+          placeholder="Producto, promesa, precio, bonus, garantia, mecanismo..."
+          required
+        />
       </label>
       <label>
         Voz de marca
-        <textarea name="voice" placeholder="Como habla, que palabras usa, que nunca diria..." required />
+        <textarea
+          name="voice"
+          defaultValue={initialBrand?.voice || ""}
+          placeholder="Como habla, que palabras usa, que nunca diria..."
+          required
+        />
       </label>
       <label>
         Objetivo creativo inicial
-        <textarea name="creative_goal" placeholder="Ej. encontrar ganadores para Meta, crear estaticos, analizar videos..." />
+        <textarea
+          name="creative_goal"
+          defaultValue={initialBrand?.creative_goal || ""}
+          placeholder="Ej. encontrar ganadores para Meta, crear estaticos, analizar videos..."
+        />
+      </label>
+
+      <label className="file-drop">
+        Archivo de contexto
+        <input name="brand_file" type="file" accept=".pdf,.doc,.docx,.txt,.csv,.xlsx" />
+        <span>Opcional: brief, manual de marca, respuestas de cliente o plantilla llena. La lectura automatica se conecta en la siguiente fase.</span>
       </label>
 
       {message && <p className="form-message">{message}</p>}
 
       <button className="primary-action" type="submit" disabled={isLoading}>
         {isLoading ? <Loader2 className="spin" size={17} /> : null}
-        Guardar marca madre <ArrowRight size={17} />
+        {submitLabel} <ArrowRight size={17} />
       </button>
     </form>
   );

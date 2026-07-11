@@ -1,12 +1,11 @@
 import { FileSpreadsheet, UploadCloud } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
-import { getAiStatus, getWorkspace } from "@/lib/workspace";
+import { MetaCalculator } from "@/components/MetaCalculator";
+import { getWorkspace } from "@/lib/workspace";
 
 export default async function AnalisisMetaPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
-
-  const ai = getAiStatus();
 
   return (
     <AppFrame active="/analisis-meta" brand={workspace.activeBrand} credits={workspace.walletBalance}>
@@ -22,10 +21,35 @@ export default async function AnalisisMetaPage() {
               </p>
             </div>
             <div className="status-card compact">
-              <b>Motor IA</b>
-              <span className={ai.openai || ai.anthropic ? "status-ok" : "status-warn"}>
-                {ai.openai || ai.anthropic ? "Configurado" : "Pendiente"}
-              </span>
+              <b>Estado</b>
+              <span className="status-warn">Subida en preparacion</span>
+            </div>
+          </div>
+
+          <div className="export-guide">
+            <span className="eyebrow">Antes de exportar desde Meta</span>
+            <h2>Marca estas columnas para que el analisis tenga sentido.</h2>
+            <div>
+              {[
+                "Nombre del anuncio",
+                "Campana y conjunto",
+                "Fecha o rango",
+                "Gasto",
+                "Impresiones",
+                "Alcance",
+                "Frecuencia",
+                "CTR",
+                "CPC",
+                "CPM",
+                "Resultados",
+                "Costo por resultado",
+                "Compras/leads/mensajes",
+                "ROAS o valor de conversion",
+              ].map((item) => (
+                <label key={item}>
+                  <input type="checkbox" defaultChecked /> {item}
+                </label>
+              ))}
             </div>
           </div>
 
@@ -58,6 +82,8 @@ export default async function AnalisisMetaPage() {
               <p>Que producir despues con base en datos reales.</p>
             </article>
           </div>
+
+          <MetaCalculator />
         </div>
       </section>
     </AppFrame>

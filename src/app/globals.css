@@ -61,7 +61,7 @@ svg {
   justify-content: space-between;
   gap: 20px;
   border-bottom: 1px solid rgba(99, 46, 89, .14);
-  background: rgba(255, 255, 255, .72);
+  background: rgba(255, 255, 255, .94);
 }
 
 .public-nav.compact {
@@ -450,7 +450,9 @@ svg {
 .app-topbar {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 20;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 10px 34px rgba(99, 46, 89, .08);
 }
 
 .app-topbar nav {
@@ -547,7 +549,7 @@ svg {
 }
 
 .module-grid article {
-  min-height: 230px;
+  min-height: 210px;
   padding: 18px;
   border-radius: 20px;
   display: flex;
@@ -557,9 +559,12 @@ svg {
 .module-grid button,
 .module-action {
   width: 100%;
+  min-height: 38px;
   margin-top: auto;
+  padding: 0 14px;
   color: #632e59;
   background: #f4ecc9;
+  font-size: 14px;
 }
 
 .work-page {
@@ -725,7 +730,9 @@ svg {
 
 .composer input,
 .brief-stack input,
-.brief-stack textarea {
+.brief-stack textarea,
+.brief-stack select,
+.calc-grid input {
   width: 100%;
   border: 1px solid rgba(99, 46, 89, .18);
   border-radius: 18px;
@@ -848,7 +855,8 @@ svg {
   gap: 8px;
 }
 
-.choice-row button {
+.choice-row button,
+.format-grid button {
   min-height: 48px;
   color: #632e59;
   background: rgba(255, 255, 255, .72);
@@ -858,6 +866,37 @@ svg {
 .choice-row button.selected {
   color: white;
   background: #632e59;
+}
+
+.format-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.format-grid button {
+  min-height: 42px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.file-drop {
+  border: 1px dashed rgba(99, 46, 89, .24);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(255, 246, 240, .5);
+}
+
+.file-drop input {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.file-drop span {
+  color: rgba(99, 46, 89, .68);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .preview-board {
@@ -889,11 +928,227 @@ svg {
   gap: 12px;
 }
 
+.inline-action {
+  min-height: 36px;
+  margin-top: 18px;
+  border-radius: 999px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #632e59;
+  background: #f4ecc9;
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .brand-list article,
 .account-cards div {
   min-height: 230px;
   border-radius: 22px;
   padding: 20px;
+}
+
+.export-guide,
+.calculator-card,
+.usage-table {
+  margin-bottom: 14px;
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 22px;
+  padding: 20px;
+  background: rgba(255, 255, 255, .62);
+}
+
+.export-guide h2,
+.calculator-card h2 {
+  margin: 8px 0;
+  color: #632e59;
+  font-family: var(--font-display), sans-serif;
+  font-size: clamp(26px, 3vw, 38px);
+  line-height: 1;
+}
+
+.export-guide > div {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.export-guide label {
+  min-height: 42px;
+  border-radius: 14px;
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #632e59;
+  background: rgba(255, 246, 240, .62);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.calculator-card {
+  margin-top: 14px;
+}
+
+.calc-grid {
+  margin: 16px 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.calc-grid label {
+  display: grid;
+  gap: 7px;
+  color: #632e59;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.calc-results {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.calc-results div {
+  border-radius: 16px;
+  padding: 14px;
+  background: #f4ecc9;
+}
+
+.calc-results span,
+.credit-packages span,
+.admin-metrics span {
+  display: block;
+  color: rgba(99, 46, 89, .72);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.calc-results b,
+.credit-packages b,
+.admin-metrics b {
+  display: block;
+  margin-top: 5px;
+  color: #632e59;
+  font-family: var(--font-display), sans-serif;
+  font-size: 28px;
+}
+
+.onboarding-links {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.credit-packages {
+  margin: 16px 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.credit-packages article {
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 20px;
+  padding: 18px;
+  background: rgba(255, 246, 240, .58);
+}
+
+.credit-packages p,
+.usage-table p {
+  color: rgba(99, 46, 89, .74);
+  line-height: 1.5;
+}
+
+.credit-packages small {
+  display: block;
+  min-height: 38px;
+  color: rgba(99, 46, 89, .62);
+}
+
+.credit-packages button {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 999px;
+  color: #632e59;
+  background: rgba(255, 255, 255, .7);
+  font-weight: 900;
+  opacity: .7;
+}
+
+.admin-page {
+  min-height: 100vh;
+  background:
+    linear-gradient(120deg, rgba(215, 220, 240, .96), rgba(249, 239, 246, .9) 46%, rgba(255, 246, 240, .92)),
+    #eceffc;
+  color: #211426;
+}
+
+.admin-topbar {
+  min-height: 74px;
+  padding: 0 28px;
+  border-bottom: 1px solid rgba(99, 46, 89, .14);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, .94);
+}
+
+.admin-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 16px auto;
+  border: 1px solid rgba(99, 46, 89, .15);
+  border-radius: 28px;
+  padding: clamp(20px, 3vw, 34px);
+  background: rgba(255, 255, 255, .72);
+  box-shadow: 0 24px 70px rgba(99, 46, 89, .11);
+}
+
+.admin-metrics,
+.admin-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 18px 0;
+}
+
+.admin-metrics article,
+.admin-grid section {
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 20px;
+  padding: 18px;
+  background: rgba(255, 246, 240, .48);
+}
+
+.admin-metrics svg {
+  color: #4f62a7;
+  margin-bottom: 16px;
+}
+
+.admin-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-grid h2 {
+  color: #632e59;
+  font-family: var(--font-display), sans-serif;
+}
+
+.admin-grid p,
+.admin-grid li {
+  color: rgba(99, 46, 89, .74);
+  line-height: 1.55;
 }
 
 .brand-list h2 {
@@ -962,7 +1217,14 @@ svg {
   .form-grid,
   .analysis-grid.three,
   .brand-list,
-  .account-cards {
+  .account-cards,
+  .format-grid,
+  .export-guide > div,
+  .calc-grid,
+  .calc-results,
+  .credit-packages,
+  .admin-metrics,
+  .admin-grid {
     grid-template-columns: 1fr;
   }
 

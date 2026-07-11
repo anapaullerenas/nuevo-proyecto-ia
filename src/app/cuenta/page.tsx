@@ -1,14 +1,12 @@
 import { redirect } from "next/navigation";
-import { CreditCard, KeyRound, LogOut, ShieldCheck } from "lucide-react";
+import { CreditCard, LogOut, ShieldCheck, WalletCards } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getAiStatus, getWorkspace } from "@/lib/workspace";
+import { getWorkspace } from "@/lib/workspace";
 
 export default async function CuentaPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
-
-  const ai = getAiStatus();
 
   async function signOut() {
     "use server";
@@ -30,18 +28,37 @@ export default async function CuentaPage() {
             <div>
               <CreditCard />
               <b>{workspace.walletBalance} creditos disponibles</b>
-              <p>El siguiente paso es definir paquetes, recargas y costo por accion.</p>
+              <p>Los creditos se gastaran en chats, analisis, imports y generacion de estaticos.</p>
             </div>
             <div>
               <ShieldCheck />
-              <b>Skool pendiente</b>
-              <p>La base ya tiene tabla para membresias. Falta conectar webhook o verificacion externa.</p>
+              <b>Acceso por membresia</b>
+              <p>La validacion con Skool se conectara al final para activar o bloquear acceso.</p>
             </div>
             <div>
-              <KeyRound />
-              <b>Llaves IA</b>
-              <p>OpenAI: {ai.openai ? "configurada" : "pendiente"} · Anthropic: {ai.anthropic ? "configurada" : "pendiente"}</p>
+              <WalletCards />
+              <b>Recargas</b>
+              <p>Mockup listo: paquetes de saldo para probar el esquema antes de conectar pagos.</p>
             </div>
+          </div>
+          <section className="credit-packages">
+            {[
+              { name: "Starter", price: "$10", credits: "1,000 creditos", note: "Para pruebas y uso ligero" },
+              { name: "Growth", price: "$25", credits: "2,800 creditos", note: "Mejor para crear y analizar semanalmente" },
+              { name: "Studio", price: "$50", credits: "6,000 creditos", note: "Para equipos o marcas con pauta activa" },
+            ].map((pack) => (
+              <article key={pack.name}>
+                <span>{pack.name}</span>
+                <b>{pack.price}</b>
+                <p>{pack.credits}</p>
+                <small>{pack.note}</small>
+                <button disabled>Agregar saldo</button>
+              </article>
+            ))}
+          </section>
+          <div className="usage-table">
+            <b>Referencia de consumo</b>
+            <p>Chat IA: 5-15 creditos · Analisis creativo: 80-150 · Import Meta: 120-250 · Estatico: 250-500.</p>
           </div>
           <form action={signOut}>
             <button className="soft-button">

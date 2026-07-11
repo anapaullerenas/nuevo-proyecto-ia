@@ -35,7 +35,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         password,
         options: {
           data: { full_name: fullName },
-          emailRedirectTo: `${window.location.origin}/onboarding`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
         },
       });
 
@@ -47,7 +47,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
       }
 
       if (!data.session) {
-        setMessage("Cuenta creada. Si Supabase pide confirmacion, revisa el correo antes de entrar.");
+        setMessage("Cuenta creada. Revisa tu correo para activar el acceso y volver al onboarding.");
         return;
       }
 
