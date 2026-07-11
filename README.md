@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Proyecto IA
 
-## Getting Started
+Plataforma unificada para:
 
-First, run the development server:
+- Chat IA como asistente de dirección creativa.
+- Análisis de datos exportados desde Meta.
+- Análisis profundo de creativos con psicología, receta, variantes y prompts.
+- Creación de estáticos con memoria de marca, referencias y edición por instrucciones.
+- Gestión de marcas, créditos, membresía Skool y panel de administración.
+
+## Ver en local
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev -- -p 3004
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abrir:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3004
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Vista admin:
 
-## Learn More
+```text
+http://localhost:3004/unified-flow?view=admin
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Variables pendientes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Copiar `.env.example` a `.env.local` cuando estén listos los accesos de Ana:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```text
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_APP_URL=
+SKOOL_WEBHOOK_SECRET=
+```
 
-## Deploy on Vercel
+## Estado
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Esta primera versión es una maqueta funcional en Next.js lista para subir a un proyecto nuevo de Vercel cuando la CLI tenga acceso al scope de Ana.
