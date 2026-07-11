@@ -724,7 +724,7 @@ svg {
 .composer {
   margin-top: 14px;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 10px;
 }
 
@@ -751,6 +751,131 @@ svg {
   padding: 0;
   color: white;
   background: #632e59;
+}
+
+.composer button.recording {
+  color: #632e59;
+  background: #ffd9f1;
+  box-shadow: 0 0 0 5px rgba(255, 217, 241, .45);
+}
+
+.suggestion-panel {
+  margin-bottom: 14px;
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255, 246, 240, .48);
+}
+
+.suggestion-panel > div {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.suggestion-panel button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: #632e59;
+  background: rgba(255, 255, 255, .72);
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 1px rgba(99, 46, 89, .12);
+}
+
+.suggestion-panel button:hover {
+  background: #f4ecc9;
+}
+
+.chat-thread {
+  min-height: 320px;
+  max-height: 520px;
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 24px;
+  padding: 18px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  overflow: auto;
+  background:
+    linear-gradient(135deg, rgba(255, 246, 240, .92), rgba(215, 220, 240, .48)),
+    rgba(255, 255, 255, .7);
+}
+
+.chat-bubble {
+  width: min(680px, 92%);
+  border-radius: 20px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, .82);
+  box-shadow: 0 12px 30px rgba(99, 46, 89, .08);
+}
+
+.chat-bubble.user {
+  justify-self: end;
+  color: white;
+  background: #632e59;
+}
+
+.chat-bubble.system {
+  justify-self: start;
+  background: rgba(255, 255, 255, .78);
+}
+
+.chat-bubble b {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.chat-bubble p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.chat-bubble.user p,
+.chat-bubble.user b {
+  color: white;
+}
+
+.chat-bubble.system p {
+  color: rgba(99, 46, 89, .74);
+}
+
+.chat-bubble audio {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.audio-chip {
+  margin-top: 12px;
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 18px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  background: rgba(255, 255, 255, .68);
+}
+
+.audio-chip audio {
+  width: 100%;
+}
+
+.audio-chip button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #632e59;
+  background: #f4ecc9;
 }
 
 .upload-zone {

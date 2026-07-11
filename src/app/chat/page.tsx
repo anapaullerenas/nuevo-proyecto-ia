@@ -1,5 +1,5 @@
-import { SendHorizontal, Sparkles } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
+import { ChatWorkspace } from "@/components/ChatWorkspace";
 import { getWorkspace } from "@/lib/workspace";
 
 export default async function ChatPage() {
@@ -29,24 +29,7 @@ export default async function ChatPage() {
             </p>
           </div>
 
-          <div className="chat-empty">
-            <Sparkles size={22} />
-            <b>Tu asistente creativo se esta preparando.</b>
-            <p>
-              Pronto podras pedir ideas de anuncios, angles, hooks, briefs y
-              diagnosticos usando la memoria de esta marca.
-            </p>
-          </div>
-
-          <form className="composer">
-            <input
-              disabled
-              placeholder="Ej. Que estatico producirias esta semana para esta marca?"
-            />
-            <button disabled aria-label="Enviar mensaje">
-              <SendHorizontal size={18} />
-            </button>
-          </form>
+          <ChatWorkspace brandName={workspace.activeBrand.name} />
         </section>
       </section>
     </AppFrame>
