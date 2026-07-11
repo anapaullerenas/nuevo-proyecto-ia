@@ -1,79 +1,23 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   Brain,
   ChartNoAxesCombined,
   ImagePlus,
   MessageCircle,
   UploadCloud,
-  WalletCards,
 } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-type Brand = {
-  id: string;
-  name: string;
-  category: string | null;
-  content_owner: string | null;
-  creative_goal: string | null;
-};
+import { AppFrame, SetupState } from "@/components/AppFrame";
+import { getWorkspace, labelContentOwner } from "@/lib/workspace";
 
 export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient();
+  const workspace = await getWorkspace();
 
-  if (!supabase) {
-    return (
-      <main className="setup-state">
-        <h1>Supabase aun no esta conectado</h1>
-        <p>Ya existe la interfaz. Falta terminar variables para guardar datos reales.</p>
-      </main>
-    );
-  }
+  if (!workspace) return <SetupState />;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const [{ data: brands }, { data: wallet }] = await Promise.all([
-    supabase.from("brands").select("id,name,category,content_owner,creative_goal").order("created_at", { ascending: false }),
-    supabase.from("credit_wallets").select("balance").eq("user_id", user.id).maybeSingle(),
-  ]);
-
-  const brandList = (brands || []) as Brand[];
-  const activeBrand = brandList[0];
-
-  if (!activeBrand) {
-    redirect("/onboarding");
-  }
+  const { activeBrand, walletBalance } = workspace;
 
   return (
-    <main className="app-page">
-      <header className="app-topbar">
-        <Link href="/dashboard" className="brand-lockup">
-          <span className="brand-mark" />
-          <span>
-            <b>Proyecto IA</b>
-            <small>{activeBrand.name}</small>
-          </span>
-        </Link>
-        <nav>
-          <a>Chat IA</a>
-          <a>Analisis Meta</a>
-          <a>Analisis creativos</a>
-          <a>Crear estaticos</a>
-          <a>Mis marcas</a>
-          <a>Cuenta</a>
-        </nav>
-        <div className="credit-pill">
-          <WalletCards size={16} />
-          <span>{wallet?.balance ?? 0} creditos</span>
-        </div>
-      </header>
-
+    <AppFrame active="/dashboard" brand={activeBrand} credits={walletBalance}>
       <section className="real-dashboard">
         <aside className="brand-context">
           <span className="eyebrow">Marca activa</span>
@@ -110,42 +54,31 @@ export default async function DashboardPage() {
               <MessageCircle />
               <b>Chat IA</b>
               <p>Preguntar que producir con el contexto de marca guardado.</p>
-              <button>Iniciar conversacion</button>
+              <Link href="/chat" className="module-action">Iniciar conversacion</Link>
             </article>
             <article>
               <ChartNoAxesCombined />
               <b>Analisis Meta</b>
               <p>Subir CSV/XLSX exportado desde Meta para detectar ganadores.</p>
-              <button>
+              <Link href="/analisis-meta" className="module-action">
                 <UploadCloud size={15} /> Subir export
-              </button>
+              </Link>
             </article>
             <article>
               <Brain />
               <b>Analisis creativos</b>
               <p>Subir video o imagen para obtener score, psicologia y variantes.</p>
-              <button>Nuevo analisis</button>
+              <Link href="/analisis-creativos" className="module-action">Nuevo analisis</Link>
             </article>
             <article>
               <ImagePlus />
               <b>Crear estaticos</b>
               <p>Crear desde cero o desde un creativo ganador cuando exista.</p>
-              <button>Crear primer estatico</button>
+              <Link href="/crear-estaticos" className="module-action">Crear primer estatico</Link>
             </article>
           </div>
         </section>
       </section>
-    </main>
+    </AppFrame>
   );
-}
-
-function labelContentOwner(value: string | null) {
-  const labels: Record<string, string> = {
-    owner: "La duena/persona crea contenido",
-    team: "Equipo interno",
-    agency: "Agencia o freelancer",
-    mixed: "Mixto",
-  };
-
-  return labels[value || ""] || "Pendiente";
 }
