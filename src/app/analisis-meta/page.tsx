@@ -1,6 +1,6 @@
+import Link from "next/link";
 import { FileSpreadsheet, UploadCloud } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
-import { MetaCalculator } from "@/components/MetaCalculator";
 import { getWorkspace } from "@/lib/workspace";
 
 export default async function AnalisisMetaPage() {
@@ -83,7 +83,14 @@ export default async function AnalisisMetaPage() {
             </article>
           </div>
 
-          <MetaCalculator />
+          <div className="meta-calculator-link">
+            <div>
+              <span className="eyebrow">Rentabilidad</span>
+              <b>Antes de escalar, calcula tu ROAS objetivo y CPA maximo.</b>
+              <p>La calculadora vive como herramienta independiente para simular costos, leads, ventas y gasto publicitario.</p>
+            </div>
+            <Link href="/calculadora-costos" className="soft-button">Abrir calculadora</Link>
+          </div>
         </div>
       </section>
     </AppFrame>

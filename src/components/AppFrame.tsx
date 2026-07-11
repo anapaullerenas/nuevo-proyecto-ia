@@ -6,6 +6,7 @@ import type { WorkspaceBrand } from "@/lib/workspace";
 const navItems = [
   { href: "/chat", label: "Chat IA" },
   { href: "/analisis-meta", label: "Analisis Meta" },
+  { href: "/calculadora-costos", label: "Calculadora" },
   { href: "/analisis-creativos", label: "Analisis creativos" },
   { href: "/crear-estaticos", label: "Crear estaticos" },
   { href: "/marcas", label: "Mis marcas" },

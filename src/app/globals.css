@@ -992,11 +992,88 @@ svg {
   margin-top: 14px;
 }
 
+.calculator-page {
+  display: grid;
+  gap: 14px;
+}
+
+.calculator-hero {
+  border: 1px solid rgba(99, 46, 89, .15);
+  border-radius: 28px;
+  padding: clamp(22px, 4vw, 38px);
+  background:
+    linear-gradient(135deg, rgba(255, 246, 240, .94), rgba(215, 220, 240, .58)),
+    rgba(255, 255, 255, .72);
+  box-shadow: 0 24px 70px rgba(99, 46, 89, .11);
+}
+
+.calculator-note {
+  max-width: 280px;
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(255, 255, 255, .62);
+}
+
+.calculator-note svg,
+.calculator-guidance svg {
+  color: #4f62a7;
+  margin-bottom: 10px;
+}
+
+.calculator-note b,
+.meta-calculator-link b,
+.scenario-table b {
+  display: block;
+  color: #632e59;
+  font-weight: 900;
+}
+
+.calculator-note p,
+.meta-calculator-link p {
+  margin: 8px 0 0;
+  color: rgba(99, 46, 89, .72);
+  line-height: 1.45;
+}
+
+.deep-calculator {
+  margin-top: 0;
+}
+
+.calculator-intro {
+  margin-bottom: 18px;
+}
+
+.calc-sections {
+  display: grid;
+  gap: 12px;
+}
+
+.calc-sections fieldset {
+  margin: 0;
+  border: 1px solid rgba(99, 46, 89, .12);
+  border-radius: 20px;
+  padding: 16px;
+  background: rgba(255, 246, 240, .36);
+}
+
+.calc-sections legend {
+  padding: 0 8px;
+  color: #632e59;
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .calc-grid {
   margin: 16px 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+.calc-grid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 580px;
 }
 
 .calc-grid label {
@@ -1008,6 +1085,7 @@ svg {
 }
 
 .calc-results {
+  margin-top: 14px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
@@ -1037,6 +1115,59 @@ svg {
   color: #632e59;
   font-family: var(--font-display), sans-serif;
   font-size: 28px;
+}
+
+.calc-results small {
+  display: block;
+  margin-top: 8px;
+  color: rgba(99, 46, 89, .62);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.scenario-table {
+  margin-top: 14px;
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 20px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 1.3fr repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
+  background: rgba(255, 255, 255, .62);
+}
+
+.scenario-table > div {
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 246, 240, .62);
+}
+
+.scenario-table span {
+  display: block;
+  color: rgba(99, 46, 89, .66);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.scenario-table strong {
+  display: block;
+  margin-top: 6px;
+  color: #632e59;
+  font-size: 18px;
+}
+
+.meta-calculator-link {
+  margin-top: 14px;
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 22px;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: rgba(255, 246, 240, .52);
 }
 
 .onboarding-links {
@@ -1224,8 +1355,13 @@ svg {
   .calc-results,
   .credit-packages,
   .admin-metrics,
-  .admin-grid {
+  .admin-grid,
+  .scenario-table {
     grid-template-columns: 1fr;
+  }
+
+  .meta-calculator-link {
+    display: grid;
   }
 
   .panel-heading.split {
