@@ -18,7 +18,22 @@ type VideoTranscript = {
   text: string;
   segments: Array<{ start: number; end: number; text: string }>;
   durationSeconds?: number;
+  textModel: "gpt-4o-transcribe" | "whisper-1";
+  timestampModel?: "whisper-1";
 };
+
+type OpenAIImageInput = {
+  type: "input_image";
+  image_url: string;
+  detail: "high";
+};
+
+type OpenAITextInput = {
+  type: "input_text";
+  text: string;
+};
+
+type OpenAIContentInput = OpenAIImageInput | OpenAITextInput;
 
 const MAX_TRANSCRIPTION_FILE_SIZE = 24 * 1024 * 1024;
 
@@ -78,9 +93,10 @@ export async function POST(request: NextRequest) {
   await supabase.from("creative_assets").update({ status: "processing" }).eq("id", asset.id).eq("owner_id", user.id);
 
   const reason = asset.asset_type === "video" ? "creative_analysis_video" : "creative_analysis_image";
+  const visionModel = process.env.OPENAI_VISION_MODEL || "gpt-4.1";
   let creditCharge;
   try {
-    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS[reason], reason, brandId: asset.brand_id, provider: "openai", model: "gpt-4.1-mini", inputTokens: asset.asset_type === "video" ? 8000 : 2500, outputTokens: 3500, costUsd: estimateCostUsd({ provider: "openai", model: "gpt-4.1-mini", inputTokens: asset.asset_type === "video" ? 8000 : 2500, outputTokens: 3500 }), route: "analysis" });
+    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS[reason], reason, brandId: asset.brand_id, provider: "openai", model: visionModel, inputTokens: asset.asset_type === "video" ? 8000 : 2500, outputTokens: 3500, costUsd: estimateCostUsd({ provider: "openai", model: visionModel, inputTokens: asset.asset_type === "video" ? 8000 : 2500, outputTokens: 3500 }), route: "analysis" });
   } catch (error) {
     await supabase.from("creative_assets").update({ status: "uploaded" }).eq("id", asset.id).eq("owner_id", user.id);
     return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) });
@@ -183,15 +199,54 @@ async function transcribeVideo(
     );
   }
 
+  const audioFile = new File([source], sourceName, { type: sourceType });
+  const [precisionResult, timestampResult] = await Promise.allSettled([
+    requestPrecisionTranscript(apiKey, audioFile),
+    requestTimestampedTranscript(apiKey, audioFile),
+  ]);
+
+  const precision = precisionResult.status === "fulfilled" ? precisionResult.value : null;
+  const timestamped = timestampResult.status === "fulfilled" ? timestampResult.value : null;
+
+  if (!precision?.text && !timestamped?.text) {
+    const precisionError = precisionResult.status === "rejected" ? precisionResult.reason : null;
+    const timestampError = timestampResult.status === "rejected" ? timestampResult.reason : null;
+    console.error("OpenAI transcription failed", { precisionError, timestampError });
+    throw new Error("OpenAI no pudo reconstruir el audio completo. No se generó un análisis parcial.");
+  }
+
+  const text = precision?.text || timestamped?.text || "";
+  const durationSeconds = timestamped?.duration || extractedAudioDurationSeconds || undefined;
+  const segments = timestamped?.segments?.length
+    ? timestamped.segments.map((segment) => ({
+        start: Number(segment.start) || 0,
+        end: Number(segment.end) || 0,
+        text: segment.text?.trim() || "",
+      })).filter((segment) => segment.text)
+    : text
+      ? [{ start: 0, end: durationSeconds || 0, text }]
+      : [];
+
+  return {
+    text: text.trim(),
+    segments,
+    durationSeconds,
+    textModel: precision?.text ? "gpt-4o-transcribe" : "whisper-1",
+    timestampModel: timestamped?.segments?.length ? "whisper-1" : undefined,
+  };
+}
+
+async function requestPrecisionTranscript(apiKey: string, audioFile: File) {
   const form = new FormData();
-  form.append(
-    "file",
-    new File([source], sourceName, { type: sourceType }),
-  );
-  form.append("model", "whisper-1");
+  form.append("file", audioFile);
+  form.append("model", "gpt-4o-transcribe");
   form.append("language", "es");
-  form.append("response_format", "verbose_json");
-  form.append("timestamp_granularities[]", "segment");
+  form.append("response_format", "json");
+  form.append("temperature", "0");
+  form.append(
+    "prompt",
+    "Transcribe literalmente el anuncio completo en español. Conserva nombres de marca, cifras, anglicismos, muletillas, repeticiones y llamadas a la acción; no resumas ni completes frases.",
+  );
 
   const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
@@ -200,24 +255,35 @@ async function transcribeVideo(
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`No pude escuchar el video: ${message.slice(0, 180)}`);
+    throw new Error(`gpt-4o-transcribe respondió ${response.status}: ${(await response.text()).slice(0, 180)}`);
   }
 
-  const json = (await response.json()) as {
+  return (await response.json()) as { text?: string };
+}
+
+async function requestTimestampedTranscript(apiKey: string, audioFile: File) {
+  const form = new FormData();
+  form.append("file", audioFile);
+  form.append("model", "whisper-1");
+  form.append("language", "es");
+  form.append("response_format", "verbose_json");
+  form.append("timestamp_granularities[]", "segment");
+  form.append("temperature", "0");
+
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+
+  if (!response.ok) {
+    throw new Error(`whisper-1 respondió ${response.status}: ${(await response.text()).slice(0, 180)}`);
+  }
+
+  return (await response.json()) as {
     text?: string;
     duration?: number;
     segments?: Array<{ start?: number; end?: number; text?: string }>;
-  };
-
-  return {
-    text: json.text?.trim() || "",
-    segments: (json.segments || []).map((segment) => ({
-      start: Number(segment.start) || 0,
-      end: Number(segment.end) || 0,
-      text: segment.text?.trim() || "",
-    })).filter((segment) => segment.text),
-    durationSeconds: Number(json.duration) || extractedAudioDurationSeconds || undefined,
   };
 }
 
@@ -257,14 +323,14 @@ async function getImageInputs(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
   asset: { asset_type: string; storage_path: string; mime_type: string | null },
   frames: Array<string | { image: string; timestamp: number }>,
-) {
+): Promise<OpenAIContentInput[]> {
   if (frames.length) {
     return frames.slice(0, 12).flatMap((frame, index) => {
       const image = typeof frame === "string" ? frame : frame.image;
       const timestamp = typeof frame === "string" ? null : frame.timestamp;
       return [
-        { type: "input_text", text: timestamp === null ? `Frame visual ${index + 1}` : `FRAME VERIFICADO ${index + 1} · ${formatSeconds(timestamp)}` },
-        { type: "input_image", image_url: image },
+        { type: "input_text" as const, text: timestamp === null ? `Frame visual ${index + 1}` : `FRAME VERIFICADO ${index + 1} · ${formatSeconds(timestamp)}` },
+        { type: "input_image" as const, image_url: image, detail: "high" as const },
       ];
     });
   }
@@ -280,6 +346,7 @@ async function getImageInputs(
     {
       type: "input_image",
       image_url: `data:${mimeType};base64,${buffer.toString("base64")}`,
+      detail: "high",
     },
   ];
 }
@@ -293,7 +360,7 @@ async function analyzeWithOpenAI({
 }: {
   brand: Record<string, unknown>;
   asset: { asset_type: string; file_name: string | null };
-  imageInputs: Array<{ type: string; image_url?: string; text?: string }>;
+  imageInputs: OpenAIContentInput[];
   transcript: VideoTranscript | null;
   previousRecipes: string[];
 }) {
@@ -377,7 +444,7 @@ ${transcript?.segments.length
 function attachVerifiedVideoEvidence(
   result: ReturnType<typeof normalizeAnalysisShape> & { score: number; verdict: string },
   transcript: VideoTranscript,
-  imageInputs: Array<{ type: string; image_url?: string; text?: string }>,
+  imageInputs: OpenAIContentInput[],
 ) {
   const structuralAnalysis = isRecord(result.structural_analysis) ? result.structural_analysis : {};
   const verifiedTranscription = transcript.segments.map((segment) => ({
@@ -398,6 +465,8 @@ function attachVerifiedVideoEvidence(
       transcript_segments: transcript.segments.length,
       duration_seconds: transcript.durationSeconds || null,
       visual_frames: imageInputs.filter((input) => input.type === "input_image").length,
+      transcription_model: transcript.textModel,
+      timestamp_model: transcript.timestampModel || null,
     },
   };
 }

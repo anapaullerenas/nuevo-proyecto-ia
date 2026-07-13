@@ -1,5 +1,6 @@
 export const PROVIDER_PRICING = {
   openai: {
+    "gpt-4.1": { inputPerMillion: 2, outputPerMillion: 8 },
     "gpt-4.1-mini": { inputPerMillion: 0.4, outputPerMillion: 1.6 },
     "gpt-image-2-medium": { perImage: 0.07 },
     "gpt-image-2-high": { perImage: 0.19 },
