@@ -20,6 +20,22 @@ Abrir:
 http://localhost:3004
 ```
 
+## Prueba de composición de texto
+
+La capa de texto usa fuentes TTF empaquetadas en `assets/fonts/` y convierte cada glifo a trazados SVG antes de rasterizar. No depende de fuentes del sistema ni de `fontconfig` en Vercel.
+
+Para ejecutar la prueba de humo reproducible:
+
+```bash
+npm run test:compose
+```
+
+La prueba crea un anuncio de 1080×1350 con acentos, texto secundario, CTA y disclaimer; verifica contraste real en cada región y escribe el resultado en `/tmp/compose-test.png`. También falla si reaparecen nodos tipográficos SVG o si se dibuja CTA/disclaimer sin contenido.
+
+La generación normal conserva la imagen terminada del modelo sin añadir tarjetas, barras, logos ni botones automáticos. El compositor por trazados se mantiene para usos explícitos y para su prueba de humo, pero no se activa automáticamente.
+
+Fuentes empaquetadas: DM Sans, Space Grotesk y Caveat. Sus licencias SIL Open Font License están junto a los TTF en `assets/fonts/`.
+
 Vista admin:
 
 ```text

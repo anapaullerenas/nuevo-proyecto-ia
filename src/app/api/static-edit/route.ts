@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import sharp from "sharp";
 import { getImageSize, StaticBrief } from "@/lib/ai/static-machine";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
@@ -46,12 +45,7 @@ export async function POST(request: NextRequest) {
     const nextFicha = replacement ? replaceFichaText(currentFicha, replacement.from, replacement.to) : currentFicha;
     const changedFichaText = JSON.stringify(nextFicha) !== JSON.stringify(currentFicha);
 
-    let output: Buffer;
-    if (replacement && changedFichaText && currentFicha.text_render_mode === "layered") {
-      output = await replaceExactTextBlock(sourceBuffer, nextFicha);
-    } else {
-      output = await editWithImageModel(sourceBuffer, source.format || "4:5 Feed", source.quality === "high" ? "high" : "medium", instruction);
-    }
+    const output = await editWithImageModel(sourceBuffer, source.format || "4:5 Feed", source.quality === "high" ? "high" : "medium", instruction);
 
     const storagePath = `${user.id}/${source.brand_id}/static-edit-${Date.now()}-${crypto.randomUUID()}.png`;
     const { error: uploadError } = await supabase.storage.from("creative-assets").upload(storagePath, output, { contentType: "image/png" });
@@ -133,36 +127,4 @@ function replaceFichaText(ficha: StaticBrief, from: string, to: string) {
   };
 }
 
-async function replaceExactTextBlock(source: Buffer, ficha: StaticBrief) {
-  const image = sharp(source);
-  const metadata = await image.metadata();
-  const width = metadata.width || 1080;
-  const height = metadata.height || 1350;
-  const margin = Math.round(width * .07);
-  const headlineSize = Math.round(width * .058);
-  const secondarySize = Math.round(width * .029);
-  const disclaimerSize = Math.round(width * .018);
-  const boxHeight = Math.round(height * (ficha.disclaimer ? .22 : .18));
-  const boxY = height - boxHeight - margin;
-  const palette = /^#[0-9a-f]{6}$/i.test(ficha.paleta[0] || "") ? ficha.paleta[0] : "#632E59";
-  const headline = textLines(ficha.texto_principal, 30, margin * 1.45, boxY + headlineSize * 1.18, headlineSize * 1.05);
-  const secondaryY = boxY + headlineSize * (headline.count > 1 ? 3.05 : 2.05);
-  const cta = escapeSvg(ficha.cta);
-  const ctaWidth = Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56));
-  const overlay = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><style>.copy{font-family:'Helvetica Neue',Arial,sans-serif;fill:#fff}.h{font-size:${headlineSize}px;font-weight:800}.s{font-size:${secondarySize}px;font-weight:600}.c{font-size:${secondarySize}px;font-weight:800;fill:${palette}}.l{font-size:${disclaimerSize}px;font-weight:500;fill:rgba(255,255,255,.86)}</style><rect x="${margin}" y="${boxY}" width="${width-margin*2}" height="${boxHeight}" rx="${Math.round(width*.025)}" fill="${palette}"/><text class="copy h">${headline.svg}</text><text x="${margin*1.45}" y="${secondaryY}" class="copy s">${escapeSvg(ficha.texto_secundario)}</text>${ficha.cta_usage === "button" ? `<rect x="${width-margin*1.45-ctaWidth}" y="${boxY+headlineSize*1.15}" width="${ctaWidth}" height="${secondarySize*1.75}" rx="${secondarySize*.88}" fill="#fff6f0"/>` : ""}${ficha.cta_usage !== "none" ? `<text x="${width-margin*1.45-ctaWidth/2}" y="${boxY+headlineSize*1.15+secondarySize*1.15}" text-anchor="middle" class="copy c">${cta}</text>` : ""}${ficha.disclaimer?`<text x="${margin*1.45}" y="${boxY+boxHeight-disclaimerSize*1.5}" class="copy l">${escapeSvg(ficha.disclaimer)}</text>`:""}</svg>`;
-  return image.composite([{ input: Buffer.from(overlay) }]).png().toBuffer();
-}
-
-function textLines(value: string, max: number, x: number, y: number, lineHeight: number) {
-  const words = escapeSvg(value).split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  for (const word of words) {
-    const current = lines.at(-1) || "";
-    if (!current || `${current} ${word}`.length > max) lines.push(word); else lines[lines.length - 1] = `${current} ${word}`;
-  }
-  const visible = lines.slice(0, 2);
-  return { count: visible.length, svg: visible.map((line, index) => `<tspan x="${x}" y="${y+index*lineHeight}">${line}</tspan>`).join("") };
-}
-
-function escapeSvg(value: string) { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[character] || character); }
 function escapeRegExp(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }

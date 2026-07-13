@@ -228,7 +228,7 @@ REGLAS DE COPY:
 - cta: máximo 4 palabras.
 - El logo NO es obligatorio: usa logo_usage "none" si el packaging ya muestra la marca o si añadirlo dañaría la composición; "subtle" por defecto y "prominent" sólo si la marca es el mensaje.
 - El CTA NO es obligatorio: usa cta_usage "none" en piezas editoriales o de descubrimiento sin una acción necesaria; "text" para una invitación discreta y "button" sólo cuando la conversión lo justifique.
-- Si texto_secundario + cta + disclaimer superan 8 palabras, o existe disclaimer, text_render_mode debe ser "layered". En otro caso puede ser "baked".
+- text_render_mode debe ser siempre "baked": la IA entrega el anuncio final terminado y el servidor no añade tarjetas, barras, botones ni texto encima.
 - Español natural con acentos.
 - Nada de placeholders, lorem ipsum, promesas falsas o texto genérico.
 - Respeta las reglas de categoría incluidas en el contexto. No apliques restricciones ni vocabulario de una industria a otra.
@@ -286,7 +286,7 @@ Una ficha menor a 85 NO pasa. Corrígela directamente hasta que sea producible.
 La art_direction debe poder entregarse a una fotógrafa sin pedir aclaraciones. Si usa sólo adjetivos vagos, reescríbela con acción, luz, cámara, superficie, props y color específicos.
 No inventes claims, cifras, testimonios ni propiedades. El texto visible debe seguir los límites del esquema.
 Corrige cualquier lenguaje de inseguridad corporal y claims absolutos antes de aprobar.
-Si hay disclaimer o más de 8 palabras entre texto secundario, CTA y disclaimer, usa text_render_mode "layered".
+Usa siempre text_render_mode "baked". La composición visual y todo el texto aprobado deben formar parte de una sola imagen final; nunca dependas de una tarjeta añadida después.
 Las referencias visuales aportan estructura y estilo, nunca categoría, identidad ni vocabulario ajenos. Los activos de producto, cuando existen, son fuente de verdad.
 Rechaza cualquier sustantivo, escenario, parte del cuerpo, producto o claim que no provenga de la marca activa.
 No fuerces logo ni botón. Aprueba su presencia sólo si mejora comprensión, reconocimiento o acción; nunca los uses como decoración automática.

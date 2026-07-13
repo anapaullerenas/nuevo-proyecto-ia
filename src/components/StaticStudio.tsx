@@ -125,7 +125,7 @@ export function StaticStudio({
   const [archetypeId, setArchetypeId] = useState("automatico");
   const [intent, setIntent] = useState("");
   const [proposals, setProposals] = useState(1);
-  const [quality, setQuality] = useState<"medium" | "high">("medium");
+  const [quality, setQuality] = useState<"medium" | "high">("high");
   const [brief, setBrief] = useState<StaticBrief | null>(null);
   const [creativeId, setCreativeId] = useState<string | null>(null);
   const [gallery, setGallery] = useState(initialGallery);
@@ -491,8 +491,8 @@ export function StaticStudio({
                   </fieldset>
                   <label>Calidad
                     <select value={quality} onChange={(event) => setQuality(event.target.value === "high" ? "high" : "medium")}>
+                      <option value="high">Alta · recomendada{unlimitedCredits ? " · incluida" : ""}</option>
                       <option value="medium">Estándar{unlimitedCredits ? " · incluida" : ""}</option>
-                      <option value="high">Alta{unlimitedCredits ? " · incluida" : ""}</option>
                     </select>
                   </label>
                 </div>
