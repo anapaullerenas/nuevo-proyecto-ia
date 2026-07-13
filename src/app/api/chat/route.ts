@@ -1,30 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { CHAT_STRATEGIST_PROMPT } from "@/lib/ai/prompts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type ChatInput = {
   messages?: Array<{ role: "user" | "assistant"; text: string }>;
   message?: string;
 };
-
-const CREATIVE_STRATEGIST_PROMPT = `
-Eres la mano derecha creativa de una emprendedora que quiere vender mas con anuncios.
-Actuas como una mezcla de estratega creativo senior, media buyer y copywriter de performance.
-
-Tu trabajo:
-- Usar la memoria de marca como contexto principal.
-- Dar respuestas accionables, concretas y priorizadas.
-- Ayudar a decidir que producir, que testear, que escalar y que corregir.
-- Explicar con claridad psicologica: deseo, objecion, mecanismo, prueba, oferta y friccion.
-- Si faltan datos, pide lo minimo indispensable y ofrece una recomendacion provisional.
-- No uses lenguaje tecnico innecesario ni menciones proveedores de IA.
-- Escribe en espanol natural para mujeres emprendedoras, directo y con criterio.
-
-Formato recomendado:
-1. Diagnostico rapido
-2. Recomendacion principal
-3. Ideas o variantes concretas
-4. Que haria primero
-`;
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
@@ -50,7 +31,7 @@ export async function POST(request: NextRequest) {
 
   const { data: brand } = await supabase
     .from("brands")
-    .select("name,website,category,audience,offer,voice,content_owner,creative_goal")
+    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal")
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -59,6 +40,33 @@ export async function POST(request: NextRequest) {
   if (!brand) {
     return NextResponse.json({ error: "Primero registra una marca para darle contexto a la IA." }, { status: 400 });
   }
+
+  const [{ data: economics }, { data: recipes }, { data: latestMeta }, { data: latestCreative }] = await Promise.all([
+    supabase.from("brand_economics").select("*").eq("brand_id", brand.id).eq("owner_id", user.id).maybeSingle(),
+    supabase
+      .from("brand_recipes")
+      .select("rule")
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(10),
+    supabase
+      .from("meta_imports")
+      .select("file_name,status,summary,created_at")
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("creative_analyses")
+      .select("score,verdict,analysis,created_at")
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   const brandContext = `
 MARCA ACTIVA
@@ -70,6 +78,42 @@ Oferta: ${brand.offer || "No especificada"}
 Voz de marca: ${brand.voice || "No especificada"}
 Quien crea contenido: ${brand.content_owner || "No especificado"}
 Objetivo creativo: ${brand.creative_goal || "No especificado"}
+
+NUMEROS DE RENTABILIDAD GUARDADOS
+${
+  economics
+    ? `Ticket: $${economics.ticket}
+CPA objetivo: $${economics.target_cpa}
+ROAS break even: ${economics.break_even_roas}x
+ROAS objetivo: ${economics.target_roas}x
+CPL/mensaje maximo: $${economics.max_cpl}`
+    : "La marca aun no ha guardado su calculadora de costos."
+}
+
+ULTIMO ANALISIS META
+${
+  latestMeta
+    ? `Archivo: ${latestMeta.file_name || "Sin nombre"}
+Estado: ${latestMeta.status}
+Resumen: ${JSON.stringify(latestMeta.summary || {}).slice(0, 900)}`
+    : "Aun no hay export de Meta analizado."
+}
+
+RECETAS GANADORAS ACUMULADAS
+${
+  recipes?.length
+    ? recipes.map((recipe, index) => `${index + 1}. ${recipe.rule}`).join("\n")
+    : "Aun no hay recetas ganadoras guardadas."
+}
+
+ULTIMO ANALISIS CREATIVO
+${
+  latestCreative
+    ? `Score: ${latestCreative.score}/100
+Etiqueta: ${latestCreative.verdict}
+Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | null)?.winning_reason || "").slice(0, 600)}`
+    : "Aun no hay analisis creativo guardado."
+}
 `;
 
   const history = (body.messages || [])
@@ -112,7 +156,7 @@ async function askAnthropic(
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
       max_tokens: 1400,
       temperature: 0.65,
-      system: `${CREATIVE_STRATEGIST_PROMPT}\n\n${brandContext}`,
+      system: `${CHAT_STRATEGIST_PROMPT}\n\n${brandContext}`,
       messages: [...history, { role: "user", content: userMessage }],
     }),
   });
@@ -151,7 +195,7 @@ async function askOpenAI(
       temperature: 0.65,
       max_tokens: 1400,
       messages: [
-        { role: "system", content: `${CREATIVE_STRATEGIST_PROMPT}\n\n${brandContext}` },
+        { role: "system", content: `${CHAT_STRATEGIST_PROMPT}\n\n${brandContext}` },
         ...history.map((message) => ({ role: message.role, content: message.content })),
         { role: "user", content: userMessage },
       ],

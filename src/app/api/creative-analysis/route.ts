@@ -1,64 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { CREATIVE_DISSECTION_PROMPT } from "@/lib/ai/prompts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type CreativeAnalysisInput = {
   assetId: string;
   frames?: string[];
 };
-
-const CREATIVE_ANALYSIS_PROMPT = `
-Eres una analista creativa senior especializada en anuncios de Meta, TikTok e Instagram.
-
-Vas a evaluar un creativo para una emprendedora que quiere vender mas. Tu diagnostico debe ser profundo, accionable y sin relleno.
-
-Evalua:
-1. Hook / capacidad de detener scroll.
-2. Claridad inmediata: que se vende, para quien y por que importa.
-3. Oferta: promesa, incentivo, friccion, urgencia.
-4. Psicologia: deseo, objecion, creencia que cambia, emocion que activa.
-5. Prueba: evidencia, demostracion, contexto real, confianza.
-6. Marca: coherencia, recordacion y credibilidad.
-7. Produccion: formato, composicion, texto, ritmo visual si aplica.
-8. Que mantener, que cambiar y que producir despues.
-
-Scoring:
-- Hook: 20
-- Claridad: 15
-- Oferta: 15
-- Prueba: 15
-- Psicologia: 15
-- Formato/plataforma: 10
-- Marca/confianza: 10
-
-Clasificacion:
-0-39 Debil
-40-59 Rescatable
-60-74 Potencial
-75-89 Ganador
-90-100 Escalable
-
-Devuelve SOLO JSON valido con esta forma:
-{
-  "score": number,
-  "verdict": "Debil" | "Rescatable" | "Potencial" | "Ganador" | "Escalable",
-  "summary": string,
-  "why_it_works": string[],
-  "diagnosis": {
-    "hook": {"level": "Bajo" | "Medio" | "Alto", "note": string},
-    "clarity": {"level": "Bajo" | "Medio" | "Alto", "note": string},
-    "offer": {"level": "Bajo" | "Medio" | "Alto", "note": string},
-    "psychology": {"level": "Bajo" | "Medio" | "Alto", "note": string},
-    "proof": {"level": "Bajo" | "Medio" | "Alto", "note": string},
-    "brand": {"level": "Bajo" | "Medio" | "Alto", "note": string}
-  },
-  "keep": string[],
-  "change": string[],
-  "produce_next": string[],
-  "variants": [
-    {"name": string, "angle": string, "hook": string, "execution": string}
-  ]
-}
-`;
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
@@ -94,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   const { data: brand } = await supabase
     .from("brands")
-    .select("name,website,category,audience,offer,voice,content_owner,creative_goal")
+    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal")
     .eq("id", asset.brand_id)
     .eq("owner_id", user.id)
     .maybeSingle();
@@ -112,10 +59,19 @@ export async function POST(request: NextRequest) {
       throw new Error("No pude leer imagenes o frames para analizar este creativo.");
     }
 
+    const { data: recipes } = await supabase
+      .from("brand_recipes")
+      .select("rule")
+      .eq("brand_id", asset.brand_id)
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(12);
+
     const result = await analyzeWithOpenAI({
       brand,
       asset,
       imageInputs,
+      previousRecipes: (recipes || []).map((recipe) => recipe.rule).filter(Boolean),
     });
 
     await supabase.from("creative_assets").update({ status: "analyzed" }).eq("id", asset.id).eq("owner_id", user.id);
@@ -135,6 +91,14 @@ export async function POST(request: NextRequest) {
 
     if (saveError) throw new Error(saveError.message);
 
+    await saveWinningRecipes({
+      supabase,
+      brandId: asset.brand_id,
+      ownerId: user.id,
+      analysisId: savedAnalysis.id,
+      rules: Array.isArray(result.winning_recipe) ? result.winning_recipe : [],
+    });
+
     return NextResponse.json({ analysis: savedAnalysis });
   } catch (error) {
     await supabase.from("creative_assets").update({ status: "failed" }).eq("id", asset.id).eq("owner_id", user.id);
@@ -151,7 +115,7 @@ async function getImageInputs(
   frames: string[],
 ) {
   if (frames.length) {
-    return frames.slice(0, 4).map((frame) => ({
+    return frames.slice(0, 8).map((frame) => ({
       type: "input_image",
       image_url: frame,
     }));
@@ -176,10 +140,12 @@ async function analyzeWithOpenAI({
   brand,
   asset,
   imageInputs,
+  previousRecipes,
 }: {
   brand: Record<string, string | null>;
   asset: { asset_type: string; file_name: string | null };
   imageInputs: Array<{ type: string; image_url: string }>;
+  previousRecipes: string[];
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("El analisis IA aun no esta activo.");
@@ -195,9 +161,13 @@ Voz: ${brand.voice || "No especificada"}
 Quien produce contenido: ${brand.content_owner || "No especificado"}
 Objetivo creativo: ${brand.creative_goal || "No especificado"}
 
+RECETAS GANADORAS PREVIAS DE ESTA MARCA
+${previousRecipes.length ? previousRecipes.map((recipe, index) => `${index + 1}. ${recipe}`).join("\n") : "Aun no hay recetas previas guardadas."}
+
 CREATIVO
 Tipo: ${asset.asset_type}
 Archivo: ${asset.file_name || "Sin nombre"}
+Frames recibidos: ${imageInputs.length}
 `;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -208,17 +178,20 @@ Archivo: ${asset.file_name || "Sin nombre"}
     },
     body: JSON.stringify({
       model: process.env.OPENAI_VISION_MODEL || "gpt-4.1",
-      temperature: 0.45,
-      max_output_tokens: 1800,
+      temperature: 0.32,
+      max_output_tokens: 6000,
       input: [
         {
           role: "system",
-          content: [{ type: "input_text", text: CREATIVE_ANALYSIS_PROMPT }],
+          content: [{ type: "input_text", text: CREATIVE_DISSECTION_PROMPT }],
         },
         {
           role: "user",
           content: [
-            { type: "input_text", text: `${brandContext}\nAnaliza este creativo con el formato JSON solicitado.` },
+            {
+              type: "input_text",
+              text: `${brandContext}\nAnaliza este creativo con el esquema JSON obligatorio. Si es video, trata los frames como momentos secuenciales del anuncio.`,
+            },
             ...imageInputs,
           ],
         },
@@ -236,9 +209,74 @@ Archivo: ${asset.file_name || "Sin nombre"}
   const json = parseJson(text);
 
   return {
-    ...json,
+    ...normalizeAnalysisShape(json),
     score: clampNumber(json.score, 0, 100),
     verdict: normalizeVerdict(json.verdict, json.score),
+  };
+}
+
+async function saveWinningRecipes({
+  supabase,
+  brandId,
+  ownerId,
+  analysisId,
+  rules,
+}: {
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
+  brandId: string;
+  ownerId: string;
+  analysisId: string;
+  rules: string[];
+}) {
+  const cleanRules = rules
+    .map((rule) => rule.trim())
+    .filter((rule, index, list) => rule.length > 8 && list.indexOf(rule) === index)
+    .slice(0, 8);
+
+  if (!cleanRules.length) return;
+
+  await supabase.from("brand_recipes").insert(
+    cleanRules.map((rule) => ({
+      brand_id: brandId,
+      owner_id: ownerId,
+      source_analysis_id: analysisId,
+      rule,
+    })),
+  );
+}
+
+function normalizeAnalysisShape(json: Record<string, unknown>) {
+  const score = clampNumber(json.score, 0, 100);
+  const verdict = normalizeVerdict(json.verdict, score);
+
+  return {
+    score,
+    verdict,
+    winning_reason:
+      typeof json.winning_reason === "string"
+        ? json.winning_reason
+        : typeof json.summary === "string"
+          ? json.summary
+          : "El creativo fue analizado por estructura, psicologia, claridad, oferta y potencial de produccion.",
+    signals: isRecord(json.signals)
+      ? json.signals
+      : {
+          scroll_stop: { level: "Medio", note: "Requiere revisar el primer impacto visual." },
+          clarity: { level: "Medio", note: "Requiere reforzar que se vende y para quien." },
+          offer: { level: "Medio", note: "Requiere hacer mas concreta la razon para actuar." },
+        },
+    structural_analysis: isRecord(json.structural_analysis) ? json.structural_analysis : {},
+    dashboard: isRecord(json.dashboard) ? json.dashboard : {},
+    psychological_analysis: isRecord(json.psychological_analysis) ? json.psychological_analysis : {},
+    persuasion_triggers: toArray(json.persuasion_triggers),
+    emotional_arc: toArray(json.emotional_arc),
+    winning_recipe: toStringArray(json.winning_recipe),
+    keep: toStringArray(json.keep),
+    test: toStringArray(json.test || json.change || json.produce_next),
+    original_script: typeof json.original_script === "string" ? json.original_script : "",
+    script_variants: toArray(json.script_variants || json.variants),
+    replication_plan: isRecord(json.replication_plan) ? json.replication_plan : {},
+    generation_prompts: toArray(json.generation_prompts),
   };
 }
 
@@ -274,6 +312,19 @@ function clampNumber(value: unknown, min: number, max: number) {
   const number = Number(value);
   if (Number.isNaN(number)) return min;
   return Math.max(min, Math.min(max, number));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toArray(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function toStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
 
 function normalizeVerdict(value: unknown, score: unknown) {

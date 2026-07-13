@@ -26,7 +26,7 @@ export default async function CalculadoraCostosPage() {
           </div>
         </div>
 
-        <MetaCalculator />
+        <MetaCalculator brandId={workspace.activeBrand.id} />
 
         <div className="analysis-grid three calculator-guidance">
           <article>

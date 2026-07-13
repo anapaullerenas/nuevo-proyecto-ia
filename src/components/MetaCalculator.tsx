@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Loader2, Save } from "lucide-react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-export function MetaCalculator() {
+export function MetaCalculator({ brandId }: { brandId: string }) {
   const [ticket, setTicket] = useState(97);
   const [productCost, setProductCost] = useState(22);
   const [shipping, setShipping] = useState(6);
@@ -13,6 +15,8 @@ export function MetaCalculator() {
   const [cpm, setCpm] = useState(12);
   const [ctr, setCtr] = useState(1.4);
   const [landingConversion, setLandingConversion] = useState(18);
+  const [saveState, setSaveState] = useState<"idle" | "loading" | "saved" | "error">("idle");
+  const [saveMessage, setSaveMessage] = useState("");
 
   const result = useMemo(() => {
     const variableCost = productCost + shipping + fees;
@@ -51,6 +55,81 @@ export function MetaCalculator() {
       projectedRoas,
     };
   }, [ticket, productCost, shipping, fees, targetNetMargin, leadCloseRate, dailyBudget, cpm, ctr, landingConversion]);
+
+  useEffect(() => {
+    async function loadSavedEconomics() {
+      const supabase = createSupabaseBrowserClient();
+      const { data } = await supabase.from("brand_economics").select("*").eq("brand_id", brandId).maybeSingle();
+
+      if (!data) return;
+
+      setTicket(Number(data.ticket) || 97);
+      setProductCost(Math.max(Number(data.ticket) - Number(data.contribution) - shipping - fees, 0) || productCost);
+      setTargetNetMargin(Number(data.target_net_margin) || targetNetMargin);
+
+      const assumptions = (data.assumptions || {}) as Record<string, number>;
+      if (typeof assumptions.productCost === "number") setProductCost(assumptions.productCost);
+      if (typeof assumptions.shipping === "number") setShipping(assumptions.shipping);
+      if (typeof assumptions.fees === "number") setFees(assumptions.fees);
+      if (typeof assumptions.leadCloseRate === "number") setLeadCloseRate(assumptions.leadCloseRate);
+      if (typeof assumptions.dailyBudget === "number") setDailyBudget(assumptions.dailyBudget);
+      if (typeof assumptions.cpm === "number") setCpm(assumptions.cpm);
+      if (typeof assumptions.ctr === "number") setCtr(assumptions.ctr);
+      if (typeof assumptions.landingConversion === "number") setLandingConversion(assumptions.landingConversion);
+    }
+
+    loadSavedEconomics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandId]);
+
+  async function saveEconomics() {
+    setSaveState("loading");
+    setSaveMessage("");
+
+    const supabase = createSupabaseBrowserClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setSaveState("error");
+      setSaveMessage("Vuelve a iniciar sesion para guardar la calculadora.");
+      return;
+    }
+
+    const { error } = await supabase.from("brand_economics").upsert({
+      brand_id: brandId,
+      owner_id: user.id,
+      ticket,
+      variable_cost: result.variableCost,
+      contribution: result.contribution,
+      contribution_margin: result.contributionMargin,
+      target_net_margin: targetNetMargin,
+      target_cpa: result.targetCpa,
+      break_even_roas: result.breakEvenRoas,
+      target_roas: result.targetRoas,
+      max_cpl: result.maxCpl,
+      assumptions: {
+        productCost,
+        shipping,
+        fees,
+        leadCloseRate,
+        dailyBudget,
+        cpm,
+        ctr,
+        landingConversion,
+      },
+    });
+
+    if (error) {
+      setSaveState("error");
+      setSaveMessage(error.message);
+      return;
+    }
+
+    setSaveState("saved");
+    setSaveMessage("Numeros guardados. El chat y los analisis podran usarlos como referencia.");
+  }
 
   return (
     <section className="calculator-card deep-calculator">
@@ -210,6 +289,14 @@ export function MetaCalculator() {
           <span>ROAS proyectado</span>
           <strong>{result.projectedRoas.toFixed(2)}x</strong>
         </div>
+      </div>
+
+      <div className="calculator-save">
+        <button type="button" onClick={saveEconomics} disabled={saveState === "loading"}>
+          {saveState === "loading" ? <Loader2 className="spin" size={16} /> : saveState === "saved" ? <CheckCircle2 size={16} /> : <Save size={16} />}
+          {saveState === "loading" ? "Guardando..." : "Guardar numeros de esta marca"}
+        </button>
+        {saveMessage && <span className={saveState}>{saveMessage}</span>}
       </div>
     </section>
   );
