@@ -13,10 +13,10 @@ export default async function CalculadoraCostosPage() {
         <div className="panel-heading split calculator-hero">
           <div>
             <span className="eyebrow">Calculadora de costos</span>
-            <h1>Decide cuánto puedes invertir sin adivinar.</h1>
+            <h1>Descubre cuánto puedes invertir sin adivinar.</h1>
             <p>
-              Una herramienta para entender break even, ROAS objetivo, CPA máximo,
-              CPL máximo y escenarios de pauta antes de escalar anuncios.
+              Elige cómo vendes y traduce tus números a una decisión sencilla:
+              cuánto puedes pagar y qué presupuesto necesita tu meta.
             </p>
           </div>
           <div className="calculator-note">
@@ -26,26 +26,26 @@ export default async function CalculadoraCostosPage() {
           </div>
         </div>
 
-        <MetaCalculator brandId={workspace.activeBrand.id} />
+        <MetaCalculator brandId={workspace.activeBrand.id} brandName={workspace.activeBrand.name} />
 
         <div className="analysis-grid three calculator-guidance">
           <article>
             <Target />
             <span>01</span>
-            <b>Break even</b>
-            <p>Tu ROAS mínimo para no perder dinero después de costos variables.</p>
+            <b>Primero, tu realidad</b>
+            <p>El precio, los costos y la forma en que realmente conviertes.</p>
           </article>
           <article>
             <Target />
             <span>02</span>
-            <b>CPA objetivo</b>
-            <p>El costo máximo por compra para conservar el margen deseado.</p>
+            <b>Después, tu límite</b>
+            <p>Cuánto puedes pagar por una compra, un mensaje o una clienta.</p>
           </article>
           <article>
             <Target />
             <span>03</span>
-            <b>CPL máximo</b>
-            <p>Cuánto pagar por lead o mensaje según tu tasa de cierre real.</p>
+            <b>Por último, tu plan</b>
+            <p>Qué presupuesto diario y mensual hace coherente tu meta.</p>
           </article>
         </div>
       </section>
