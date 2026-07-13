@@ -2,7 +2,7 @@
 
 import { ChangeEvent, CSSProperties, ReactNode, useState } from "react";
 import Image from "next/image";
-import { ArrowLeft, Brain, Check, Clipboard, Eye, FileText, FlaskConical, ImageUp, Library, Loader2, Lock, Plus, Rocket, Sparkles } from "lucide-react";
+import { ArrowLeft, Brain, Check, Clipboard, Eye, FileText, FlaskConical, ImageUp, Library, Loader2, Lock, Pencil, Plus, Rocket, Sparkles, Trash2, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type UploadItem = {
@@ -30,6 +30,7 @@ type CreativeAnalysisResult = {
 
 type CreativeHistoryItem = {
   id: string;
+  assetId?: string | null;
   name: string;
   assetType: "image" | "video";
   createdAt: string;
@@ -158,8 +159,12 @@ type CreativeDissection = {
 
 export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: string; initialHistory: CreativeHistoryItem[] }) {
   const [items, setItems] = useState<UploadItem[]>([]);
+  const [history, setHistory] = useState(initialHistory);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<CreativeHistoryItem | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [libraryMessage, setLibraryMessage] = useState("");
   const currentResult = items.find((item) => item.analysis);
   const activeItem = currentResult || (selectedHistory ? {
     id: selectedHistory.id,
@@ -174,6 +179,28 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
     setItems([]);
     setSelectedHistory(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function saveCreativeName(entry: CreativeHistoryItem) {
+    const name = draftName.trim();
+    if (name.length < 2) return;
+    const response = await fetch(`/api/creative-library/${entry.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
+    const data = await response.json();
+    if (!response.ok) return setLibraryMessage(data.error || "No se pudo cambiar el nombre.");
+    setHistory((current) => current.map((item) => item.id === entry.id ? { ...item, name: data.name } : item));
+    setSelectedHistory((current) => current?.id === entry.id ? { ...current, name: data.name } : current);
+    setRenamingId(null);
+    setLibraryMessage("Nombre actualizado.");
+  }
+
+  async function deleteCreative(entry: CreativeHistoryItem) {
+    if (!window.confirm(`¿Borrar “${cleanFileName(entry.name)}” y su análisis? Esta acción no se puede deshacer.`)) return;
+    const response = await fetch(`/api/creative-library/${entry.id}`, { method: "DELETE" });
+    const data = await response.json();
+    if (!response.ok) return setLibraryMessage(data.error || "No se pudo borrar el creativo.");
+    setHistory((current) => current.filter((item) => item.id !== entry.id));
+    if (selectedHistory?.id === entry.id) setSelectedHistory(null);
+    setLibraryMessage("Creativo eliminado de la biblioteca.");
   }
 
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
@@ -335,7 +362,7 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
 
         {activeItem.previewUrl && <CreativePreview type={activeItem.assetType} url={activeItem.previewUrl} name={activeItem.name} />}
 
-        <CreativeAnalysisCard result={activeItem.analysis} />
+        <CreativeAnalysisCard result={activeItem.analysis} assetType={activeItem.assetType || "video"} />
 
         <footer className="analysis-action-bar">
           <div>
@@ -394,24 +421,21 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
             <Library size={19} />
             <div><span className="eyebrow">Biblioteca</span><h2>Análisis anteriores</h2></div>
           </div>
-          <small>{initialHistory.length} guardados</small>
+          <small>{history.length} guardados</small>
         </header>
-        {initialHistory.length === 0 ? (
+        {history.length === 0 ? (
           <div className="library-empty"><Eye size={22} /><b>Aún no hay análisis</b><p>El primer resultado aparecerá aquí automáticamente.</p></div>
         ) : (
           <div className="creative-library-grid">
-            {initialHistory.map((entry) => (
-              <button key={entry.id} type="button" onClick={() => setSelectedHistory(entry)}>
-                <span className="library-score">{entry.result.score}</span>
-                <div>
-                  <b>{cleanFileName(entry.name)}</b>
-                  <small>{entry.assetType === "video" ? "Video" : "Imagen"} · {verdictFromScore(entry.result.score)}</small>
-                </div>
-                <time>{new Date(entry.createdAt).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}</time>
-              </button>
+            {history.map((entry) => (
+              <article className="creative-library-item" key={entry.id}>
+                {renamingId === entry.id ? <div className="creative-rename-row"><input autoFocus value={draftName} onChange={(event) => setDraftName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") saveCreativeName(entry); if (event.key === "Escape") setRenamingId(null); }} /><button type="button" onClick={() => saveCreativeName(entry)}><Check /></button><button type="button" onClick={() => setRenamingId(null)}><X /></button></div> : <button className="creative-library-open" type="button" onClick={() => setSelectedHistory(entry)}><span className="library-score">{entry.result.score}</span><div><b>{cleanFileName(entry.name)}</b><small>{entry.assetType === "video" ? "Video" : "Estático"} · {verdictFromScore(entry.result.score)}</small></div><time>{new Date(entry.createdAt).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}</time></button>}
+                <div className="creative-library-actions"><button type="button" aria-label="Editar nombre" title="Editar nombre" onClick={() => { setRenamingId(entry.id); setDraftName(cleanFileName(entry.name)); }}><Pencil /></button><button type="button" aria-label="Borrar creativo" title="Borrar creativo" onClick={() => deleteCreative(entry)}><Trash2 /></button></div>
+              </article>
             ))}
           </div>
         )}
+        {libraryMessage && <p className="library-message">{libraryMessage}</p>}
       </section>
     </div>
   );
@@ -426,8 +450,9 @@ function CreativePreview({ type, url, name }: { type?: "image" | "video"; url: s
   );
 }
 
-function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
+function CreativeAnalysisCard({ result, assetType }: { result: CreativeAnalysisResult; assetType: "image" | "video" }) {
   const analysis = normalizeClientAnalysis(result.analysis, result);
+  if (assetType === "image") return <StaticCreativeAnalysisCard result={result} analysis={analysis} />;
   const score = analysis.score ?? result.score;
   const verdict = verdictFromScore(score);
   const verdictMeta = verdictStyle(score);
@@ -646,6 +671,35 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
   );
 }
 
+function StaticCreativeAnalysisCard({ result, analysis }: { result: CreativeAnalysisResult; analysis: CreativeDissection }) {
+  const score = analysis.score ?? result.score;
+  const verdict = verdictFromScore(score);
+  const verdictMeta = verdictStyle(score);
+  const structure = analysis.structural_analysis;
+  const decision = score >= 80 ? "Usar y escalar" : score >= 60 ? "Probar con ajustes" : "Rediseñar antes de pautar";
+  return (
+    <section className="creative-result static-analysis-report">
+      <header className="static-analysis-hero">
+        <div className="static-score" style={{ "--score-color": verdictMeta.color } as CSSProperties}><b>{score}</b><span>/100</span></div>
+        <div><span className="eyebrow">Análisis de creativo estático</span><h3>{analysis.winning_reason || "Lectura visual completa del anuncio."}</h3><strong className={`verdict-badge ${verdictMeta.className}`}>{verdict}</strong></div>
+        <div className="static-decision"><span>Decisión recomendada</span><b>{decision}</b></div>
+      </header>
+      <div className="creative-signal-grid static-signal-grid"><SignalCard title="Impacto al detener scroll" signal={analysis.signals?.scroll_stop} /><SignalCard title="Mensaje en 2 segundos" signal={analysis.signals?.clarity} /><SignalCard title="Razón para actuar" signal={analysis.signals?.offer} /></div>
+      <section className="static-reading-board">
+        <article className="static-reading-main"><span>Lo que vende la pieza</span><h4>{analysis.core_diagnosis?.what_really_sells || "La idea visual principal"}</h4><p>{analysis.core_diagnosis?.evidence_note || analysis.core_diagnosis?.central_tension || "Lectura basada en composición, texto visible y producto."}</p></article>
+        <article><span>Qué conservar</span><CheckList items={analysis.keep || []} /></article>
+        <article><span>Qué corregir</span><ArrowList items={analysis.test || []} /></article>
+      </section>
+      <div className="static-analysis-grid">
+        <ReportPanel icon={<Eye size={18} />} title="Jerarquía visual"><Insight label="Formato" value={structure?.format} /><Insight label="Tipo de pieza" value={structure?.creative_type} /><Insight label="Contexto visual" value={structure?.visual_context} /><b className="panel-mini-title">Texto que se alcanza a leer</b><ChipRow items={structure?.visible_text || []} /></ReportPanel>
+        <ReportPanel icon={<Brain size={18} />} title="Lectura de compradora"><Insight label="Tensión" value={analysis.core_diagnosis?.central_tension} /><Insight label="Cambio de creencia" value={analysis.core_diagnosis?.belief_shift} /><Insight label="Mayor fuga" value={analysis.core_diagnosis?.biggest_leak} /></ReportPanel>
+        <ReportPanel icon={<Sparkles size={18} />} title="Receta reutilizable"><NumberedList items={analysis.winning_recipe || []} /></ReportPanel>
+        <ReportPanel icon={<Rocket size={18} />} title="Siguiente pieza"><Insight label="Brief" value={analysis.replication_plan?.production_brief} /><Insight label="Ángulo recomendado" value={analysis.replication_plan?.static_ad_angle} /><CheckList items={analysis.replication_plan?.do_not_change || []} /></ReportPanel>
+      </div>
+    </section>
+  );
+}
+
 function normalizeClientAnalysis(analysis: CreativeDissection, result: CreativeAnalysisResult): CreativeDissection {
   const score = analysis.score ?? result.score;
   const legacyVariants =
@@ -859,16 +913,20 @@ function EvidenceTimeline({ items }: { items: NonNullable<CreativeDissection["ev
           <time>{item.timestamp || `Momento ${index + 1}`}</time>
           <div>
             <blockquote>{item.spoken_or_visible || "Sin frase comprobable"}</blockquote>
-            {item.visual_action && <p><b>Qué ocurre</b>{item.visual_action}</p>}
+            {item.visual_action && <p><b>Qué ocurre</b>{cleanEvidenceText(item.visual_action)}</p>}
             {item.viewer_thought && <p><b>Qué piensa la espectadora</b>{item.viewer_thought}</p>}
             {item.psychological_mechanism && <p><b>Por qué funciona</b>{item.psychological_mechanism}</p>}
             {item.conversion_role && <p><b>Función en la venta</b>{item.conversion_role}</p>}
           </div>
-          <span className={`evidence-decision ${(item.decision || "").toLowerCase()}`}>{item.decision || "Revisar"}</span>
+          <span className={`evidence-decision ${(item.decision || "").toLowerCase()}`}>{item.decision === "Corregir" ? "Mejorar" : item.decision === "Probar" ? "Probar siguiente" : item.decision?.toLowerCase() === "revisar" ? "Evidencia parcial" : item.decision || "Evidencia visual"}</span>
         </article>
       ))}
     </div>
   );
+}
+
+function cleanEvidenceText(value: string) {
+  return value.replace(/^\s*\[?inferido\]?\s*[:—-]?\s*/i, "").trim();
 }
 
 function BeatSheet({ items }: { items: NonNullable<NonNullable<CreativeDissection["script_variants"]>[number]["beat_sheet"]> }) {
@@ -940,9 +998,9 @@ async function extractVideoFrames(file: File) {
       .filter((time, index, list) => Number.isFinite(time) && list.findIndex((candidate) => Math.abs(candidate - time) < 0.25) === index)
       .slice(0, 8);
 
-    const frames: string[] = [];
+    const frames: Array<{ image: string; timestamp: number }> = [];
     for (const time of times) {
-      frames.push(await captureFrame(video, time));
+      frames.push({ image: await captureFrame(video, time), timestamp: time });
     }
 
     return frames;

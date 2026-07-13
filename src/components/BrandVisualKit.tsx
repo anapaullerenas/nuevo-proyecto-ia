@@ -15,6 +15,7 @@ export type VisualAsset = {
   kind: string;
   label?: string | null;
   signed_url?: string | null;
+  metadata?: { logo_variant?: "primary" | "light" | "dark" } | null;
 };
 
 export function BrandVisualKit({
@@ -34,21 +35,21 @@ export function BrandVisualKit({
   const [busy, setBusy] = useState<"product_photo" | "logo" | null>(null);
   const [message, setMessage] = useState("");
 
-  async function upload(event: ChangeEvent<HTMLInputElement>, kind: "product_photo" | "logo") {
+  async function upload(event: ChangeEvent<HTMLInputElement>, kind: "product_photo" | "logo", logoVariant?: "primary" | "light" | "dark") {
     const file = event.target.files?.[0];
     if (!file) return;
     setBusy(kind);
     setMessage("");
     try {
-      if (!file.type.startsWith("image/")) throw new Error("Sube una imagen JPG, PNG o WebP.");
+      if (!file.type.startsWith("image/")) throw new Error("Sube una imagen PNG, SVG, JPG o WebP.");
       const supabase = createSupabaseBrowserClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Vuelve a iniciar sesión para subir archivos.");
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-      const storagePath = `${user.id}/${brandId}/brand-asset-${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+      const storagePath = `${user.id}/${brandId}/brand-asset-${file.lastModified}-${crypto.randomUUID()}-${safeName}`;
       const { error: uploadError } = await supabase.storage.from("creative-assets").upload(storagePath, file, { contentType: file.type });
       if (uploadError) throw uploadError;
-      const label = cleanLabel(file.name);
+      const label = kind === "logo" ? ({ primary: "Logo principal", light: "Logo claro", dark: "Logo oscuro" }[logoVariant || "primary"]) : cleanLabel(file.name);
       const { data: saved, error: saveError } = await supabase.from("brand_assets").insert({
         brand_id: brandId,
         owner_id: user.id,
@@ -59,7 +60,8 @@ export function BrandVisualKit({
         mime_type: file.type,
         kind,
         label,
-      }).select("id,file_name,storage_path,bucket_id,kind,label").single();
+        metadata: kind === "logo" ? { logo_variant: logoVariant || "primary" } : {},
+      }).select("id,file_name,storage_path,bucket_id,kind,label,metadata").single();
       if (saveError) throw saveError;
       const { data: signed } = await supabase.storage.from("creative-assets").createSignedUrl(storagePath, 60 * 60 * 24 * 7);
       const next = { ...saved, signed_url: signed?.signedUrl || null } as VisualAsset;
@@ -75,6 +77,7 @@ export function BrandVisualKit({
   }
 
   const ready = logos.length > 0 && products.length > 0 && referenceIds.length >= 5;
+  const logoByVariant = (variant: "primary" | "light" | "dark") => logos.find((logo) => (logo.metadata?.logo_variant || "primary") === variant);
 
   return (
     <section className="brand-visual-kit">
@@ -90,9 +93,12 @@ export function BrandVisualKit({
       <div className="brand-kit-columns">
         <article>
           <div className="brand-kit-title"><b>Logo principal</b><small>{logos.length ? "Listo" : "Obligatorio"}</small></div>
-          <div className="brand-asset-library">
-            {logos.slice(0, 2).map((asset) => <AssetCard key={asset.id} asset={asset} contain />)}
-            <label className="brand-asset-add">{busy === "logo" ? <Loader2 className="spin" /> : <Upload />}<span>{logos.length ? "Actualizar logo" : "Subir logo"}</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => upload(event, "logo")} /></label>
+          <div className="logo-variant-grid">
+            {(["primary", "light", "dark"] as const).map((variant) => {
+              const asset = logoByVariant(variant);
+              const label = { primary: "Principal", light: "Para fondos oscuros", dark: "Para fondos claros" }[variant];
+              return <label className={`logo-variant-slot ${variant}`} key={variant}>{asset?.signed_url ? <img src={asset.signed_url} alt={label} /> : busy === "logo" ? <Loader2 className="spin" /> : <Upload />}<b>{label}</b><small>{asset ? "Reemplazar" : "Subir transparente"}</small><input type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" onChange={(event) => upload(event, "logo", variant)} /></label>;
+            })}
           </div>
         </article>
         <article>

@@ -49,14 +49,15 @@ METODO OBLIGATORIO:
 1. Reconstruye el mensaje real: producto, promesa, avatar, problema, mecanismo, prueba, oferta y CTA.
 2. Divide el anuncio en 4-8 momentos decisivos. En cada momento cita la frase exacta o el elemento
    visual, explica lo que piensa la espectadora, el mecanismo psicologico y su funcion en la venta.
-3. Separa HECHOS de INFERENCIAS. No atribuyas resultados de ventas al creativo si no hay datos Meta.
-   Puedes evaluar su potencial persuasivo y explicar la hipotesis.
+3. Usa cada frame etiquetado con timestamp como evidencia visual verificada. No escribas "[INFERIDO]" si la acción,
+   producto, texto o composición se ve en uno de esos frames. Si algo no aparece, escribe "No visible en los frames recibidos".
+   No atribuyas resultados de ventas al creativo si no hay datos Meta; evalúa potencial persuasivo como hipótesis.
 4. La psicologia debe unir evidencia -> tension humana -> creencia -> accion. No enumeres sesgos sin
    demostrar donde aparecen y que cambian en la mente de la compradora.
 5. Extrae una receta transferible en forma: mecanismo + evidencia concreta + forma de reutilizarlo.
    "UGC en casa", "lenguaje directo" o "mostrar producto" solos NO son recetas.
-6. Entrega el guion original limpio desde la transcripcion. Si no hay audio, marca explicitamente
-   [INFERIDO DESDE TEXTO VISIBLE] y no inventes dialogo.
+6. Entrega el guion original limpio desde la transcripcion. Si no hay audio, usa únicamente texto visible y aclara
+   "Texto visible en la pieza"; no inventes diálogo.
 7. Escribe EXACTAMENTE 3 variantes completas. Cada una debe probar una hipotesis distinta, conservar
    los elementos no negociables del ganador e incluir guion hablado, tomas y textos en pantalla.
 8. El plan debe ser un brief producible: quien aparece, que graba, orden, duracion, edicion, overlays,
@@ -213,6 +214,8 @@ REGLAS DE COPY:
 - texto_principal: máximo 6 palabras.
 - texto_secundario: máximo 8 palabras.
 - cta: máximo 4 palabras.
+- El logo NO es obligatorio: usa logo_usage "none" si el packaging ya muestra la marca o si añadirlo dañaría la composición; "subtle" por defecto y "prominent" sólo si la marca es el mensaje.
+- El CTA NO es obligatorio: usa cta_usage "none" en piezas editoriales o de descubrimiento sin una acción necesaria; "text" para una invitación discreta y "button" sólo cuando la conversión lo justifique.
 - Si texto_secundario + cta + disclaimer superan 8 palabras, o existe disclaimer, text_render_mode debe ser "layered". En otro caso puede ser "baked".
 - Español natural con acentos.
 - Nada de placeholders, lorem ipsum, promesas falsas o texto genérico.
@@ -229,6 +232,8 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO:
   "texto_secundario": string,
   "cta": string,
   "disclaimer": string,
+  "logo_usage": "none" | "subtle" | "prominent",
+  "cta_usage": "none" | "text" | "button",
   "text_render_mode": "baked" | "layered",
   "composicion": {
     "zona_superior": string,
@@ -262,6 +267,7 @@ No inventes claims, cifras, testimonios ni propiedades. El texto visible debe se
 Corrige cualquier lenguaje de inseguridad corporal y claims absolutos antes de aprobar.
 Si hay disclaimer o más de 8 palabras entre texto secundario, CTA y disclaimer, usa text_render_mode "layered".
 Las referencias visuales aportan estructura y estilo, nunca identidad ajena. Los activos de producto son fuente de verdad.
+No fuerces logo ni botón. Aprueba su presencia sólo si mejora comprensión, reconocimiento o acción; nunca los uses como decoración automática.
 
 Devuelve únicamente el mismo JSON completo de la ficha, añadiendo review_score y review_summary.
 `;

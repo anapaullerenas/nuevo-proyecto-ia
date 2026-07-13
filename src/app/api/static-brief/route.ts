@@ -5,6 +5,13 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const maxDuration = 120;
 
+const externalReferencePatterns = {
+  none: { regla: "Dirección original basada en la marca y el objetivo." },
+  product_context: { nombre: "Producto en contexto", estructura: "Escena real, producto protagonista y anotaciones breves de ingredientes o beneficios.", regla: "Usar sólo jerarquía y encuadre; nunca copiar identidad, producto ni texto ajenos." },
+  creator_bundle: { nombre: "Creadora + producto", estructura: "Presencia humana auténtica, producto en mano, luz cálida y composición de prueba social.", regla: "Usar sólo estructura y naturalidad; conservar identidad y activos propios." },
+  aspirational_demo: { nombre: "Resultado aspiracional", estructura: "Resultado visible primero, producto como respaldo y tipografía editorial con mucho aire.", regla: "Inspirarse en la lectura visual sin replicar identidad o claims ajenos." },
+} as const;
+
 type StaticBriefInput = {
   brandId: string;
   intent: string;
@@ -15,6 +22,7 @@ type StaticBriefInput = {
   logoAssetId?: string;
   serviceNoProduct?: boolean;
   referenceAssetIds?: string[];
+  externalReference?: "none" | "product_context" | "creator_bundle" | "aspirational_demo";
 };
 
 export async function POST(request: NextRequest) {
@@ -40,7 +48,7 @@ export async function POST(request: NextRequest) {
 
   const { data: brand } = await supabase
     .from("brands")
-    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal")
+    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context")
     .eq("id", body.brandId)
     .eq("owner_id", user.id)
     .maybeSingle();
@@ -128,6 +136,7 @@ export async function POST(request: NextRequest) {
       recipes: (recipes || []).map((recipe) => String(recipe.rule)),
       archetypes: (archetypes || []) as StaticArchetype[],
       references: references || [],
+      externalReference: body.externalReference || "none",
     });
 
     const { data: saved, error: saveError } = await supabase
@@ -145,6 +154,7 @@ export async function POST(request: NextRequest) {
           product_asset_id: body.productAssetId || null,
           service_no_product: Boolean(body.serviceNoProduct),
           reference_asset_ids: (references || []).map((reference) => reference.id),
+          external_reference: body.externalReference || "none",
         },
         status: "brief",
       })
@@ -174,8 +184,9 @@ async function createBriefWithOpenAI({
   recipes,
   archetypes,
   references,
+  externalReference,
 }: {
-  brand: Record<string, string | null>;
+  brand: Record<string, unknown>;
   intent: string;
   format: string;
   funnelStage: string;
@@ -186,6 +197,7 @@ async function createBriefWithOpenAI({
   recipes: string[];
   archetypes: StaticArchetype[];
   references: Array<{ id: string; file_name: string; label: string | null; metadata: unknown }>;
+  externalReference: keyof typeof externalReferencePatterns;
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("La directora creativa aún no está activa.");
@@ -206,6 +218,7 @@ async function createBriefWithOpenAI({
       analisis: reference.metadata,
       regla: "Usar sólo estructura, jerarquía y tratamiento visual. No copiar identidad, producto ni texto.",
     })),
+    estructura_externa_elegida: externalReferencePatterns[externalReference],
   };
 
   const draft = await requestStructuredBrief({
@@ -219,11 +232,12 @@ async function createBriefWithOpenAI({
   });
 
   const brandSummary = [
-    `Marca: ${brand.name || "Sin nombre"}`,
-    `Categoría: ${brand.category || "No definida"}`,
-    `Audiencia: ${brand.audience || "No definida"}`,
-    `Oferta: ${brand.offer || "No definida"}`,
-    `Voz: ${brand.voice || "No definida"}`,
+    `Marca: ${String(brand.name || "Sin nombre")}`,
+    `Categoría: ${String(brand.category || "No definida")}`,
+    `Audiencia: ${String(brand.audience || "No definida")}`,
+    `Oferta: ${String(brand.offer || "No definida")}`,
+    `Voz: ${String(brand.voice || "No definida")}`,
+    `Contexto estratégico: ${JSON.stringify(brand.strategic_context || {})}`,
   ].join("\n");
 
   const reviewed = await requestStructuredBrief({

@@ -8,6 +8,8 @@ export type StaticBrief = {
   texto_principal: string;
   texto_secundario: string;
   cta: string;
+  logo_usage: "none" | "subtle" | "prominent";
+  cta_usage: "none" | "text" | "button";
   disclaimer: string;
   text_render_mode: "baked" | "layered";
   composicion: {
@@ -34,6 +36,8 @@ export const StaticBriefSchema = z.object({
   texto_principal: z.string(),
   texto_secundario: z.string(),
   cta: z.string(),
+  logo_usage: z.enum(["none", "subtle", "prominent"]),
+  cta_usage: z.enum(["none", "text", "button"]),
   disclaimer: z.string(),
   text_render_mode: z.enum(["baked", "layered"]),
   composicion: z.object({ zona_superior: z.string(), zona_media: z.string(), zona_inferior: z.string() }),
@@ -54,6 +58,8 @@ export const STATIC_BRIEF_JSON_SCHEMA = {
   properties: {
     arquetipo: { type: "string" }, arquetipo_label: { type: "string" }, concepto: { type: "string" }, hook_visual: { type: "string" },
     texto_principal: { type: "string" }, texto_secundario: { type: "string" }, cta: { type: "string" }, disclaimer: { type: "string" },
+    logo_usage: { type: "string", enum: ["none", "subtle", "prominent"] },
+    cta_usage: { type: "string", enum: ["none", "text", "button"] },
     text_render_mode: { type: "string", enum: ["baked", "layered"] },
     composicion: {
       type: "object", additionalProperties: false,
@@ -65,7 +71,7 @@ export const STATIC_BRIEF_JSON_SCHEMA = {
     must_preserve: { type: "array", items: { type: "string" } }, must_avoid: { type: "array", items: { type: "string" } },
     review_score: { type: "number" }, review_summary: { type: "string" },
   },
-  required: ["arquetipo", "arquetipo_label", "concepto", "hook_visual", "texto_principal", "texto_secundario", "cta", "disclaimer", "text_render_mode", "composicion", "paleta", "emocion_objetivo", "por_que_funciona", "riesgo_a_evitar", "notas_disenadora", "must_preserve", "must_avoid", "review_score", "review_summary"],
+  required: ["arquetipo", "arquetipo_label", "concepto", "hook_visual", "texto_principal", "texto_secundario", "cta", "disclaimer", "logo_usage", "cta_usage", "text_render_mode", "composicion", "paleta", "emocion_objetivo", "por_que_funciona", "riesgo_a_evitar", "notas_disenadora", "must_preserve", "must_avoid", "review_score", "review_summary"],
 };
 
 export type StaticArchetype = {
@@ -88,6 +94,8 @@ export function normalizeStaticBrief(value: Partial<StaticBrief> | null | undefi
     texto_principal: clampWords(value?.texto_principal || "Beneficio claro", 6),
     texto_secundario: clampWords(value?.texto_secundario || "Oferta fácil de entender", 8),
     cta: clampWords(value?.cta || "Pide el tuyo", 4),
+    logo_usage: ["none", "subtle", "prominent"].includes(value?.logo_usage || "") ? value!.logo_usage! : "subtle",
+    cta_usage: ["none", "text", "button"].includes(value?.cta_usage || "") ? value!.cta_usage! : "text",
     disclaimer: value?.disclaimer?.trim() || "",
     text_render_mode: renderMode,
     composicion: {
@@ -145,16 +153,17 @@ export function compileDesignPrompt({
 - Las franjas superior e inferior solo pueden llevar fondo, textura o ambiente.`
       : "Mantén márgenes amplios para que el anuncio respire y sea legible en celular.";
 
+  const visibleCta = ficha.cta_usage === "none" ? "" : ficha.cta;
   const textDirection = ficha.text_render_mode === "layered"
     ? `MODO CAPA DE TEXTO — OBLIGATORIO:
 - Genera la fotografía/composición BASE SIN NINGUNA PALABRA, letra, número, logo tipográfico ni pseudo texto.
 - Reserva aire visual limpio para que el servidor añada después el copy exacto.
-- Deja una zona negativa clara en la parte superior para headline y una zona inferior para apoyo, CTA y disclaimer.
-- No intentes renderizar: "${ficha.texto_principal}", "${ficha.texto_secundario}", "${ficha.cta}" ni "${ficha.disclaimer}".`
+- Deja una zona negativa clara en la parte superior para headline y una zona inferior para apoyo${visibleCta ? ", CTA" : ""} y disclaimer.
+- No intentes renderizar: "${ficha.texto_principal}", "${ficha.texto_secundario}"${visibleCta ? `, "${visibleCta}"` : ""} ni "${ficha.disclaimer}".`
     : `TEXTO EN LA IMAGEN, EXACTO Y SIN AÑADIR MÁS:
 - Texto principal: "${ficha.texto_principal}"
 - Texto secundario: "${ficha.texto_secundario}"
-- CTA: "${ficha.cta}"
+${visibleCta ? `- CTA: "${visibleCta}" (${ficha.cta_usage === "button" ? "botón" : "texto discreto"})` : "- No incluyas CTA visible."}
 
 REGLAS ABSOLUTAS DE TEXTO:
 - Renderiza exactamente esos textos, ni una palabra más.
@@ -199,11 +208,13 @@ DOCTRINA VISUAL OBLIGATORIA:
 - Una sola idea entendible en 2 segundos.
 - Producto o sujeto hero ocupa entre 35% y 60% del lienzo.
 - Al menos 30% del lienzo debe permanecer visualmente limpio.
-- Jerarquía: headline, imagen/producto, apoyo y CTA.
+- Jerarquía: headline, imagen/producto y apoyo${visibleCta ? ", con CTA sólo si aporta a la acción" : ""}.
 - Máximo 4 zonas de texto. Sólo un módulo secundario: una prueba, una cifra, una oferta, una comparación o hasta 3 apoyos breves.
 - Estética de anuncio DTC premium hecho por dirección de arte: fotográfico, táctil, limpio y con una decisión visual fuerte.
 - Luz premium de campaña, composición limpia, una sola pieza dominante y comprensión en un vistazo a tamaño pulgar.
 - Piel real con textura y poros; nada plástico o aerografiado. Manos correctas y modelos adultas genéricas, nunca figuras públicas.
+- Fotografía comercial creíble: física, escala, sombras de contacto, reflejos y materiales plausibles; pequeñas imperfecciones ópticas naturales.
+- Nada de brillo plástico, simetría imposible, objetos flotantes, UI falsa, chat inventado o escenografía sintética salvo que el arquetipo lo exija.
 
 PUERTA DE RELEVANCIA COMERCIAL:
 - Debe reconocerse para quién es, qué tensión humana resuelve, qué transformación promete, cuál es la razón para creer y qué producto ofrece.
@@ -218,7 +229,7 @@ ${styleReferenceCount > 0 ? `REFERENCIAS DE ESTILO (${styleReferenceCount}):
 
 ${brandAssetCount > 0 ? `ACTIVOS REALES DE MARCA (${brandAssetCount}):
 - El producto adjunto, cuando exista, es fuente de verdad de packaging y debe conservarse con máxima fidelidad.
-- El logo oficial se colocará después de generar: reserva una zona limpia en la esquina superior derecha y NO dibujes, inventes ni escribas ningún logo.` : ""}
+${ficha.logo_usage === "none" ? "- No reserves ni dibujes un logo adicional: el packaging o la identidad visual ya son suficientes." : `- El logo oficial se colocará después de generar: reserva una zona limpia y discreta en una esquina, sin tarjeta blanca, y NO dibujes, inventes ni escribas ningún logo.`}` : ""}
 
 PROHIBICIONES:
 - No inventes texto adicional, letras decorativas, marcas de agua, logos de terceros ni elementos sin propósito.

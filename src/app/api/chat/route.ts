@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
   const { data: brand } = await supabase
     .from("brands")
-    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal")
+    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context")
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -78,6 +78,7 @@ Oferta: ${brand.offer || "No especificada"}
 Voz de marca: ${brand.voice || "No especificada"}
 Quien crea contenido: ${brand.content_owner || "No especificado"}
 Objetivo creativo: ${brand.creative_goal || "No especificado"}
+Brief estratégico profundo: ${JSON.stringify(brand.strategic_context || {})}
 
 NUMEROS DE RENTABILIDAD GUARDADOS
 ${

@@ -298,10 +298,13 @@ function MetaAnalysisDashboard({ entry }: { entry: MetaHistoryItem }) {
         <article className="poor"><TrendingDown size={18} /><span><b>{poor.length}</b><small>creativos para pausar</small></span></article>
       </div>
 
-      <section className="meta-strategy-brief">
-        <div><span>Lectura simple</span><h3>{analysis.creative_strategy_summary || analysis.period_summary || "El análisis está listo para tomar decisiones creativas."}</h3></div>
-        <article><b>El patrón ganador</b><p>{analysis.winning_pattern || "Revisa los primeros creativos del ranking y conserva su mecanismo principal."}</p></article>
-        <article><b>Qué hacer ahora</b><p>{analysis.next_move || analysis.actions?.[0] || "Mantén los ganadores, crea variantes y pausa lo que no recupera inversión."}</p></article>
+      <section className="meta-strategy-brief meta-clean-brief">
+        <header><span>Interpretación del período</span><h3>{firstSentence(analysis.creative_strategy_summary || analysis.period_summary || "El análisis está listo para tomar decisiones creativas.")}</h3></header>
+        <div className="meta-decision-steps">
+          <article><span>01</span><div><b>Qué se repite en los ganadores</b><p>{analysis.winning_pattern || "Revisa los primeros creativos del ranking y conserva su mecanismo principal."}</p></div></article>
+          <article><span>02</span><div><b>La decisión para esta semana</b><p>{analysis.next_move || analysis.actions?.[0] || "Mantén los ganadores y pausa lo que no recupera inversión."}</p></div></article>
+        </div>
+        <details><summary>Leer interpretación completa</summary><p>{analysis.creative_strategy_summary || analysis.period_summary}</p></details>
       </section>
 
       <section className="meta-ranking-board">
@@ -326,4 +329,10 @@ function MetaAnalysisDashboard({ entry }: { entry: MetaHistoryItem }) {
       {(analysis.data_quality || []).length > 0 && <aside className="data-quality-note"><AlertTriangle size={16} /><div><b>Calidad de datos</b><p>{analysis.data_quality?.join(" · ")}</p></div></aside>}
     </section>
   );
+}
+
+function firstSentence(value: string) {
+  const clean = value.trim();
+  const match = clean.match(/^.*?[.!?](?:\s|$)/);
+  return (match?.[0] || clean).trim().slice(0, 220);
 }

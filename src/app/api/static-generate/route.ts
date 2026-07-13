@@ -19,7 +19,8 @@ type StaticGenerateInput = {
   referenceAssetIds?: string[];
 };
 
-type ImageAsset = { id: string; bucket_id: string; storage_path: string; file_name: string; mime_type: string | null; kind: string };
+type ImageAsset = { id: string; bucket_id: string; storage_path: string; file_name: string; mime_type: string | null; kind: string; metadata?: { logo_variant?: "primary" | "light" | "dark" } | null };
+type LogoSource = { buffer: Buffer; variant: "primary" | "light" | "dark" };
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
@@ -71,15 +72,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Elige una foto real del producto. No generaremos un empaque inventado." }, { status: 400 });
   }
 
-  const [{ data: logoAsset }, { count: referenceCount }] = await Promise.all([
+  const [{ data: logoAssets }, { count: referenceCount }] = await Promise.all([
     supabase
       .from("brand_assets")
-      .select("id,bucket_id,storage_path,file_name,mime_type,kind")
-      .eq("id", body.logoAssetId || "00000000-0000-0000-0000-000000000000")
+      .select("id,bucket_id,storage_path,file_name,mime_type,kind,metadata")
       .eq("brand_id", brand.id)
       .eq("owner_id", user.id)
       .eq("kind", "logo")
-      .maybeSingle(),
+      .limit(6),
     supabase
       .from("brand_assets")
       .select("id", { count: "exact", head: true })
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       .eq("kind", "style_reference"),
   ]);
 
-  if (!logoAsset || (referenceCount || 0) < 5) {
+  if (!logoAssets?.length || (referenceCount || 0) < 5) {
     return NextResponse.json({ error: "Completa el kit visual con un logo y cinco referencias antes de generar." }, { status: 400 });
   }
 
@@ -104,11 +104,18 @@ export async function POST(request: NextRequest) {
     styleReferences = data || [];
   }
 
-  const { data: logoBlob, error: logoDownloadError } = await supabase.storage.from(logoAsset.bucket_id).download(logoAsset.storage_path);
-  if (logoDownloadError || !logoBlob) {
-    return NextResponse.json({ error: "No pudimos leer el logo oficial. Vuelve a subirlo antes de generar." }, { status: 400 });
+  const logoSources = (await Promise.all(logoAssets.map(async (asset) => {
+    const { data: blob } = await supabase.storage.from(asset.bucket_id).download(asset.storage_path);
+    if (!blob) return null;
+    return {
+      buffer: Buffer.from(await blob.arrayBuffer()),
+      variant: asset.metadata?.logo_variant || "primary",
+    } as LogoSource;
+  }))).filter((source): source is LogoSource => Boolean(source));
+
+  if (!logoSources.length) {
+    return NextResponse.json({ error: "No pudimos leer los logotipos oficiales. Vuelve a subirlos antes de generar." }, { status: 400 });
   }
-  const logoBuffer = Buffer.from(await logoBlob.arrayBuffer());
 
   const { data: archetype } = ficha.arquetipo
     ? await supabase
@@ -131,7 +138,7 @@ export async function POST(request: NextRequest) {
         serviceNoProduct: Boolean(body.serviceNoProduct),
         variantIndex: index + 1,
         styleReferenceCount: styleReferences.length,
-        brandAssetCount: (productAsset ? 1 : 0) + 1,
+        brandAssetCount: (productAsset ? 1 : 0) + logoSources.length,
       });
 
       const generatedImage = await generateImage({
@@ -142,7 +149,7 @@ export async function POST(request: NextRequest) {
         productAsset,
         styleReferences,
       });
-      const image = await composeBrandLayers(generatedImage, ficha, logoBuffer);
+      const image = await composeBrandLayers(generatedImage, ficha, logoSources);
 
       const storagePath = `${user.id}/${brand.id}/static-${Date.now()}-${crypto.randomUUID()}.png`;
       const buffer = Buffer.from(image, "base64");
@@ -292,7 +299,7 @@ async function generateImageEdit({
   return b64 as string;
 }
 
-async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSource: Buffer) {
+async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSources: LogoSource[]) {
   const input = Buffer.from(base64, "base64");
   const image = sharp(input);
   const metadata = await image.metadata();
@@ -309,18 +316,21 @@ async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSource
   const disclaimer = escapeSvg(ficha.disclaimer);
   const palette = /^#[0-9a-f]{6}$/i.test(ficha.paleta[0] || "") ? ficha.paleta[0] : "#632E59";
 
-  const logoWidth = Math.round(width * .16);
-  const logo = await sharp(logoSource).resize({ width: logoWidth, height: Math.round(height * .07), fit: "inside" }).png().toBuffer();
-  const logoMeta = await sharp(logo).metadata();
-  const logoHeight = logoMeta.height || Math.round(height * .05);
-  const logoLeft = width - margin - logoWidth;
-  const logoTop = margin;
-  const logoCard = Buffer.from(`<svg width="${logoWidth + 28}" height="${logoHeight + 22}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" rx="14" fill="white" fill-opacity=".9"/></svg>`);
-
-  const overlays: Array<{ input: Buffer; left?: number; top?: number }> = [
-    { input: logoCard, left: logoLeft - 14, top: logoTop - 11 },
-    { input: logo, left: logoLeft, top: logoTop },
-  ];
+  const overlays: Array<{ input: Buffer; left?: number; top?: number }> = [];
+  if (ficha.logo_usage !== "none") {
+    const sampleWidth = Math.max(1, Math.round(width * .28));
+    const sampleHeight = Math.max(1, Math.round(height * .12));
+    const { channels } = await sharp(input).extract({ left: width - sampleWidth, top: 0, width: sampleWidth, height: sampleHeight }).stats();
+    const luminance = channels.slice(0, 3).reduce((sum, channel) => sum + channel.mean, 0) / Math.max(1, Math.min(3, channels.length));
+    const preferredVariant = luminance < 138 ? "light" : "dark";
+    const chosen = logoSources.find((source) => source.variant === preferredVariant)
+      || logoSources.find((source) => source.variant === "primary")
+      || logoSources[0];
+    const logoWidth = Math.round(width * (ficha.logo_usage === "prominent" ? .19 : .13));
+    const logo = await sharp(chosen.buffer).resize({ width: logoWidth, height: Math.round(height * .065), fit: "inside" }).png().toBuffer();
+    const logoMeta = await sharp(logo).metadata();
+    overlays.push({ input: logo, left: width - margin - (logoMeta.width || logoWidth), top: margin });
+  }
 
   if (ficha.text_render_mode === "layered") {
     const headlineLines = svgTextLines(ficha.texto_principal, 30, margin * 1.45, boxY + headlineSize * 1.18, headlineSize * 1.05);
@@ -337,8 +347,8 @@ async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSource
       <rect x="${margin}" y="${boxY}" width="${width - margin * 2}" height="${boxHeight}" rx="${Math.round(width * .025)}" fill="${palette}" fill-opacity=".94"/>
       <text class="copy headline">${headlineLines.svg}</text>
       <text x="${margin * 1.45}" y="${secondaryY}" class="copy secondary">${secondary}</text>
-      <rect x="${width - margin * 1.45 - Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56))}" y="${boxY + headlineSize * 1.15}" width="${Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56))}" height="${secondarySize * 1.75}" rx="${secondarySize * .88}" fill="#fff6f0"/>
-      <text x="${width - margin * 1.45 - Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56)) / 2}" y="${boxY + headlineSize * 1.15 + secondarySize * 1.15}" text-anchor="middle" class="copy cta">${cta}</text>
+      ${ficha.cta_usage === "button" ? `<rect x="${width - margin * 1.45 - Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56))}" y="${boxY + headlineSize * 1.15}" width="${Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56))}" height="${secondarySize * 1.75}" rx="${secondarySize * .88}" fill="#fff6f0"/>` : ""}
+      ${ficha.cta_usage !== "none" ? `<text x="${width - margin * 1.45 - Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56)) / 2}" y="${boxY + headlineSize * 1.15 + secondarySize * 1.15}" text-anchor="middle" class="copy cta">${cta}</text>` : ""}
       ${disclaimer ? `<text x="${margin * 1.45}" y="${boxY + boxHeight - disclaimerSize * 1.5}" class="copy legal">${disclaimer}</text>` : ""}
     </svg>`;
     overlays.unshift({ input: Buffer.from(overlay) });

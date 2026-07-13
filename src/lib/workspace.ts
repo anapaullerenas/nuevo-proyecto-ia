@@ -11,6 +11,7 @@ export type WorkspaceBrand = {
   offer?: string | null;
   voice?: string | null;
   website?: string | null;
+  strategic_context?: Record<string, string> | null;
 };
 
 export async function getWorkspace() {
@@ -31,7 +32,7 @@ export async function getWorkspace() {
   const [{ data: brands }, { data: wallet }, { data: profile }] = await Promise.all([
     supabase
       .from("brands")
-      .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal")
+      .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context")
       .order("created_at", { ascending: false }),
     supabase.from("credit_wallets").select("balance").eq("user_id", user.id).maybeSingle(),
     supabase.from("profiles").select("role,email").eq("id", user.id).maybeSingle(),

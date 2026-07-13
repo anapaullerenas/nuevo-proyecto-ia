@@ -33,6 +33,8 @@ type StaticBrief = {
   texto_principal: string;
   texto_secundario: string;
   cta: string;
+  logo_usage: "none" | "subtle" | "prominent";
+  cta_usage: "none" | "text" | "button";
   disclaimer: string;
   text_render_mode: "baked" | "layered";
   composicion: { zona_superior: string; zona_media: string; zona_inferior: string };
@@ -71,6 +73,12 @@ const examples = [
   "Ej: Quiero explicar por qué el producto vale lo que cuesta sin sonar técnica.",
   "Ej: Quiero una pieza directa para vender el pack antes del domingo.",
 ];
+const swipeSlide = "https://docs.google.com/presentation/d/1v9wvp-GLzMXOe88Lvd_tjso4qGv9UOXt_MqvFfMJKcs/export/png?id=1v9wvp-GLzMXOe88Lvd_tjso4qGv9UOXt_MqvFfMJKcs&pageid=g337cb9cdf36_0_1994";
+const visualReferences = [
+  { id: "product_context", label: "Producto en contexto", note: "Escena real + razones breves", position: "left" },
+  { id: "creator_bundle", label: "Creadora + producto", note: "Prueba humana y cercana", position: "center" },
+  { id: "aspirational_demo", label: "Resultado aspiracional", note: "Resultado primero, producto después", position: "right" },
+] as const;
 
 export function StaticStudio({
   brandId,
@@ -96,6 +104,7 @@ export function StaticStudio({
   const [format, setFormat] = useState("4:5 Feed");
   const [stage, setStage] = useState("Conversión");
   const [archetypeId, setArchetypeId] = useState("automatico");
+  const [externalReference, setExternalReference] = useState<"none" | "product_context" | "creator_bundle" | "aspirational_demo">("none");
   const [intent, setIntent] = useState("");
   const [proposals, setProposals] = useState(1);
   const [quality, setQuality] = useState<"medium" | "high">("medium");
@@ -142,6 +151,7 @@ export function StaticStudio({
           serviceNoProduct,
           logoAssetId: initialLogos[0]?.id,
           referenceAssetIds: initialReferences.slice(0, 10).map((item) => item.id),
+          externalReference,
         }),
       });
       const data = await response.json();
@@ -282,6 +292,11 @@ export function StaticStudio({
           <summary><StepNumber number="02" done /><span><b>Etapa y estructura visual</b><small>{stage} · {archetypeId === "automatico" ? "Automático" : archetypes.find((item) => item.id === archetypeId)?.label_visible}</small></span><ChevronDown /></summary>
           <div className="studio-step-body">
             <div className="stage-tabs compact-tabs">{stages.map((item) => <button key={item} type="button" className={stage === item ? "selected" : ""} onClick={() => setStage(item)}>{item}</button>)}</div>
+            <div className="swipe-reference-head"><div><span className="eyebrow">Inspiración de estructura</span><b>Elige una lectura visual, no una marca.</b></div><a href="https://docs.google.com/presentation/d/1v9wvp-GLzMXOe88Lvd_tjso4qGv9UOXt_MqvFfMJKcs/edit?slide=id.g337cb9cdf36_0_1994#slide=id.g337cb9cdf36_0_1994" target="_blank" rel="noreferrer">Ver fuente</a></div>
+            <div className="external-reference-rail">
+              <button type="button" className={externalReference === "none" ? "selected original" : "original"} onClick={() => setExternalReference("none")}><Sparkles /><b>Dirección original</b><span>La IA decide con tu brief.</span></button>
+              {visualReferences.map((item) => <button type="button" key={item.id} className={externalReference === item.id ? "selected" : ""} onClick={() => setExternalReference(item.id)}><span className={`swipe-crop ${item.position}`} style={{ backgroundImage: `url(${swipeSlide})` }} /><b>{item.label}</b><span>{item.note}</span></button>)}
+            </div>
             <div className="archetype-carousel">
               <button type="button" className={archetypeId === "automatico" ? "selected automatic" : "automatic"} onClick={() => setArchetypeId("automatico")}><div className="archetype-auto-visual"><Sparkles /></div><b>Automático</b><span>La directora elige la estructura más adecuada.</span></button>
               {archetypes.map((item) => <button type="button" data-archetype={item.id} key={item.id} className={archetypeId === item.id ? "selected" : ""} onClick={() => setArchetypeId(item.id)}><ArchetypeMockup id={item.id} /><b>{item.label_visible}</b><span>{structureDescription(item.id)}</span></button>)}
@@ -303,7 +318,8 @@ export function StaticStudio({
             <summary><StepNumber number="04" done /><span><b>Texto y dirección aprobados</b><small>{brief.arquetipo_label} · {brief.review_score}/100</small></span><ChevronDown /></summary>
             <div className="studio-step-body brief-editor">
               <label>Concepto<textarea value={brief.concepto} onChange={(event) => updateBrief("concepto", event.target.value)} /></label>
-              <div className="copy-grid"><label>Texto principal<input value={brief.texto_principal} onChange={(event) => updateBrief("texto_principal", event.target.value)} /></label><label>Texto secundario<input value={brief.texto_secundario} onChange={(event) => updateBrief("texto_secundario", event.target.value)} /></label><label>CTA<input value={brief.cta} onChange={(event) => updateBrief("cta", event.target.value)} /></label></div>
+              <div className="copy-grid"><label>Texto principal<input value={brief.texto_principal} onChange={(event) => updateBrief("texto_principal", event.target.value)} /></label><label>Texto secundario<input value={brief.texto_secundario} onChange={(event) => updateBrief("texto_secundario", event.target.value)} /></label><label>CTA<input value={brief.cta} disabled={brief.cta_usage === "none"} onChange={(event) => updateBrief("cta", event.target.value)} /></label></div>
+              <div className="creative-usage-controls"><label>Logotipo<select value={brief.logo_usage} onChange={(event) => updateBrief("logo_usage", event.target.value as StaticBrief["logo_usage"])}><option value="none">No usar</option><option value="subtle">Discreto</option><option value="prominent">Protagonista</option></select></label><label>Call to action<select value={brief.cta_usage} onChange={(event) => updateBrief("cta_usage", event.target.value as StaticBrief["cta_usage"])}><option value="none">Sin CTA</option><option value="text">Texto discreto</option><option value="button">Botón</option></select></label></div>
               <label>Disclaimer o texto legal<input value={brief.disclaimer || ""} onChange={(event) => updateBrief("disclaimer", event.target.value)} placeholder="Déjalo vacío si no aplica" /></label>
               <details className="art-direction-details"><summary>Ver dirección de arte</summary><p>{brief.hook_visual}</p><div className="direction-zones"><span><b>Arriba</b>{brief.composicion.zona_superior}</span><span><b>Centro</b>{brief.composicion.zona_media}</span><span><b>Abajo</b>{brief.composicion.zona_inferior}</span></div></details>
               <div className="brief-generate-row"><div><span>{proposals} {proposals === 1 ? "propuesta" : "propuestas"} · {format}</span><small>{unlimitedCredits ? "Incluido en tu cuenta" : `${totalCost} créditos estimados`}</small></div><button type="button" onClick={handleGenerate} disabled={busy === "generate"}>{busy === "generate" ? <Loader2 className="spin" /> : <WandSparkles />} {busy === "generate" ? "Generando…" : "Generar ahora"}</button></div>

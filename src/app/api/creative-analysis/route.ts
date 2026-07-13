@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type CreativeAnalysisInput = {
   assetId: string;
-  frames?: string[];
+  frames?: Array<string | { image: string; timestamp: number }>;
 };
 
 type VideoTranscript = {
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
   const { data: brand } = await supabase
     .from("brands")
-    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal")
+    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context")
     .eq("id", asset.brand_id)
     .eq("owner_id", user.id)
     .maybeSingle();
@@ -176,13 +176,17 @@ async function transcribeVideo(
 async function getImageInputs(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
   asset: { asset_type: string; storage_path: string; mime_type: string | null },
-  frames: string[],
+  frames: Array<string | { image: string; timestamp: number }>,
 ) {
   if (frames.length) {
-    return frames.slice(0, 8).map((frame) => ({
-      type: "input_image",
-      image_url: frame,
-    }));
+    return frames.slice(0, 12).flatMap((frame, index) => {
+      const image = typeof frame === "string" ? frame : frame.image;
+      const timestamp = typeof frame === "string" ? null : frame.timestamp;
+      return [
+        { type: "input_text", text: timestamp === null ? `Frame visual ${index + 1}` : `FRAME VERIFICADO ${index + 1} · ${formatSeconds(timestamp)}` },
+        { type: "input_image", image_url: image },
+      ];
+    });
   }
 
   if (asset.asset_type !== "image") return [];
@@ -207,9 +211,9 @@ async function analyzeWithOpenAI({
   transcript,
   previousRecipes,
 }: {
-  brand: Record<string, string | null>;
+  brand: Record<string, unknown>;
   asset: { asset_type: string; file_name: string | null };
-  imageInputs: Array<{ type: string; image_url: string }>;
+  imageInputs: Array<{ type: string; image_url?: string; text?: string }>;
   transcript: VideoTranscript | null;
   previousRecipes: string[];
 }) {
@@ -226,6 +230,7 @@ Oferta: ${brand.offer || "No especificada"}
 Voz: ${brand.voice || "No especificada"}
 Quien produce contenido: ${brand.content_owner || "No especificado"}
 Objetivo creativo: ${brand.creative_goal || "No especificado"}
+Brief psicológico y estratégico: ${JSON.stringify(brand.strategic_context || {})}
 
 RECETAS GANADORAS PREVIAS DE ESTA MARCA
 ${previousRecipes.length ? previousRecipes.map((recipe, index) => `${index + 1}. ${recipe}`).join("\n") : "Aun no hay recetas previas guardadas."}
@@ -233,7 +238,7 @@ ${previousRecipes.length ? previousRecipes.map((recipe, index) => `${index + 1}.
 CREATIVO
 Tipo: ${asset.asset_type}
 Archivo: ${asset.file_name || "Sin nombre"}
-Frames recibidos: ${imageInputs.length}
+Frames visuales verificados: ${imageInputs.filter((input) => input.type === "input_image").length}
 
 TRANSCRIPCION REAL DEL AUDIO
 ${transcript?.warning || (transcript?.text ? transcript.text : "No aplica o no hay audio comprobable.")}
@@ -264,7 +269,7 @@ ${transcript?.segments.length
           content: [
             {
               type: "input_text",
-              text: `${brandContext}\nAnaliza este creativo con el esquema JSON obligatorio. Los frames están en orden cronológico. Usa la transcripción como fuente de verdad para el guion y señala con claridad cualquier inferencia visual.`,
+              text: `${brandContext}\n${asset.asset_type === "image" ? "FORMATO ESTÁTICO: evalúa jerarquía, lectura en 2 segundos, producto, copy visible, composición, prueba, deseo y acción. No inventes temporalidad, audio ni guion original; usa un solo momento de evidencia visual y concentra el plan en la siguiente pieza estática." : "FORMATO VIDEO: cada imagen está precedida por su timestamp exacto. Usa los frames como evidencia visual y la transcripción como evidencia verbal. Analiza tanto lo que se ve como lo que se escucha."} No agregues etiquetas de inferencia ni corchetes. Di “No visible en los frames recibidos” únicamente cuando falte evidencia.`,
             },
             ...imageInputs,
           ],

@@ -8,7 +8,7 @@ export default async function AnalisisCreativosPage() {
 
   const { data: analyses } = await workspace.supabase
     .from("creative_analyses")
-    .select("id,score,verdict,analysis,created_at,creative_assets(file_name,asset_type,storage_path)")
+    .select("id,score,verdict,analysis,created_at,creative_assets(id,file_name,asset_type,storage_path)")
     .eq("brand_id", workspace.activeBrand.id)
     .eq("owner_id", workspace.user.id)
     .order("created_at", { ascending: false })
@@ -27,6 +27,7 @@ export default async function AnalisisCreativosPage() {
     const asset = Array.isArray(item.creative_assets) ? item.creative_assets[0] : item.creative_assets;
     return {
       id: item.id,
+      assetId: asset?.id || null,
       name: asset?.file_name || `Análisis ${new Date(item.created_at).toLocaleDateString("es-MX")}`,
       assetType: (asset?.asset_type === "image" ? "image" : "video") as "image" | "video",
       createdAt: item.created_at,
