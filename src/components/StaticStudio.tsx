@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Download, Expand, ImageIcon, Loader2, Pencil, RefreshCw, Sparkles, WandSparkles, X } from "lucide-react";
 import type { StyleReference } from "@/components/ReferenceUploader";
@@ -38,6 +39,7 @@ type StaticBrief = {
   disclaimer: string;
   text_render_mode: "baked" | "layered";
   composicion: { zona_superior: string; zona_media: string; zona_inferior: string };
+  art_direction: { decision_visual_fuerte: string; iluminacion: string; camara_y_encuadre: string; superficie_y_entorno: string; props: string; tratamiento_color: string };
   paleta: string[];
   emocion_objetivo: string;
   por_que_funciona: string;
@@ -73,12 +75,6 @@ const examples = [
   "Ej: Quiero explicar por qué el producto vale lo que cuesta sin sonar técnica.",
   "Ej: Quiero una pieza directa para vender el pack antes del domingo.",
 ];
-const swipeSlide = "https://docs.google.com/presentation/d/1v9wvp-GLzMXOe88Lvd_tjso4qGv9UOXt_MqvFfMJKcs/export/png?id=1v9wvp-GLzMXOe88Lvd_tjso4qGv9UOXt_MqvFfMJKcs&pageid=g337cb9cdf36_0_1994";
-const visualReferences = [
-  { id: "product_context", label: "Producto en contexto", note: "Escena real + razones breves", position: "left" },
-  { id: "creator_bundle", label: "Creadora + producto", note: "Prueba humana y cercana", position: "center" },
-  { id: "aspirational_demo", label: "Resultado aspiracional", note: "Resultado primero, producto después", position: "right" },
-] as const;
 
 export function StaticStudio({
   brandId,
@@ -99,12 +95,12 @@ export function StaticStudio({
   initialReferences: StyleReference[];
   unlimitedCredits?: boolean;
 }) {
+  const router = useRouter();
   const [selectedAssetId, setSelectedAssetId] = useState(initialAssets[0]?.id || "");
   const [serviceNoProduct, setServiceNoProduct] = useState(false);
   const [format, setFormat] = useState("4:5 Feed");
   const [stage, setStage] = useState("Conversión");
   const [archetypeId, setArchetypeId] = useState("automatico");
-  const [externalReference, setExternalReference] = useState<"none" | "product_context" | "creator_bundle" | "aspirational_demo">("none");
   const [intent, setIntent] = useState("");
   const [proposals, setProposals] = useState(1);
   const [quality, setQuality] = useState<"medium" | "high">("medium");
@@ -118,6 +114,8 @@ export function StaticStudio({
   const [openStep, setOpenStep] = useState<"setup" | "style" | "intent" | "brief">("setup");
   const [correction, setCorrection] = useState("");
   const [fullScreen, setFullScreen] = useState(false);
+  const [remainingProposals, setRemainingProposals] = useState(0);
+  const [variantOffset, setVariantOffset] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -127,7 +125,6 @@ export function StaticStudio({
 
   const identityReady = initialLogos.length > 0 && initialReferences.length >= 5;
   const productReady = serviceNoProduct || Boolean(selectedAssetId);
-  const totalCost = proposals * (quality === "high" ? 300 : 150);
   const selectedUrl = selectedCreative?.public_url || selectedCreative?.signed_url || "";
 
   async function handleCreateBrief(event: FormEvent<HTMLFormElement>) {
@@ -151,15 +148,17 @@ export function StaticStudio({
           serviceNoProduct,
           logoAssetId: initialLogos[0]?.id,
           referenceAssetIds: initialReferences.slice(0, 10).map((item) => item.id),
-          externalReference,
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "No se pudo preparar el anuncio.");
       setBrief(data.ficha);
       setCreativeId(data.creativeId);
+      setRemainingProposals(0);
+      setVariantOffset(0);
       setOpenStep("brief");
       setMessage("Dirección lista. Revisa el texto y genera la imagen.");
+      router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo preparar el anuncio.");
     } finally {
@@ -183,7 +182,8 @@ export function StaticStudio({
           format,
           funnelStage: stage,
           quality,
-          variants: proposals,
+          variants: 1,
+          variantOffset,
           productAssetId: serviceNoProduct ? undefined : selectedAssetId,
           serviceNoProduct,
           logoAssetId: initialLogos[0]?.id,
@@ -195,7 +195,11 @@ export function StaticStudio({
       const created = (data.statics || []) as GeneratedStatic[];
       setGallery((current) => [...created, ...current]);
       setSelectedCreative(created[0] || null);
-      setMessage(`${created.length === 1 ? "Propuesta creada" : `${created.length} propuestas creadas`} y guardada${created.length === 1 ? "" : "s"}.`);
+      const pending = variantOffset === 0 ? Math.max(0, proposals - 1) : Math.max(0, remainingProposals - 1);
+      setRemainingProposals(pending);
+      setVariantOffset((current) => current + 1);
+      setMessage(pending > 0 ? `Propuesta creada y guardada. Revísala antes de generar ${pending === 1 ? "la siguiente" : `las ${pending} restantes`}.` : "Propuesta creada y guardada.");
+      router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo generar la imagen.");
     } finally {
@@ -220,6 +224,7 @@ export function StaticStudio({
       setSelectedCreative(edited);
       setCorrection("");
       setMessage(`Corrección guardada como versión ${edited.version}. La anterior sigue disponible.`);
+      router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo corregir la imagen.");
     } finally {
@@ -249,7 +254,7 @@ export function StaticStudio({
             </div>
             <div className="canvas-actions">
               <div><span>{selectedCreative.ficha?.arquetipo_label || "Anuncio estático"}</span><b>{selectedCreative.ficha?.texto_principal || "Propuesta generada"}</b></div>
-              <a href={selectedUrl} download={`${brandName}_${selectedCreative.format}_v${selectedCreative.version}.png`}><Download size={17} /> Descargar en alta calidad</a>
+              <a href={selectedUrl} onClick={() => { void fetch(`/api/static-download/${selectedCreative.id}`, { method: "POST" }); }} download={`${brandName}_${selectedCreative.format}_v${selectedCreative.version}.png`}><Download size={17} /> Descargar en alta calidad</a>
             </div>
           </div>
         ) : (
@@ -292,11 +297,7 @@ export function StaticStudio({
           <summary><StepNumber number="02" done /><span><b>Etapa y estructura visual</b><small>{stage} · {archetypeId === "automatico" ? "Automático" : archetypes.find((item) => item.id === archetypeId)?.label_visible}</small></span><ChevronDown /></summary>
           <div className="studio-step-body">
             <div className="stage-tabs compact-tabs">{stages.map((item) => <button key={item} type="button" className={stage === item ? "selected" : ""} onClick={() => setStage(item)}>{item}</button>)}</div>
-            <div className="swipe-reference-head"><div><span className="eyebrow">Inspiración de estructura</span><b>Elige una lectura visual, no una marca.</b></div><a href="https://docs.google.com/presentation/d/1v9wvp-GLzMXOe88Lvd_tjso4qGv9UOXt_MqvFfMJKcs/edit?slide=id.g337cb9cdf36_0_1994#slide=id.g337cb9cdf36_0_1994" target="_blank" rel="noreferrer">Ver fuente</a></div>
-            <div className="external-reference-rail">
-              <button type="button" className={externalReference === "none" ? "selected original" : "original"} onClick={() => setExternalReference("none")}><Sparkles /><b>Dirección original</b><span>La IA decide con tu brief.</span></button>
-              {visualReferences.map((item) => <button type="button" key={item.id} className={externalReference === item.id ? "selected" : ""} onClick={() => setExternalReference(item.id)}><span className={`swipe-crop ${item.position}`} style={{ backgroundImage: `url(${swipeSlide})` }} /><b>{item.label}</b><span>{item.note}</span></button>)}
-            </div>
+            <div className="archetype-section-heading"><div><span className="eyebrow">Formatos de anuncio</span><b>Elige visualmente cómo se contará la idea.</b></div><small>Las imágenes son referencias de estructura. Tu pieza usará únicamente tu marca y tus productos.</small></div>
             <div className="archetype-carousel">
               <button type="button" className={archetypeId === "automatico" ? "selected automatic" : "automatic"} onClick={() => setArchetypeId("automatico")}><div className="archetype-auto-visual"><Sparkles /></div><b>Automático</b><span>La directora elige la estructura más adecuada.</span></button>
               {archetypes.map((item) => <button type="button" data-archetype={item.id} key={item.id} className={archetypeId === item.id ? "selected" : ""} onClick={() => setArchetypeId(item.id)}><ArchetypeMockup id={item.id} /><b>{item.label_visible}</b><span>{structureDescription(item.id)}</span></button>)}
@@ -321,8 +322,8 @@ export function StaticStudio({
               <div className="copy-grid"><label>Texto principal<input value={brief.texto_principal} onChange={(event) => updateBrief("texto_principal", event.target.value)} /></label><label>Texto secundario<input value={brief.texto_secundario} onChange={(event) => updateBrief("texto_secundario", event.target.value)} /></label><label>CTA<input value={brief.cta} disabled={brief.cta_usage === "none"} onChange={(event) => updateBrief("cta", event.target.value)} /></label></div>
               <div className="creative-usage-controls"><label>Logotipo<select value={brief.logo_usage} onChange={(event) => updateBrief("logo_usage", event.target.value as StaticBrief["logo_usage"])}><option value="none">No usar</option><option value="subtle">Discreto</option><option value="prominent">Protagonista</option></select></label><label>Call to action<select value={brief.cta_usage} onChange={(event) => updateBrief("cta_usage", event.target.value as StaticBrief["cta_usage"])}><option value="none">Sin CTA</option><option value="text">Texto discreto</option><option value="button">Botón</option></select></label></div>
               <label>Disclaimer o texto legal<input value={brief.disclaimer || ""} onChange={(event) => updateBrief("disclaimer", event.target.value)} placeholder="Déjalo vacío si no aplica" /></label>
-              <details className="art-direction-details"><summary>Ver dirección de arte</summary><p>{brief.hook_visual}</p><div className="direction-zones"><span><b>Arriba</b>{brief.composicion.zona_superior}</span><span><b>Centro</b>{brief.composicion.zona_media}</span><span><b>Abajo</b>{brief.composicion.zona_inferior}</span></div></details>
-              <div className="brief-generate-row"><div><span>{proposals} {proposals === 1 ? "propuesta" : "propuestas"} · {format}</span><small>{unlimitedCredits ? "Incluido en tu cuenta" : `${totalCost} créditos estimados`}</small></div><button type="button" onClick={handleGenerate} disabled={busy === "generate"}>{busy === "generate" ? <Loader2 className="spin" /> : <WandSparkles />} {busy === "generate" ? "Generando…" : "Generar ahora"}</button></div>
+              <details className="art-direction-details"><summary>Ver cómo se fotografiará y compondrá</summary><p>{brief.hook_visual}</p><div className="direction-zones"><span><b>Decisión visual</b>{brief.art_direction.decision_visual_fuerte}</span><span><b>Luz</b>{brief.art_direction.iluminacion}</span><span><b>Cámara</b>{brief.art_direction.camara_y_encuadre}</span><span><b>Entorno</b>{brief.art_direction.superficie_y_entorno}</span><span><b>Props</b>{brief.art_direction.props}</span><span><b>Color</b>{brief.art_direction.tratamiento_color}</span></div></details>
+              <div className="brief-generate-row"><div><span>{remainingProposals > 0 ? `${remainingProposals} propuestas pendientes` : `${proposals} ${proposals === 1 ? "propuesta" : "propuestas"}`} · {format}</span><small>{unlimitedCredits ? "Incluido en tu cuenta" : `${quality === "high" ? 250 : 120} créditos por propuesta`}</small></div><button type="button" onClick={handleGenerate} disabled={busy === "generate" || (variantOffset >= proposals && variantOffset > 0)}>{busy === "generate" ? <Loader2 className="spin" /> : <WandSparkles />} {busy === "generate" ? "Generando…" : variantOffset >= proposals && variantOffset > 0 ? "Propuestas listas" : remainingProposals > 0 ? "Generar siguiente propuesta" : "Generar ahora"}</button></div>
             </div>
           </details>
         )}
@@ -339,7 +340,7 @@ function StepNumber({ number, done }: { number: string; done?: boolean }) {
 }
 
 function ArchetypeMockup({ id }: { id: string }) {
-  return <span className={`archetype-mockup mock-${id}`}><i /><i /><i /></span>;
+  return <span className="archetype-reference-image"><img src={`/archetypes/${id}.jpg`} alt="" aria-hidden="true" /></span>;
 }
 
 function formatClass(value: string) {
@@ -358,14 +359,7 @@ function cleanLabel(fileName: string) {
 
 function structureDescription(id: string) {
   const descriptions: Record<string, string> = {
-    oferta_directa: "Oferta arriba, producto al centro y CTA claro.",
-    testimonio_chat: "Prueba social real con producto como respaldo.",
-    before_after: "Dos estados comparables con el producto como puente.",
-    us_vs_them: "Dos columnas para mostrar una diferencia concreta.",
-    beneficios_apilados: "Producto central con tres razones de compra.",
-    problema_solucion: "Problema visible arriba y solución abajo.",
-    ugc_casual: "Escena nativa, humana y poco producida.",
-    editorial: "Producto hero con aire y jerarquía premium.",
+    beneficios_apilados: "Producto héroe con tres beneficios que se leen en segundos.", antes_despues_sutil: "Dos estados honestos con la misma luz y encuadre.", busqueda_solucion: "Una búsqueda real del avatar y el producto como respuesta.", resultados_busqueda: "Grid nativo que convierte la marca en la respuesta dominante.", regalo_kit: "Regalo tangible, condición clara y manos reales.", descuento_desbloqueado: "El descuento se siente como un logro personal.", producto_heroe_editorial: "Producto gigante, textura real y datos concretos.", collage_lifestyle: "La vida aspiracional del avatar en formato moodboard.", declaracion_contraria: "Una frase con actitud que rompe una creencia.", post_its: "Oferta urgente en una escena doméstica y personal.", ticket_novedad: "El ahorro convertido en un ticket físico.", checklist_toggles: "Comparación rápida sin nombrar competidores.", chat_imessage: "Recomendación natural en una conversación de amigas.", anotaciones_manuscritas: "Foto UGC con dos anotaciones señalando el valor.", diagrama_callouts: "Producto explicado con autoridad editorial.", prueba_social_flotante: "Comentarios reales alrededor del producto héroe.", comparacion_ancla: "Dos gastos comparables que reencuadran el precio.",
   };
   return descriptions[id] || "Estructura visual pensada para este objetivo.";
 }

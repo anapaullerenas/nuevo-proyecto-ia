@@ -34,7 +34,7 @@ export async function getWorkspace() {
       .from("brands")
       .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context")
       .order("created_at", { ascending: false }),
-    supabase.from("credit_wallets").select("balance").eq("user_id", user.id).maybeSingle(),
+    supabase.from("credit_wallets").select("balance,monthly_allowance,allowance_used,allowance_reset_at,lifetime_spent,lifetime_purchased").eq("user_id", user.id).maybeSingle(),
     supabase.from("profiles").select("role,email").eq("id", user.id).maybeSingle(),
   ]);
 
@@ -61,9 +61,18 @@ export async function getWorkspace() {
     user,
     brandList,
     activeBrand,
-    walletBalance: wallet?.balance ?? 0,
+    walletBalance: (wallet?.balance ?? 0) + monthlyRemaining(wallet),
+    wallet,
     isUnlimited,
   };
+}
+
+function monthlyRemaining(wallet: { monthly_allowance?: number | null; allowance_used?: number | null; allowance_reset_at?: string | null } | null) {
+  if (!wallet) return 0;
+  const reset = wallet.allowance_reset_at ? new Date(wallet.allowance_reset_at) : null;
+  const now = new Date();
+  const currentMonth = reset && reset.getUTCFullYear() === now.getUTCFullYear() && reset.getUTCMonth() === now.getUTCMonth();
+  return Math.max(0, Number(wallet.monthly_allowance || 5000) - (currentMonth ? Number(wallet.allowance_used || 0) : 0));
 }
 
 export function labelContentOwner(value: string | null) {

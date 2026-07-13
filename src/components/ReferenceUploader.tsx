@@ -62,6 +62,9 @@ export function ReferenceUploader({
       setIsUploading(false);
       return;
     }
+    const [{ data: creativeUsage }, { data: brandUsage }] = await Promise.all([supabase.from("creative_assets").select("file_size").eq("owner_id", user.id), supabase.from("brand_assets").select("file_size").eq("owner_id", user.id)]);
+    const usedBytes = [...(creativeUsage || []), ...(brandUsage || [])].reduce((sum, item) => sum + Number(item.file_size || 0), 0);
+    if (usedBytes + files.reduce((sum, file) => sum + file.size, 0) > 2 * 1024 * 1024 * 1024) { setIsUploading(false); return; }
 
     let nextSelectedIds = [...selectedIds];
 

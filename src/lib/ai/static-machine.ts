@@ -17,6 +17,14 @@ export type StaticBrief = {
     zona_media: string;
     zona_inferior: string;
   };
+  art_direction: {
+    decision_visual_fuerte: string;
+    iluminacion: string;
+    camara_y_encuadre: string;
+    superficie_y_entorno: string;
+    props: string;
+    tratamiento_color: string;
+  };
   paleta: string[];
   emocion_objetivo: string;
   por_que_funciona: string;
@@ -41,6 +49,7 @@ export const StaticBriefSchema = z.object({
   disclaimer: z.string(),
   text_render_mode: z.enum(["baked", "layered"]),
   composicion: z.object({ zona_superior: z.string(), zona_media: z.string(), zona_inferior: z.string() }),
+  art_direction: z.object({ decision_visual_fuerte: z.string(), iluminacion: z.string(), camara_y_encuadre: z.string(), superficie_y_entorno: z.string(), props: z.string(), tratamiento_color: z.string() }),
   paleta: z.array(z.string()),
   emocion_objetivo: z.string(),
   por_que_funciona: z.string(),
@@ -66,12 +75,17 @@ export const STATIC_BRIEF_JSON_SCHEMA = {
       properties: { zona_superior: { type: "string" }, zona_media: { type: "string" }, zona_inferior: { type: "string" } },
       required: ["zona_superior", "zona_media", "zona_inferior"],
     },
+    art_direction: {
+      type: "object", additionalProperties: false,
+      properties: { decision_visual_fuerte: { type: "string" }, iluminacion: { type: "string" }, camara_y_encuadre: { type: "string" }, superficie_y_entorno: { type: "string" }, props: { type: "string" }, tratamiento_color: { type: "string" } },
+      required: ["decision_visual_fuerte", "iluminacion", "camara_y_encuadre", "superficie_y_entorno", "props", "tratamiento_color"],
+    },
     paleta: { type: "array", items: { type: "string" } }, emocion_objetivo: { type: "string" }, por_que_funciona: { type: "string" },
     riesgo_a_evitar: { type: "string" }, notas_disenadora: { type: "array", items: { type: "string" } },
     must_preserve: { type: "array", items: { type: "string" } }, must_avoid: { type: "array", items: { type: "string" } },
     review_score: { type: "number" }, review_summary: { type: "string" },
   },
-  required: ["arquetipo", "arquetipo_label", "concepto", "hook_visual", "texto_principal", "texto_secundario", "cta", "disclaimer", "logo_usage", "cta_usage", "text_render_mode", "composicion", "paleta", "emocion_objetivo", "por_que_funciona", "riesgo_a_evitar", "notas_disenadora", "must_preserve", "must_avoid", "review_score", "review_summary"],
+  required: ["arquetipo", "arquetipo_label", "concepto", "hook_visual", "texto_principal", "texto_secundario", "cta", "disclaimer", "logo_usage", "cta_usage", "text_render_mode", "composicion", "art_direction", "paleta", "emocion_objetivo", "por_que_funciona", "riesgo_a_evitar", "notas_disenadora", "must_preserve", "must_avoid", "review_score", "review_summary"],
 };
 
 export type StaticArchetype = {
@@ -102,6 +116,14 @@ export function normalizeStaticBrief(value: Partial<StaticBrief> | null | undefi
       zona_superior: value?.composicion?.zona_superior || "Texto principal",
       zona_media: value?.composicion?.zona_media || "Producto o resultado protagonista",
       zona_inferior: value?.composicion?.zona_inferior || "CTA visible",
+    },
+    art_direction: {
+      decision_visual_fuerte: value?.art_direction?.decision_visual_fuerte || "Producto o persona con una sola acción física y jerarquía inequívoca.",
+      iluminacion: value?.art_direction?.iluminacion || "Luz lateral suave con sombras de contacto y reflejos físicamente plausibles.",
+      camara_y_encuadre: value?.art_direction?.camara_y_encuadre || "Encuadre frontal a 3/4, sujeto principal al 45% del lienzo y márgenes de 8%.",
+      superficie_y_entorno: value?.art_direction?.superficie_y_entorno || "Una escena real coherente con la marca, sin fondos compuestos.",
+      props: value?.art_direction?.props || "Ninguno, salvo un objeto funcional.",
+      tratamiento_color: value?.art_direction?.tratamiento_color || "Dos colores de marca, un neutro y contraste natural.",
     },
     paleta: Array.isArray(value?.paleta) && value.paleta.length ? value.paleta.slice(0, 5) : ["#632E59", "#F4ECC9", "#FFF6F0"],
     emocion_objetivo: value?.emocion_objetivo || "claridad, deseo y confianza",
@@ -190,6 +212,14 @@ COMPOSICIÓN POR ZONAS:
 - Zona media: ${ficha.composicion.zona_media}
 - Zona inferior: ${ficha.composicion.zona_inferior}
 
+FOTOGRAFÍA — INSTRUCCIONES EJECUTABLES:
+- Decisión visual: ${ficha.art_direction.decision_visual_fuerte}
+- Iluminación: ${ficha.art_direction.iluminacion}
+- Cámara y encuadre: ${ficha.art_direction.camara_y_encuadre}
+- Superficie y entorno: ${ficha.art_direction.superficie_y_entorno}
+- Props: ${ficha.art_direction.props}
+- Tratamiento de color: ${ficha.art_direction.tratamiento_color}
+
 CONCEPTO:
 ${ficha.concepto}
 
@@ -216,6 +246,18 @@ DOCTRINA VISUAL OBLIGATORIA:
 - Fotografía comercial creíble: física, escala, sombras de contacto, reflejos y materiales plausibles; pequeñas imperfecciones ópticas naturales.
 - Nada de brillo plástico, simetría imposible, objetos flotantes, UI falsa, chat inventado o escenografía sintética salvo que el arquetipo lo exija.
 
+REGLAS DE ORO DEL CATÁLOGO:
+1. UNA idea y un producto héroe —o lineup ordenado— por pieza.
+2. Nada toca bordes: padding 6-8% en los cuatro lados y mínimo 30% de aire.
+3. Headline de 2-4 palabras por línea, máximo dos familias y una sola palabra acentuada.
+4. Máximo un sticker, badge o roundel.
+5. Máximo cuatro beneficios de cuatro palabras cada uno, con estilo consistente.
+6. Fotografía real y táctil: gotas, polvo, uñas, piel y materiales físicamente creíbles.
+7. El fondo toma una sola decisión: escena única, color plano o gradiente suave.
+8. Si el formato es nativo, debe parecer contenido orgánico creíble, no una parodia de UI.
+9. Disclaimer pequeño al pie y sin competir.
+10. Dos o tres colores de marca más un neutro; nunca una paleta descontrolada.
+
 PUERTA DE RELEVANCIA COMERCIAL:
 - Debe reconocerse para quién es, qué tensión humana resuelve, qué transformación promete, cuál es la razón para creer y qué producto ofrece.
 - El copy habla como la clienta, no como ficha técnica.
@@ -224,7 +266,7 @@ PUERTA DE RELEVANCIA COMERCIAL:
 - Sin antes/después dramático ni lenguaje que señale inseguridades corporales.
 
 ${styleReferenceCount > 0 ? `REFERENCIAS DE ESTILO (${styleReferenceCount}):
-- Los primeros archivos adjuntos son inspiración de formato, jerarquía, densidad, ritmo, encuadre y tratamiento fotográfico.
+- Los archivos marcados como inspiración aportan formato, jerarquía, densidad, ritmo, encuadre y tratamiento fotográfico.
 - Nunca copies sus logos, productos, textos, colores de marca ni identidad.` : "No hay referencias de estilo seleccionadas; crea una dirección original coherente con la marca."}
 
 ${brandAssetCount > 0 ? `ACTIVOS REALES DE MARCA (${brandAssetCount}):

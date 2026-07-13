@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CREATIVE_DISSECTION_PROMPT } from "@/lib/ai/prompts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 
 type CreativeAnalysisInput = {
   assetId: string;
@@ -60,6 +62,15 @@ export async function POST(request: NextRequest) {
 
   await supabase.from("creative_assets").update({ status: "processing" }).eq("id", asset.id).eq("owner_id", user.id);
 
+  const reason = asset.asset_type === "video" ? "creative_analysis_video" : "creative_analysis_image";
+  let creditCharge;
+  try {
+    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS[reason], reason, brandId: asset.brand_id, provider: "openai", model: "gpt-4.1-mini", inputTokens: asset.asset_type === "video" ? 8000 : 2500, outputTokens: 3500, costUsd: estimateCostUsd({ provider: "openai", model: "gpt-4.1-mini", inputTokens: asset.asset_type === "video" ? 8000 : 2500, outputTokens: 3500 }), route: "analysis" });
+  } catch (error) {
+    await supabase.from("creative_assets").update({ status: "uploaded" }).eq("id", asset.id).eq("owner_id", user.id);
+    return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) });
+  }
+
   try {
     const imageInputs = await getImageInputs(supabase, asset, body.frames || []);
 
@@ -111,9 +122,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ analysis: savedAnalysis });
   } catch (error) {
+    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, reason, asset.brand_id);
+    console.error("creative analysis failed", error);
     await supabase.from("creative_assets").update({ status: "failed" }).eq("id", asset.id).eq("owner_id", user.id);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudo analizar el creativo." },
+      { error: "No pudimos terminar este análisis. Tus créditos fueron devueltos; prueba nuevamente con el archivo original." },
       { status: 500 },
     );
   }

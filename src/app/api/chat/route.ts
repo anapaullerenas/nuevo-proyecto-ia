@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CHAT_STRATEGIST_PROMPT } from "@/lib/ai/prompts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 
 type ChatInput = {
   messages?: Array<{ role: "user" | "assistant"; text: string }>;
@@ -124,6 +126,13 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
       content: message.text,
     }));
 
+  const preferredProvider = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "openai" as const;
+  const preferredModel = preferredProvider === "anthropic" ? (process.env.ANTHROPIC_MODEL || "claude-sonnet-5") : (process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini");
+  let creditCharge;
+  try {
+    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS.chat_message, reason: "chat_message", brandId: brand.id, provider: preferredProvider, model: preferredModel, inputTokens: 2600, outputTokens: 900, costUsd: estimateCostUsd({ provider: preferredProvider, model: preferredProvider === "anthropic" ? "claude-sonnet-5" : "gpt-4.1-mini", inputTokens: 2600, outputTokens: 900 }), route: "chat" });
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) }); }
+
   try {
     const answer = await askAnthropic(brandContext, history, userMessage);
     return NextResponse.json({ answer, provider: "anthropic" });
@@ -131,9 +140,10 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
     try {
       const answer = await askOpenAI(brandContext, history, userMessage);
       return NextResponse.json({ answer, provider: "openai" });
-    } catch {
-      const message = anthropicError instanceof Error ? anthropicError.message : "No se pudo generar respuesta.";
-      return NextResponse.json({ error: message }, { status: 500 });
+    } catch (openAiError) {
+      if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "chat_message", brand.id);
+      console.error("chat providers failed", anthropicError, openAiError);
+      return NextResponse.json({ error: "La estratega no pudo responder en este momento. Intenta nuevamente; tus créditos fueron devueltos." }, { status: 500 });
     }
   }
 }

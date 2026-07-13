@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { compileDesignPrompt, getImageSize, normalizeStaticBrief, StaticArchetype, StaticBrief } from "@/lib/ai/static-machine";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 
 export const maxDuration = 300;
 
@@ -17,6 +19,7 @@ type StaticGenerateInput = {
   logoAssetId?: string;
   serviceNoProduct?: boolean;
   referenceAssetIds?: string[];
+  variantOffset?: number;
 };
 
 type ImageAsset = { id: string; bucket_id: string; storage_path: string; file_name: string; mime_type: string | null; kind: string; metadata?: { logo_variant?: "primary" | "light" | "dark" } | null };
@@ -55,6 +58,7 @@ export async function POST(request: NextRequest) {
   if (!brand) {
     return NextResponse.json({ error: "No encontré la marca activa." }, { status: 404 });
   }
+  const { data: visualIdentity } = await supabase.from("brand_visual_identity").select("tipografia_estilo").eq("brand_id", brand.id).maybeSingle();
 
   let productAsset: ImageAsset | null = null;
   if (!body.serviceNoProduct && body.productAssetId) {
@@ -101,7 +105,7 @@ export async function POST(request: NextRequest) {
       .eq("owner_id", user.id)
       .eq("kind", "style_reference")
       .in("id", body.referenceAssetIds.slice(0, 10));
-    styleReferences = data || [];
+    styleReferences = (data || []).slice(0, 3);
   }
 
   const logoSources = (await Promise.all(logoAssets.map(async (asset) => {
@@ -124,24 +128,39 @@ export async function POST(request: NextRequest) {
         .eq("id", ficha.arquetipo)
         .maybeSingle()
     : { data: null };
+  const { data: activeArchetypes } = variants > 1
+    ? await supabase.from("static_archetypes").select("id,name,label_visible,stage,prompt_fragment,structure").eq("active", true).order("sort_order")
+    : { data: [] };
+  const candidateArchetypes = [archetype, ...(activeArchetypes || []).filter((item) => item.id !== archetype?.id && normalizeStage(item.stage) === normalizeStage(body.funnelStage)), ...(activeArchetypes || []).filter((item) => item.id !== archetype?.id)]
+    .filter((item, index, list) => Boolean(item) && list.findIndex((candidate) => candidate?.id === item?.id) === index) as StaticArchetype[];
 
+  const creditAmount = variants * (quality === "high" ? CREDIT_COSTS.static_generate_high : CREDIT_COSTS.static_generate_medium);
+  let creditCharge;
+  try {
+    creditCharge = await chargeCredits({ userId: user.id, amount: creditAmount, reason: quality === "high" ? "static_generate_high" : "static_generate_medium", brandId: brand.id, provider: "openai", model: `gpt-image-2-${quality}`, images: variants, costUsd: estimateCostUsd({ provider: "openai", model: `gpt-image-2-${quality}`, images: variants }), route: "image" });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) });
+  }
   try {
     const results = [];
     for (let index = 0; index < variants; index += 1) {
+      const variationIndex = index + Math.max(0, Number(body.variantOffset) || 0);
+      const variantArchetype = candidateArchetypes[variationIndex] || candidateArchetypes[variationIndex % Math.max(candidateArchetypes.length, 1)] || (archetype as StaticArchetype | null);
+      const variantFicha = variationIndex === 0 ? ficha : adaptBriefToArchetype(ficha, variantArchetype);
       const prompt = compileDesignPrompt({
         brandName: brand.name,
         brandVoice: brand.voice,
         format: body.format,
-        ficha,
-        archetype: (archetype as StaticArchetype | null) || null,
+        ficha: variantFicha,
+        archetype: variantArchetype,
         quality,
         serviceNoProduct: Boolean(body.serviceNoProduct),
-        variantIndex: index + 1,
+        variantIndex: variationIndex + 1,
         styleReferenceCount: styleReferences.length,
         brandAssetCount: (productAsset ? 1 : 0) + logoSources.length,
       });
 
-      const generatedImage = await generateImage({
+      let generatedImage = await generateImage({
         supabase,
         prompt,
         format: body.format,
@@ -149,7 +168,20 @@ export async function POST(request: NextRequest) {
         productAsset,
         styleReferences,
       });
-      const image = await composeBrandLayers(generatedImage, ficha, logoSources);
+      let image = await composeBrandLayers(generatedImage, variantFicha, logoSources, visualIdentity?.tipografia_estilo);
+      let qa = await inspectStaticImage({ supabase, image, productAsset, format: body.format, ficha: variantFicha });
+      if (qa.veredicto === "regenerar") {
+        generatedImage = await generateImage({
+          supabase,
+          prompt: `${prompt}\n\nREGENERACIÓN OBLIGATORIA TRAS QA: ${qa.razon}. Corrige exactamente este problema sin cambiar el producto ni el mensaje.`,
+          format: body.format,
+          quality,
+          productAsset,
+          styleReferences,
+        });
+        image = await composeBrandLayers(generatedImage, variantFicha, logoSources, visualIdentity?.tipografia_estilo);
+        qa = await inspectStaticImage({ supabase, image, productAsset, format: body.format, ficha: variantFicha });
+      }
 
       const storagePath = `${user.id}/${brand.id}/static-${Date.now()}-${crypto.randomUUID()}.png`;
       const buffer = Buffer.from(image, "base64");
@@ -169,8 +201,8 @@ export async function POST(request: NextRequest) {
           owner_id: user.id,
           storage_path: storagePath,
           prompt,
-          ficha,
-          archetype: ficha.arquetipo,
+          ficha: variantFicha,
+          archetype: variantFicha.arquetipo,
           format: body.format,
           funnel_stage: body.funnelStage,
           quality,
@@ -182,10 +214,8 @@ export async function POST(request: NextRequest) {
             variant: index + 1,
             reference_asset_ids: styleReferences.map((reference) => reference.id),
           },
-          qa_report: {
-            status: "pendiente_revision_visual",
-            checklist: ["texto exacto", "producto visible", "zona segura", "sin elementos basura"],
-          },
+          qa_report: qa,
+          metadata: { qa },
           status: "generated",
         })
         .select("id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,status,created_at")
@@ -201,10 +231,47 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ statics: results });
   } catch (error) {
+    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, quality === "high" ? "static_generate_high" : "static_generate_medium", brand.id);
+    console.error("static generation failed", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudo generar el estático." },
+      { error: "No pudimos completar esta imagen con la calidad necesaria. Tus créditos fueron devueltos; revisa la foto de producto e intenta nuevamente." },
       { status: 500 },
     );
+  }
+}
+
+function adaptBriefToArchetype(ficha: StaticBrief, archetype: StaticArchetype | null): StaticBrief {
+  if (!archetype) return ficha;
+  const structure = archetype.structure || {};
+  const zones = (structure.estructura || structure.zones || {}) as Record<string, string>;
+  const art = (structure.art_direction_default || {}) as Partial<StaticBrief["art_direction"]>;
+  return normalizeStaticBrief({ ...ficha, arquetipo: archetype.id, arquetipo_label: archetype.label_visible, composicion: { zona_superior: zones.zona_superior || zones.top || ficha.composicion.zona_superior, zona_media: zones.zona_media || zones.middle || zones.center || ficha.composicion.zona_media, zona_inferior: zones.zona_inferior || zones.bottom || ficha.composicion.zona_inferior }, art_direction: { ...ficha.art_direction, ...art } });
+}
+
+function normalizeStage(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
+
+type StaticQa = { producto_fiel: boolean; texto_correcto: boolean; zona_segura_ok: boolean; sin_artefactos: boolean; cumple_reglas_de_oro: boolean; look_disenador: boolean; veredicto: "aprobada" | "regenerar"; razon: string };
+
+async function inspectStaticImage({ supabase, image, productAsset, format, ficha }: { supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>; image: string; productAsset: ImageAsset | null; format: string; ficha: StaticBrief }): Promise<StaticQa> {
+  const fallback: StaticQa = { producto_fiel: true, texto_correcto: true, zona_segura_ok: true, sin_artefactos: true, cumple_reglas_de_oro: true, look_disenador: true, veredicto: "aprobada", razon: "QA visual no disponible; requiere revisión humana." };
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return fallback;
+  const content: Array<Record<string, unknown>> = [
+    { type: "text", text: `Audita este anuncio ${format}. Texto aprobado: ${ficha.texto_principal} / ${ficha.texto_secundario} / ${ficha.cta_usage === "none" ? "sin CTA" : ficha.cta}. Rechaza si: producto deformado o diferente, texto baked incorrecto, elementos a menos de 6% del borde, dos badges, menos de 30% de aire, manos/rostros/packaging con artefactos o apariencia evidente de IA. look_disenador exige fotografía comercial creíble, jerarquía y materiales físicos.` },
+    { type: "image_url", image_url: { url: `data:image/png;base64,${image}`, detail: "high" } },
+  ];
+  if (productAsset && supabase) {
+    const { data } = await supabase.storage.from(productAsset.bucket_id).download(productAsset.storage_path);
+    if (data) content.push({ type: "image_url", image_url: { url: `data:${productAsset.mime_type || "image/png"};base64,${Buffer.from(await data.arrayBuffer()).toString("base64")}`, detail: "high" } });
+  }
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini", temperature: 0, max_tokens: 500, response_format: { type: "json_schema", json_schema: { name: "static_visual_qa", strict: true, schema: { type: "object", additionalProperties: false, properties: { producto_fiel: { type: "boolean" }, texto_correcto: { type: "boolean" }, zona_segura_ok: { type: "boolean" }, sin_artefactos: { type: "boolean" }, cumple_reglas_de_oro: { type: "boolean" }, look_disenador: { type: "boolean" }, veredicto: { type: "string", enum: ["aprobada", "regenerar"] }, razon: { type: "string" } }, required: ["producto_fiel","texto_correcto","zona_segura_ok","sin_artefactos","cumple_reglas_de_oro","look_disenador","veredicto","razon"] } } }, messages: [{ role: "system", content: "Eres control de calidad visual estricto para anuncios DTC. La primera imagen es el anuncio; la segunda, si existe, es el producto fuente de verdad." }, { role: "user", content }] }) });
+    if (!response.ok) return fallback;
+    const data = await response.json();
+    return JSON.parse(data.choices?.[0]?.message?.content || "{}") as StaticQa;
+  } catch (error) {
+    console.error("static visual QA failed", error);
+    return fallback;
   }
 }
 
@@ -226,7 +293,7 @@ async function generateImage({
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("La generación de imágenes aún no está activa.");
 
-  const orderedAssets = [...styleReferences, ...(productAsset ? [productAsset] : [])];
+  const orderedAssets = [...(productAsset ? [productAsset] : []), ...styleReferences];
   if (orderedAssets.length && supabase) {
     const files = [];
     for (const [index, asset] of orderedAssets.entries()) {
@@ -248,8 +315,8 @@ async function generateImage({
         return await generateImageEdit({ apiKey, prompt, format, quality, files });
       } catch (error) {
         if (productAsset) {
-          const detail = error instanceof Error ? error.message : "OpenAI rechazó la referencia.";
-          throw new Error(`No generamos una sustitución falsa del producto. Revisa la foto original e intenta de nuevo. ${detail}`);
+          console.error("image reference rejected", error);
+          throw new Error("No generamos una sustitución falsa del producto. Revisa la foto original e intenta de nuevo.");
         }
         throw error;
       }
@@ -280,6 +347,7 @@ async function generateImageEdit({
   form.append("quality", quality);
   form.append("n", "1");
   form.append("output_format", "png");
+  form.append("input_fidelity", "high");
   files.forEach((file) => form.append("image[]", file.blob, file.name));
 
   const response = await fetch("https://api.openai.com/v1/images/edits", {
@@ -299,7 +367,7 @@ async function generateImageEdit({
   return b64 as string;
 }
 
-async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSources: LogoSource[]) {
+async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSources: LogoSource[], typographyStyle?: string | null) {
   const input = Buffer.from(base64, "base64");
   const image = sharp(input);
   const metadata = await image.metadata();
@@ -315,6 +383,7 @@ async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSource
   const cta = escapeSvg(ficha.cta);
   const disclaimer = escapeSvg(ficha.disclaimer);
   const palette = /^#[0-9a-f]{6}$/i.test(ficha.paleta[0] || "") ? ficha.paleta[0] : "#632E59";
+  const typeface = typographyStyle === "serif_editorial" ? "Georgia,serif" : typographyStyle === "condensada" ? "Impact,sans-serif" : typographyStyle === "redondeada" ? "Trebuchet MS,sans-serif" : typographyStyle === "manuscrita" ? "Comic Sans MS,cursive" : "Helvetica Neue,Arial,sans-serif";
 
   const overlays: Array<{ input: Buffer; left?: number; top?: number }> = [];
   if (ficha.logo_usage !== "none") {
@@ -333,12 +402,19 @@ async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSource
   }
 
   if (ficha.text_render_mode === "layered") {
+    if (ficha.arquetipo === "post_its") {
+      const postIt = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><style>.note{font-family:'Comic Sans MS',cursive;fill:#392a35;text-anchor:middle;font-weight:700}.fine{font-family:${typeface};fill:#fff;font-size:${disclaimerSize}px}</style><g transform="translate(${margin},${Math.round(height*.12)}) rotate(-3 ${Math.round(width*.2)} ${Math.round(height*.08)})"><rect width="${Math.round(width*.42)}" height="${Math.round(height*.15)}" rx="8" fill="#fff1a8" filter="drop-shadow(0 8px 8px rgba(40,20,35,.18))"/><text x="${Math.round(width*.21)}" y="${Math.round(height*.09)}" class="note" font-size="${headlineSize*.72}">${escapeSvg(ficha.texto_principal)}</text></g><g transform="translate(${Math.round(width*.5)},${Math.round(height*.44)}) rotate(3 ${Math.round(width*.2)} ${Math.round(height*.08)})"><rect width="${Math.round(width*.4)}" height="${Math.round(height*.15)}" rx="8" fill="#f6c6df" filter="drop-shadow(0 8px 8px rgba(40,20,35,.18))"/><text x="${Math.round(width*.2)}" y="${Math.round(height*.09)}" class="note" font-size="${secondarySize*.9}">${escapeSvg(ficha.texto_secundario)}</text></g>${ficha.cta_usage!=="none"?`<g transform="translate(${Math.round(width*.12)},${Math.round(height*.72)}) rotate(-2 ${Math.round(width*.18)} ${Math.round(height*.06)})"><rect width="${Math.round(width*.36)}" height="${Math.round(height*.12)}" rx="8" fill="#dce8c8" filter="drop-shadow(0 8px 8px rgba(40,20,35,.18))"/><text x="${Math.round(width*.18)}" y="${Math.round(height*.074)}" class="note" font-size="${secondarySize*.88}">${escapeSvg(ficha.cta)}</text></g>`:""}${disclaimer?`<text x="${margin}" y="${height-margin}" class="fine">${disclaimer}</text>`:""}</svg>`;
+      overlays.unshift({ input: Buffer.from(postIt) });
+    } else if (ficha.arquetipo === "anotaciones_manuscritas") {
+      const notes = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><style>.note{font-family:'Comic Sans MS',cursive;fill:#fff;font-weight:800;paint-order:stroke;stroke:rgba(30,20,28,.3);stroke-width:3px}</style><text x="${margin}" y="${Math.round(height*.18)}" class="note" font-size="${headlineSize*.72}">${escapeSvg(ficha.texto_principal)} ↘</text><text x="${Math.round(width*.48)}" y="${Math.round(height*.78)}" class="note" font-size="${secondarySize}">↖ ${escapeSvg(ficha.texto_secundario)}</text></svg>`;
+      overlays.unshift({ input: Buffer.from(notes) });
+    } else {
     const headlineLines = svgTextLines(ficha.texto_principal, 30, margin * 1.45, boxY + headlineSize * 1.18, headlineSize * 1.05);
     const secondaryY = boxY + headlineSize * (headlineLines.count > 1 ? 3.05 : 2.05);
     const overlay = `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <style>
-        .copy { font-family: 'Helvetica Neue', Arial, sans-serif; fill: #ffffff; }
+        .copy { font-family: ${typeface}; fill: #ffffff; }
         .headline { font-size: ${headlineSize}px; font-weight: 800; letter-spacing: -1px; }
         .secondary { font-size: ${secondarySize}px; font-weight: 600; }
         .cta { font-size: ${secondarySize}px; font-weight: 800; fill: ${palette}; }
@@ -352,6 +428,7 @@ async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSource
       ${disclaimer ? `<text x="${margin * 1.45}" y="${boxY + boxHeight - disclaimerSize * 1.5}" class="copy legal">${disclaimer}</text>` : ""}
     </svg>`;
     overlays.unshift({ input: Buffer.from(overlay) });
+    }
   }
 
   const output = await image.composite(overlays).png().toBuffer();

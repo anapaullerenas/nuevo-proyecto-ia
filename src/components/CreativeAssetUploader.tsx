@@ -20,7 +20,7 @@ type UploadItem = {
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
-const MAX_VIDEO_SIZE = 200 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 100 * 1024 * 1024;
 
 type CreativeAnalysisResult = {
   score: number;
@@ -218,6 +218,11 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
       setIsUploading(false);
       return;
     }
+    const [{ data: creativeUsage }, { data: brandUsage }] = await Promise.all([supabase.from("creative_assets").select("file_size").eq("owner_id", user.id), supabase.from("brand_assets").select("file_size").eq("owner_id", user.id)]);
+    const usedBytes = [...(creativeUsage || []), ...(brandUsage || [])].reduce((sum, item) => sum + Number(item.file_size || 0), 0);
+    if (usedBytes + files.reduce((sum, file) => sum + file.size, 0) > 2 * 1024 * 1024 * 1024) {
+      setItems([{ id: crypto.randomUUID(), name: "Almacenamiento", status: "error", message: "Alcanzaste 2 GB de archivos. Borra creativos que ya no necesitas antes de subir más." }]); setIsUploading(false); return;
+    }
 
     for (const file of files) {
       const localId = crypto.randomUUID();
@@ -241,7 +246,7 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
               ? {
                   ...item,
                   status: "error",
-                  message: "Este video supera 200 MB. Comprime el archivo o exporta una versión más ligera antes de subirlo.",
+                  message: "Este video supera 100 MB. Comprime el archivo o exporta una versión más ligera antes de subirlo.",
                 }
               : item,
           ),

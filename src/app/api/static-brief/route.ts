@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { STATIC_BRIEF_DIRECTOR_PROMPT, STATIC_BRIEF_REVIEWER_PROMPT } from "@/lib/ai/prompts";
 import { normalizeStaticBrief, STATIC_BRIEF_JSON_SCHEMA, StaticArchetype, StaticBrief, StaticBriefSchema } from "@/lib/ai/static-machine";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 
 export const maxDuration = 120;
 
@@ -101,7 +103,7 @@ export async function POST(request: NextRequest) {
     productAsset = asset;
   }
 
-  const [{ data: recipes }, { data: archetypes }, { data: references }] = await Promise.all([
+  const [{ data: recipes }, { data: archetypes }, { data: references }, { data: goldenBriefs }, { data: visualIdentity }] = await Promise.all([
     supabase
       .from("brand_recipes")
       .select("rule")
@@ -121,8 +123,16 @@ export async function POST(request: NextRequest) {
       .eq("owner_id", user.id)
       .eq("kind", "style_reference")
       .in("id", Array.isArray(body.referenceAssetIds) && body.referenceAssetIds.length ? body.referenceAssetIds.slice(0, 10) : ["00000000-0000-0000-0000-000000000000"]),
+    supabase.from("golden_briefs").select("archetype_id,scope,ficha").eq("active", true).or(`scope.eq.global,brand_id.eq.${brand.id}`).limit(12),
+    supabase.from("brand_visual_identity").select("colores_hex,tipografia_estilo,luz_y_foto,estilo_general").eq("brand_id", brand.id).maybeSingle(),
   ]);
 
+  let creditCharge;
+  try {
+    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS.static_brief, reason: "static_brief", brandId: brand.id, provider: "openai", model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini", inputTokens: 3500, outputTokens: 2000, costUsd: estimateCostUsd({ provider: "openai", model: "gpt-4.1-mini", inputTokens: 3500, outputTokens: 2000 }) });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) });
+  }
   try {
     const ficha = await createBriefWithOpenAI({
       brand,
@@ -137,7 +147,13 @@ export async function POST(request: NextRequest) {
       archetypes: (archetypes || []) as StaticArchetype[],
       references: references || [],
       externalReference: body.externalReference || "none",
+      goldenBriefs: goldenBriefs || [],
+      visualIdentity,
     });
+
+    if (!visualIdentity) {
+      await supabase.from("brand_visual_identity").upsert({ brand_id: brand.id, owner_id: user.id, colores_hex: ficha.paleta, tipografia_estilo: typographyForArchetype(ficha.arquetipo), luz_y_foto: ficha.art_direction.iluminacion, estilo_general: ficha.art_direction.tratamiento_color }, { onConflict: "brand_id" });
+    }
 
     const { data: saved, error: saveError } = await supabase
       .from("static_creatives")
@@ -165,12 +181,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ creativeId: saved.id, ficha: saved.ficha, saved });
   } catch (error) {
+    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "static_brief", brand.id);
+    console.error("static brief failed", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudo crear la ficha del anuncio." },
+      { error: "No pudimos preparar la dirección del anuncio. Tus créditos fueron devueltos; intenta nuevamente." },
       { status: 500 },
     );
   }
 }
+
+function typographyForArchetype(archetype: string) { if (["post_its","anotaciones_manuscritas"].includes(archetype)) return "manuscrita"; if (["producto_heroe_editorial","diagrama_callouts","prueba_social_flotante"].includes(archetype)) return "serif_editorial"; if (archetype === "ticket_novedad") return "condensada"; return "sans_geometrica"; }
 
 async function createBriefWithOpenAI({
   brand,
@@ -185,6 +205,8 @@ async function createBriefWithOpenAI({
   archetypes,
   references,
   externalReference,
+  goldenBriefs,
+  visualIdentity,
 }: {
   brand: Record<string, unknown>;
   intent: string;
@@ -198,6 +220,8 @@ async function createBriefWithOpenAI({
   archetypes: StaticArchetype[];
   references: Array<{ id: string; file_name: string; label: string | null; metadata: unknown }>;
   externalReference: keyof typeof externalReferencePatterns;
+  goldenBriefs: Array<{ archetype_id: string; scope: string; ficha: unknown }>;
+  visualIdentity: Record<string, unknown> | null;
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("La directora creativa aún no está activa.");
@@ -219,6 +243,8 @@ async function createBriefWithOpenAI({
       regla: "Usar sólo estructura, jerarquía y tratamiento visual. No copiar identidad, producto ni texto.",
     })),
     estructura_externa_elegida: externalReferencePatterns[externalReference],
+    identidad_visual_persistente: visualIdentity,
+    ejemplos_de_ficha_excelente: goldenBriefs.filter((brief) => archetypeId === "automatico" || brief.archetype_id === archetypeId).slice(0, 3),
   };
 
   const draft = await requestStructuredBrief({

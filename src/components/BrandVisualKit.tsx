@@ -45,6 +45,9 @@ export function BrandVisualKit({
       const supabase = createSupabaseBrowserClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Vuelve a iniciar sesión para subir archivos.");
+      const [{ data: creativeUsage }, { data: brandUsage }] = await Promise.all([supabase.from("creative_assets").select("file_size").eq("owner_id", user.id), supabase.from("brand_assets").select("file_size").eq("owner_id", user.id)]);
+      const usedBytes = [...(creativeUsage || []), ...(brandUsage || [])].reduce((sum, item) => sum + Number(item.file_size || 0), 0);
+      if (usedBytes + file.size > 2 * 1024 * 1024 * 1024) throw new Error("Alcanzaste 2 GB de archivos. Libera espacio antes de subir otro recurso.");
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
       const storagePath = `${user.id}/${brandId}/brand-asset-${file.lastModified}-${crypto.randomUUID()}-${safeName}`;
       const { error: uploadError } = await supabase.storage.from("creative-assets").upload(storagePath, file, { contentType: file.type });
@@ -67,7 +70,7 @@ export function BrandVisualKit({
       const next = { ...saved, signed_url: signed?.signedUrl || null } as VisualAsset;
       if (kind === "logo") setLogos((current) => [next, ...current]);
       else setProducts((current) => [next, ...current]);
-      setMessage(kind === "logo" ? "Logo principal actualizado." : "Producto agregado a la biblioteca de la marca.");
+      setMessage(kind === "logo" ? "Variante de logotipo actualizada." : "Producto agregado a la biblioteca de la marca.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo guardar el archivo.");
     } finally {

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { getImageSize, StaticBrief } from "@/lib/ai/static-machine";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 
 export const maxDuration = 300;
 
@@ -30,6 +32,12 @@ export async function POST(request: NextRequest) {
   const { data: sourceBlob, error: sourceError } = await supabase.storage.from("creative-assets").download(source.storage_path);
   if (sourceError || !sourceBlob) return NextResponse.json({ error: "No pudimos abrir la versión elegida." }, { status: 400 });
 
+  let creditCharge;
+  try {
+    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS.static_edit, reason: "static_edit", brandId: source.brand_id, provider: "openai", model: "gpt-image-2-medium", images: 1, costUsd: estimateCostUsd({ provider: "openai", model: "gpt-image-2-medium", images: 1 }), route: "image" });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) });
+  }
   try {
     const sourceBuffer = Buffer.from(await sourceBlob.arrayBuffer());
     const currentFicha = source.ficha as StaticBrief;
@@ -69,6 +77,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ static: { ...saved, public_url: signed?.signedUrl || null } });
   } catch (error) {
+    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "static_edit", source.brand_id);
     console.error("static edit failed", error);
     return NextResponse.json({ error: "No pude aplicar esa corrección sin comprometer la imagen. Intenta describir un solo cambio concreto." }, { status: 500 });
   }
@@ -83,6 +92,7 @@ async function editWithImageModel(source: Buffer, format: string, quality: "medi
   form.append("quality", quality);
   form.append("n", "1");
   form.append("output_format", "png");
+  form.append("input_fidelity", "high");
   form.append("image[]", new Blob([new Uint8Array(source)], { type: "image/png" }), "version-original.png");
   form.append("prompt", `Edita esta pieza publicitaria. Aplica SOLAMENTE este cambio: ${instruction}. Conserva exactamente composición, dimensiones, producto, envase, iluminación, modelo, logo, colores y todos los demás textos. No rediseñes la pieza. No añadas elementos. Devuelve una sola imagen terminada.`);
   const response = await fetch("https://api.openai.com/v1/images/edits", { method: "POST", headers: { authorization: `Bearer ${apiKey}` }, body: form });

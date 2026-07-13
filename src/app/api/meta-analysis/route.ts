@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSheet } from "read-excel-file/node";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 
 export const maxDuration = 120;
 
@@ -30,6 +32,14 @@ export async function POST(request: NextRequest) {
 
   await supabase.from("meta_imports").update({ status: "processing" }).eq("id", metaImport.id).eq("owner_id", user.id);
 
+  let creditCharge;
+  try {
+    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS.meta_analysis, reason: "meta_analysis", brandId: metaImport.brand_id, provider: "openai", model: "gpt-4.1-mini", inputTokens: 7000, outputTokens: 2500, costUsd: estimateCostUsd({ provider: "openai", model: "gpt-4.1-mini", inputTokens: 7000, outputTokens: 2500 }), route: "analysis" });
+  } catch (error) {
+    await supabase.from("meta_imports").update({ status: "uploaded" }).eq("id", metaImport.id).eq("owner_id", user.id);
+    return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) });
+  }
+
   try {
     const { data: file, error: downloadError } = await supabase.storage.from("meta-imports").download(storagePath);
     if (downloadError || !file) throw new Error(downloadError?.message || "No pude descargar el export.");
@@ -57,8 +67,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ analysis: completedSummary });
   } catch (error) {
+    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "meta_analysis", metaImport.brand_id);
+    console.error("meta analysis failed", error);
     await supabase.from("meta_imports").update({ status: "failed" }).eq("id", metaImport.id).eq("owner_id", user.id);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo analizar el export." }, { status: 500 });
+    return NextResponse.json({ error: "No pudimos terminar el análisis del archivo. Tus créditos fueron devueltos; verifica el formato e intenta nuevamente." }, { status: 500 });
   }
 }
 

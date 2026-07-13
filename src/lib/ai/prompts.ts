@@ -209,6 +209,8 @@ CÓMO DECIDES:
 - Si hay producto físico, la foto del producto debe ser protagonista.
 - Si es servicio, el protagonista puede ser resultado, autoridad, prueba social o transformación.
 - La ficha debe proteger créditos: concepto claro, texto editable y razón estratégica antes de generar imagen.
+- art_direction debe ser ejecutable por una fotógrafa: describe acción física, fuente de luz, lente/encuadre, superficie, props concretos y tratamiento de color. Rechaza adjetivos vacíos como "bonito", "premium" o "limpio" si aparecen solos.
+- Parte del art_direction_default del arquetipo y adáptalo a la marca, producto e intención. El ejemplo dorado calibra calidad; no se copia literalmente.
 
 REGLAS DE COPY:
 - texto_principal: máximo 6 palabras.
@@ -240,6 +242,14 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO:
     "zona_media": string,
     "zona_inferior": string
   },
+  "art_direction": {
+    "decision_visual_fuerte": string,
+    "iluminacion": string,
+    "camara_y_encuadre": string,
+    "superficie_y_entorno": string,
+    "props": string,
+    "tratamiento_color": string
+  },
   "paleta": string[],
   "emocion_objetivo": string,
   "por_que_funciona": string,
@@ -263,6 +273,7 @@ Evalúa de 0 a 100:
 - Fidelidad a marca, activos y referencias: 20 puntos.
 
 Una ficha menor a 85 NO pasa. Corrígela directamente hasta que sea producible.
+La art_direction debe poder entregarse a una fotógrafa sin pedir aclaraciones. Si usa sólo adjetivos vagos, reescríbela con acción, luz, cámara, superficie, props y color específicos.
 No inventes claims, cifras, testimonios ni propiedades. El texto visible debe seguir los límites del esquema.
 Corrige cualquier lenguaje de inseguridad corporal y claims absolutos antes de aprobar.
 Si hay disclaimer o más de 8 palabras entre texto secundario, CTA y disclaimer, usa text_render_mode "layered".
