@@ -5,7 +5,7 @@ import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 
 type ChatInput = {
-  messages?: Array<{ role: "user" | "assistant"; text: string }>;
+  conversationId?: string | null;
   message?: string;
 };
 
@@ -119,12 +119,38 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
 }
 `;
 
-  const history = (body.messages || [])
-    .slice(-8)
-    .map((message) => ({
-      role: message.role,
-      content: message.text,
-    }));
+  let conversation: { id: string; title: string; updated_at: string } | null = null;
+  let history: Array<{ role: "user" | "assistant"; content: string }> = [];
+
+  if (body.conversationId) {
+    const { data: existingConversation } = await supabase
+      .from("chat_conversations")
+      .select("id,title,updated_at")
+      .eq("id", body.conversationId)
+      .eq("owner_id", user.id)
+      .eq("brand_id", brand.id)
+      .maybeSingle();
+
+    if (!existingConversation) {
+      return NextResponse.json({ error: "No encontramos esa conversación." }, { status: 404 });
+    }
+
+    conversation = existingConversation;
+    const { data: storedMessages } = await supabase
+      .from("chat_messages")
+      .select("role,content")
+      .eq("conversation_id", conversation.id)
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(8);
+
+    history = (storedMessages || [])
+      .reverse()
+      .map((message) => ({
+        role: message.role as "user" | "assistant",
+        content: message.content,
+      }));
+  }
 
   const preferredProvider = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "openai" as const;
   const preferredModel = preferredProvider === "anthropic" ? (process.env.ANTHROPIC_MODEL || "claude-sonnet-5") : (process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini");
@@ -133,19 +159,69 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
     creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS.chat_message, reason: "chat_message", brandId: brand.id, provider: preferredProvider, model: preferredModel, inputTokens: 2600, outputTokens: 900, costUsd: estimateCostUsd({ provider: preferredProvider, model: preferredProvider === "anthropic" ? "claude-sonnet-5" : "gpt-4.1-mini", inputTokens: 2600, outputTokens: 900 }), route: "chat" });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) }); }
 
+  let answer = "";
+  let provider: "anthropic" | "openai" = "anthropic";
+
   try {
-    const answer = await askAnthropic(brandContext, history, userMessage);
-    return NextResponse.json({ answer, provider: "anthropic" });
+    answer = await askAnthropic(brandContext, history, userMessage);
   } catch (anthropicError) {
     try {
-      const answer = await askOpenAI(brandContext, history, userMessage);
-      return NextResponse.json({ answer, provider: "openai" });
+      answer = await askOpenAI(brandContext, history, userMessage);
+      provider = "openai";
     } catch (openAiError) {
       if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "chat_message", brand.id);
       console.error("chat providers failed", anthropicError, openAiError);
       return NextResponse.json({ error: "La estratega no pudo responder en este momento. Intenta nuevamente; tus créditos fueron devueltos." }, { status: 500 });
     }
   }
+
+  try {
+    if (!conversation) {
+      const { data: createdConversation, error: conversationError } = await supabase
+        .from("chat_conversations")
+        .insert({
+          owner_id: user.id,
+          brand_id: brand.id,
+          title: conversationTitle(userMessage),
+        })
+        .select("id,title,updated_at")
+        .single();
+
+      if (conversationError || !createdConversation) throw conversationError || new Error("No se creó la conversación.");
+      conversation = createdConversation;
+    } else {
+      const updatedAt = new Date().toISOString();
+      const { error: updateError } = await supabase
+        .from("chat_conversations")
+        .update({ updated_at: updatedAt })
+        .eq("id", conversation.id)
+        .eq("owner_id", user.id);
+      if (updateError) throw updateError;
+      conversation = { ...conversation, updated_at: updatedAt };
+    }
+
+    const { data: savedMessages, error: messageError } = await supabase
+      .from("chat_messages")
+      .insert([
+        { conversation_id: conversation.id, owner_id: user.id, role: "user", content: userMessage },
+        { conversation_id: conversation.id, owner_id: user.id, role: "assistant", content: answer },
+      ])
+      .select("id,role");
+
+    if (messageError) throw messageError;
+    const assistantMessage = savedMessages?.find((message) => message.role === "assistant");
+
+    return NextResponse.json({ answer, provider, conversation, messageId: assistantMessage?.id });
+  } catch (persistenceError) {
+    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "chat_message", brand.id);
+    console.error("chat history persistence failed", persistenceError);
+    return NextResponse.json({ error: "La respuesta se generó, pero no pudimos guardarla. Tus créditos fueron devueltos; intenta nuevamente." }, { status: 500 });
+  }
+}
+
+function conversationTitle(message: string) {
+  const clean = message.replace(/\s+/g, " ").trim();
+  return clean.length > 62 ? `${clean.slice(0, 59).trimEnd()}…` : clean;
 }
 
 async function askAnthropic(

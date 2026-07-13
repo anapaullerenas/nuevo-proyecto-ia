@@ -5,7 +5,7 @@ import { BrandMark } from "@/components/BrandIdentity";
 import type { WorkspaceBrand } from "@/lib/workspace";
 
 const navItems = [
-  { href: "/chat", label: "Chat IA" },
+  { href: "/dashboard", label: "Chat IA" },
   { href: "/analisis-meta", label: "Análisis Meta" },
   { href: "/calculadora-costos", label: "Calculadora" },
   { href: "/analisis-creativos", label: "Análisis creativos" },
