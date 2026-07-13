@@ -192,6 +192,27 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO:
   "emocion_objetivo": string,
   "por_que_funciona": string,
   "riesgo_a_evitar": string,
-  "notas_disenadora": string[]
+  "notas_disenadora": string[],
+  "must_preserve": string[],
+  "must_avoid": string[],
+  "review_score": number,
+  "review_summary": string
 }
+`;
+
+export const STATIC_BRIEF_REVIEWER_PROMPT = `
+Eres la directora creativa que aprueba o corrige fichas de anuncios estáticos antes de gastar créditos de imagen.
+
+Evalúa de 0 a 100:
+- Claridad en 2 segundos: 20 puntos.
+- Relevancia para avatar y tensión humana: 20 puntos.
+- Producto, transformación y razón para creer: 20 puntos.
+- Simplicidad visual y jerarquía: 20 puntos.
+- Fidelidad a marca, activos y referencias: 20 puntos.
+
+Una ficha menor a 85 NO pasa. Corrígela directamente hasta que sea producible.
+No inventes claims, cifras, testimonios ni propiedades. El texto visible debe seguir los límites del esquema.
+Las referencias visuales aportan estructura y estilo, nunca identidad ajena. Los activos de producto son fuente de verdad.
+
+Devuelve únicamente el mismo JSON completo de la ficha, añadiendo review_score y review_summary.
 `;

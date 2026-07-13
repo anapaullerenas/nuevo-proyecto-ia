@@ -5,7 +5,7 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { Check, Download, ImagePlus, Loader2, Pencil, Sparkles, Upload, WandSparkles } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { ReferenceUploader } from "@/components/ReferenceUploader";
+import { ReferenceUploader, StyleReference } from "@/components/ReferenceUploader";
 
 type BrandAsset = {
   id: string;
@@ -43,6 +43,10 @@ type StaticBrief = {
   por_que_funciona: string;
   riesgo_a_evitar: string;
   notas_disenadora: string[];
+  must_preserve: string[];
+  must_avoid: string[];
+  review_score: number;
+  review_summary: string;
 };
 
 type GeneratedStatic = {
@@ -75,12 +79,14 @@ export function StaticStudio({
   initialAssets,
   archetypes,
   initialGallery,
+  initialReferences,
 }: {
   brandId: string;
   brandName: string;
   initialAssets: BrandAsset[];
   archetypes: StaticArchetype[];
   initialGallery: GeneratedStatic[];
+  initialReferences: StyleReference[];
 }) {
   const [assets, setAssets] = useState(initialAssets);
   const [selectedAssetId, setSelectedAssetId] = useState(initialAssets[0]?.id || "");
@@ -97,6 +103,9 @@ export function StaticStudio({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<"asset" | "brief" | "generate" | null>(null);
   const [exampleIndex, setExampleIndex] = useState(0);
+  const [referenceMode, setReferenceMode] = useState<"original" | "inspired">("original");
+  const [selectedReferenceIds, setSelectedReferenceIds] = useState<string[]>([]);
+  const [confirmingGeneration, setConfirmingGeneration] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setExampleIndex((current) => (current + 1) % examples.length), 2800);
@@ -177,6 +186,11 @@ export function StaticStudio({
       return;
     }
 
+    if (referenceMode === "inspired" && selectedReferenceIds.length === 0) {
+      setMessage("Selecciona al menos una referencia para adaptar su estructura visual.");
+      return;
+    }
+
     setBusy("brief");
     try {
       const response = await fetch("/api/static-brief", {
@@ -190,6 +204,7 @@ export function StaticStudio({
           archetypeId,
           productAssetId: serviceNoProduct ? undefined : selectedAssetId,
           serviceNoProduct,
+          referenceAssetIds: referenceMode === "inspired" ? selectedReferenceIds : [],
         }),
       });
       const data = await response.json();
@@ -213,11 +228,7 @@ export function StaticStudio({
       return;
     }
 
-    if (totalGenerationCost >= 80) {
-      const ok = window.confirm(`Esta generación usará ${totalGenerationCost} créditos cuando activemos el débito automático. ¿Continuar?`);
-      if (!ok) return;
-    }
-
+    setConfirmingGeneration(false);
     setBusy("generate");
     try {
       const response = await fetch("/api/static-generate", {
@@ -233,6 +244,7 @@ export function StaticStudio({
           variants,
           productAssetId: serviceNoProduct ? undefined : selectedAssetId,
           serviceNoProduct,
+          referenceAssetIds: referenceMode === "inspired" ? selectedReferenceIds : [],
         }),
       });
       const data = await response.json();
@@ -269,8 +281,8 @@ export function StaticStudio({
           <div className="section-title">
             <span>01</span>
             <div>
-              <b>Tu producto</b>
-              <p>La foto real evita que el anuncio se vea genérico.</p>
+              <b>Producto de tu marca</b>
+              <p>Se guarda una vez y queda disponible para futuras piezas.</p>
             </div>
           </div>
 
@@ -293,7 +305,7 @@ export function StaticStudio({
 
             <label className="asset-upload">
               {busy === "asset" ? <Loader2 className="spin" size={18} /> : <Upload size={18} />}
-              <span>Subir foto</span>
+              <span>Agregar producto</span>
               <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAssetUpload} />
             </label>
           </div>
@@ -377,16 +389,17 @@ export function StaticStudio({
           <textarea value={intent} onChange={(event) => setIntent(event.target.value)} placeholder={examples[exampleIndex]} />
 
           <div className="generation-controls">
-            <label>
-              Variantes
-              <input
-                type="number"
-                min="1"
-                max="4"
-                value={variants}
-                onChange={(event) => setVariants(Math.min(Math.max(Number(event.target.value), 1), 4))}
-              />
-            </label>
+            <fieldset className="variant-selector">
+              <legend>Variantes</legend>
+              <div>
+                {[1, 2, 3].map((count) => (
+                  <button key={count} type="button" className={variants === count ? "selected" : ""} onClick={() => setVariants(count)}>
+                    {count}
+                  </button>
+                ))}
+              </div>
+              <small>{totalGenerationCost} créditos de generación</small>
+            </fieldset>
             <label>
               Calidad
               <select value={quality} onChange={(event) => setQuality(event.target.value === "high" ? "high" : "medium")}>
@@ -403,8 +416,21 @@ export function StaticStudio({
         </section>
 
         <details className="optional-references">
-          <summary>Referencias opcionales</summary>
-          <ReferenceUploader brandId={brandId} />
+          <summary><span>Dirección visual</span><small>Crea algo original o adapta la estructura de referencias</small></summary>
+          <div className="reference-mode">
+            <button type="button" className={referenceMode === "original" ? "selected" : ""} onClick={() => setReferenceMode("original")}>
+              <b>Dirección original</b><span>La IA trabaja con tu marca y producto.</span>
+            </button>
+            <button type="button" className={referenceMode === "inspired" ? "selected" : ""} onClick={() => setReferenceMode("inspired")}>
+              <b>Inspirada en referencias</b><span>Usa composición y estilo, nunca identidad ajena.</span>
+            </button>
+          </div>
+          <ReferenceUploader
+            brandId={brandId}
+            initialReferences={initialReferences}
+            selectedIds={selectedReferenceIds}
+            onSelectionChange={setSelectedReferenceIds}
+          />
         </details>
 
         {message && <p className="form-message">{message}</p>}
@@ -421,7 +447,7 @@ export function StaticStudio({
           <section className="brief-preview">
             <div className="brief-head">
               <span>{brief.arquetipo_label}</span>
-              <b>Ficha editable</b>
+              <b>{brief.review_score ? `Aprobada · ${brief.review_score}/100` : "Ficha editable"}</b>
             </div>
 
             <label>
@@ -444,35 +470,36 @@ export function StaticStudio({
               </label>
             </div>
 
-            <label>
-              Hook visual
-              <textarea value={brief.hook_visual} onChange={(event) => updateBrief("hook_visual", event.target.value)} />
-            </label>
-
-            <div className="zone-grid">
+            <details className="art-direction-details">
+              <summary>Ver dirección de arte</summary>
               <label>
-                Superior
-                <input value={brief.composicion.zona_superior} onChange={(event) => updateZone("zona_superior", event.target.value)} />
+                Hook visual
+                <textarea value={brief.hook_visual} onChange={(event) => updateBrief("hook_visual", event.target.value)} />
               </label>
-              <label>
-                Media
-                <input value={brief.composicion.zona_media} onChange={(event) => updateZone("zona_media", event.target.value)} />
-              </label>
-              <label>
-                Inferior
-                <input value={brief.composicion.zona_inferior} onChange={(event) => updateZone("zona_inferior", event.target.value)} />
-              </label>
-            </div>
+              <div className="zone-grid">
+                <label>Superior<input value={brief.composicion.zona_superior} onChange={(event) => updateZone("zona_superior", event.target.value)} /></label>
+                <label>Media<input value={brief.composicion.zona_media} onChange={(event) => updateZone("zona_media", event.target.value)} /></label>
+                <label>Inferior<input value={brief.composicion.zona_inferior} onChange={(event) => updateZone("zona_inferior", event.target.value)} /></label>
+              </div>
+            </details>
 
             <div className="why-card">
               <b>Por qué funciona</b>
               <p>{brief.por_que_funciona}</p>
             </div>
 
-            <button className="primary-action" type="button" disabled={busy === "generate"} onClick={handleGenerate}>
-              {busy === "generate" ? <Loader2 className="spin" size={16} /> : <WandSparkles size={16} />}
-              {busy === "generate" ? "Generando imagen..." : `Generar imagen · ${totalGenerationCost} cr`}
-            </button>
+            {confirmingGeneration ? (
+              <div className="generation-confirmation" role="dialog" aria-label="Confirmar generación">
+                <div><b>Revisa antes de generar</b><span>{format} · {variants} {variants === 1 ? "pieza" : "piezas"} · costo estimado {totalGenerationCost} cr</span></div>
+                <button type="button" onClick={() => setConfirmingGeneration(false)}>Cancelar</button>
+                <button type="button" className="confirm" onClick={handleGenerate}>Confirmar</button>
+              </div>
+            ) : (
+              <button className="primary-action" type="button" disabled={busy === "generate"} onClick={() => setConfirmingGeneration(true)}>
+                {busy === "generate" ? <Loader2 className="spin" size={16} /> : <WandSparkles size={16} />}
+                {busy === "generate" ? "Generando imagen..." : `Generar imagen · ${totalGenerationCost} cr`}
+              </button>
+            )}
           </section>
         )}
 

@@ -1,22 +1,33 @@
-import { Brain } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
 import { CreativeAssetUploader } from "@/components/CreativeAssetUploader";
 import { getWorkspace } from "@/lib/workspace";
 
-const sections = [
-  "Score ganador",
-  "Gancho y claridad",
-  "Oferta y objeciones",
-  "Psicología de compra",
-  "Receta ganadora",
-  "Qué mantener",
-  "Qué producir después",
-  "Variantes recomendadas",
-];
-
 export default async function AnalisisCreativosPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
+
+  const { data: analyses } = await workspace.supabase
+    .from("creative_analyses")
+    .select("id,score,verdict,analysis,created_at,creative_assets(file_name,asset_type)")
+    .eq("brand_id", workspace.activeBrand.id)
+    .eq("owner_id", workspace.user.id)
+    .order("created_at", { ascending: false })
+    .limit(24);
+
+  const history = (analyses || []).map((item) => {
+    const asset = Array.isArray(item.creative_assets) ? item.creative_assets[0] : item.creative_assets;
+    return {
+      id: item.id,
+      name: asset?.file_name || `Análisis ${new Date(item.created_at).toLocaleDateString("es-MX")}`,
+      assetType: (asset?.asset_type === "image" ? "image" : "video") as "image" | "video",
+      createdAt: item.created_at,
+      result: {
+        score: item.score || 0,
+        verdict: item.verdict || "",
+        analysis: item.analysis || {},
+      },
+    };
+  });
 
   return (
     <AppFrame active="/analisis-creativos" brand={workspace.activeBrand} credits={workspace.walletBalance}>
@@ -24,26 +35,13 @@ export default async function AnalisisCreativosPage() {
         <div className="studio-panel">
           <div className="panel-heading">
             <span className="eyebrow">Análisis creativos</span>
-            <h1>Sube imagen o video y recibe una lectura profunda.</h1>
+            <h1>Entiende qué hace vender a cada creativo.</h1>
             <p>
-              Analiza anuncios visuales con una lectura clara: score, psicología,
-              señales, receta ganadora, guiones y próximos pasos.
+              Sube una imagen o video, analiza su estructura y vuelve a consultar
+              cada resultado desde la biblioteca de tu marca.
             </p>
           </div>
-
-          <div className="two-column">
-            <CreativeAssetUploader brandId={workspace.activeBrand.id} />
-            <div className="analysis-map">
-              <Brain size={22} />
-              <b>Estructura del análisis</b>
-              <div>
-                {sections.map((section) => (
-                  <span key={section}>{section}</span>
-                ))}
-              </div>
-              <p className="status-warn">Después de subir un archivo, presiona Analizar. Imágenes se leen directo; videos se interpretan con frames clave.</p>
-            </div>
-          </div>
+          <CreativeAssetUploader brandId={workspace.activeBrand.id} initialHistory={history} />
         </div>
       </section>
     </AppFrame>

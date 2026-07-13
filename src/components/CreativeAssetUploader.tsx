@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, CSSProperties, ReactNode, useState } from "react";
-import { Brain, Check, Clipboard, Eye, FileText, FlaskConical, ImageUp, Loader2, Lock, Rocket, Sparkles } from "lucide-react";
+import { ArrowLeft, Brain, Check, Clipboard, Eye, FileText, FlaskConical, ImageUp, Library, Loader2, Lock, Plus, Rocket, Sparkles } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type UploadItem = {
@@ -24,6 +24,14 @@ type CreativeAnalysisResult = {
   score: number;
   verdict: string;
   analysis: CreativeDissection;
+};
+
+type CreativeHistoryItem = {
+  id: string;
+  name: string;
+  assetType: "image" | "video";
+  createdAt: string;
+  result: CreativeAnalysisResult;
 };
 
 type Signal = { level?: string; note?: string };
@@ -116,10 +124,24 @@ type CreativeDissection = {
   generation_prompts?: Array<{ name?: string; mode?: string; prompt?: string }>;
 };
 
-export function CreativeAssetUploader({ brandId }: { brandId: string }) {
+export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: string; initialHistory: CreativeHistoryItem[] }) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const activeItem = items.find((item) => item.analysis);
+  const [selectedHistory, setSelectedHistory] = useState<CreativeHistoryItem | null>(null);
+  const currentResult = items.find((item) => item.analysis);
+  const activeItem = currentResult || (selectedHistory ? {
+    id: selectedHistory.id,
+    name: selectedHistory.name,
+    assetType: selectedHistory.assetType,
+    status: "listo" as const,
+    analysis: selectedHistory.result,
+  } : undefined);
+
+  function resetWorkspace() {
+    setItems([]);
+    setSelectedHistory(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
@@ -266,69 +288,96 @@ export function CreativeAssetUploader({ brandId }: { brandId: string }) {
     const score = activeItem.analysis.score;
     const verdict = verdictFromScore(score);
     return (
-      <div className="creative-result-layout">
+      <div className="creative-result-layout analysis-reading-mode">
         <header className="analysis-compact-header">
           <div>
             <span className="eyebrow">Análisis creativo</span>
             <b title={activeItem.name}>{cleanFileName(activeItem.name)}</b>
             <small>{activeItem.assetType === "video" ? "Video" : "Imagen"} · {verdict} · {score}/100</small>
           </div>
-          <button className="secondary-action" type="button" onClick={() => setItems([])}>
-            Analizar otro creativo
+          <button className="secondary-action" type="button" onClick={resetWorkspace}>
+            <Plus size={16} /> Nuevo análisis
           </button>
         </header>
 
-        <div className="creative-result-with-rail">
-          <CreativeAnalysisCard result={activeItem.analysis} />
-          <aside className="analysis-next-rail">
-            <article>
-              <b>¿Y ahora qué?</b>
-              <button type="button">Convertir en estático · 150 cr</button>
-              <button type="button">Analizar otra versión · 120 cr</button>
-              <button type="button">Guardar receta</button>
-            </article>
-            <article>
-              <b>Memoria de marca</b>
-              <p>Las recetas útiles de este análisis quedan disponibles para el chat y la máquina de estáticos.</p>
-            </article>
-          </aside>
-        </div>
+        <CreativeAnalysisCard result={activeItem.analysis} />
+
+        <footer className="analysis-action-bar">
+          <div>
+            <Check size={17} />
+            <span><b>Guardado en memoria</b> Las recetas ya están disponibles para el chat y la creación de estáticos.</span>
+          </div>
+          <a className="secondary-action" href="/crear-estaticos">Convertir idea en estático</a>
+          <button className="primary-action" type="button" onClick={resetWorkspace}>Analizar otra versión</button>
+        </footer>
+        <button className="analysis-back-link" type="button" onClick={resetWorkspace}>
+          <ArrowLeft size={15} /> Volver a la biblioteca
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="upload-zone tall">
-      <ImageUp size={34} />
-      <b>Subir imagen o video del anuncio</b>
-      <p>Sube imagen o video y recibe una lectura profunda con score, psicología, receta, guiones y variantes.</p>
-      <label className="upload-action">
-        {isUploading ? <Loader2 className="spin" size={16} /> : <ImageUp size={16} />}
-        {isUploading ? "Subiendo..." : "Seleccionar creativo"}
-        <input type="file" accept="image/*,video/mp4,video/quicktime,video/webm" multiple onChange={handleFiles} />
-      </label>
-      {items.length > 0 && (
-        <div className="upload-list">
-          {items.map((item) => (
-            <div key={item.id} className={item.status}>
-              <span>{item.name}</span>
-              <small>{item.message || item.status}</small>
-              {item.status === "listo" && item.assetId && item.analysisStatus !== "listo" && (
-                <button
-                  className="inline-action"
-                  type="button"
-                  onClick={() => analyzeItem(item)}
-                  disabled={item.analysisStatus === "analizando"}
-                >
-                  {item.analysisStatus === "analizando" ? <Loader2 className="spin" size={14} /> : <Brain size={14} />}
-                  {item.analysisStatus === "analizando" ? "Analizando..." : "Analizar · 120 cr"}
-                </button>
-              )}
-              {item.analysis && <CreativeAnalysisCard result={item.analysis} />}
-            </div>
-          ))}
+    <div className="creative-entry-workspace">
+      <section className="creative-upload-panel">
+        <div className="creative-upload-copy">
+          <span className="eyebrow">Nuevo análisis</span>
+          <h2>Sube el anuncio que quieres diseccionar</h2>
+          <p>Imágenes y videos se analizan con la información guardada de tu marca.</p>
         </div>
-      )}
+
+        <label className="creative-file-picker">
+          {isUploading ? <Loader2 className="spin" size={24} /> : <ImageUp size={24} />}
+          <b>{isUploading ? "Subiendo archivo..." : "Elegir imagen o video"}</b>
+          <span>JPG, PNG, WebP, MP4, MOV o WebM · máximo 200 MB</span>
+          <input type="file" accept="image/*,video/mp4,video/quicktime,video/webm" onChange={handleFiles} />
+        </label>
+
+        {items.length > 0 && (
+          <div className="creative-upload-queue">
+            {items.map((item) => (
+              <article key={item.id} className={item.status}>
+                <div>
+                  <b>{cleanFileName(item.name)}</b>
+                  <small>{item.message || item.status}</small>
+                </div>
+                {item.status === "listo" && item.assetId && item.analysisStatus !== "listo" && (
+                  <button className="primary-action" type="button" onClick={() => analyzeItem(item)} disabled={item.analysisStatus === "analizando"}>
+                    {item.analysisStatus === "analizando" ? <Loader2 className="spin" size={15} /> : <Brain size={15} />}
+                    {item.analysisStatus === "analizando" ? "Analizando..." : "Analizar ahora · 120 cr"}
+                  </button>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="creative-library">
+        <header>
+          <div>
+            <Library size={19} />
+            <div><span className="eyebrow">Biblioteca</span><h2>Análisis anteriores</h2></div>
+          </div>
+          <small>{initialHistory.length} guardados</small>
+        </header>
+        {initialHistory.length === 0 ? (
+          <div className="library-empty"><Eye size={22} /><b>Aún no hay análisis</b><p>El primer resultado aparecerá aquí automáticamente.</p></div>
+        ) : (
+          <div className="creative-library-grid">
+            {initialHistory.map((entry) => (
+              <button key={entry.id} type="button" onClick={() => setSelectedHistory(entry)}>
+                <span className="library-score">{entry.result.score}</span>
+                <div>
+                  <b>{cleanFileName(entry.name)}</b>
+                  <small>{entry.assetType === "video" ? "Video" : "Imagen"} · {verdictFromScore(entry.result.score)}</small>
+                </div>
+                <time>{new Date(entry.createdAt).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}</time>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -368,14 +417,14 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
         <SignalCard title="Oferta" signal={analysis.signals?.offer} />
       </div>
 
-      <div className="creative-layer-tabs">
-        <span><Eye size={15} /> Dashboard</span>
-        <span><Brain size={15} /> Psicologia</span>
-        <span><FileText size={15} /> Guiones</span>
-        <span><Rocket size={15} /> Plan</span>
-      </div>
+      <nav className="creative-layer-tabs" aria-label="Secciones del análisis">
+        <a href="#resumen"><Eye size={15} /> Resumen</a>
+        <a href="#psicologia"><Brain size={15} /> Psicología</a>
+        <a href="#guiones"><FileText size={15} /> Guiones</a>
+        <a href="#plan"><Rocket size={15} /> Plan</a>
+      </nav>
 
-      <div className="creative-deep-grid">
+      <div className="creative-deep-grid analysis-section-anchor" id="resumen">
         <ReportPanel icon={<Sparkles size={18} />} title="La receta ganadora">
           <NumberedList items={analysis.winning_recipe || []} />
         </ReportPanel>
@@ -397,7 +446,7 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
           <FrameList frames={hook?.frame_descriptions || []} />
         </ReportPanel>
 
-        <ReportPanel icon={<Brain size={18} />} title="Psicologia del comprador">
+        <ReportPanel icon={<Brain size={18} />} title="Psicologia del comprador" anchorId="psicologia">
           <Insight label="Deseo profundo" value={buyer?.deep_desire} />
           <Insight label="Dolor agitado" value={buyer?.agitated_pain} />
           <Insight label="Cambio de identidad" value={buyer?.identity_shift} />
@@ -437,7 +486,7 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
         </ReportPanel>
       </div>
 
-      <ReportPanel icon={<FileText size={18} />} title="Guion original y variantes" wide>
+      <ReportPanel icon={<FileText size={18} />} title="Guion original y variantes" wide anchorId="guiones">
         {analysis.original_script && <p className="script-box">{analysis.original_script}</p>}
         <div className="variant-grid">
           {(analysis.script_variants || []).map((variant, index) => (
@@ -457,7 +506,7 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
         </div>
       </ReportPanel>
 
-      <div className="creative-deep-grid">
+      <div className="creative-deep-grid analysis-section-anchor" id="plan">
         <ReportPanel icon={<Rocket size={18} />} title="Plan de replicacion">
           <Insight label="Tono" value={analysis.replication_plan?.voice_tone} />
           <CheckList items={analysis.replication_plan?.editing_notes || []} />
@@ -562,16 +611,18 @@ function ReportPanel({
   title,
   eyebrow,
   wide,
+  anchorId,
   children,
 }: {
   icon: ReactNode;
   title: string;
   eyebrow?: string;
   wide?: boolean;
+  anchorId?: string;
   children: ReactNode;
 }) {
   return (
-    <article className={`report-panel${wide ? " wide" : ""}`}>
+    <article id={anchorId} className={`report-panel${wide ? " wide" : ""}`}>
       <header>
         {icon}
         <b>{title}</b>

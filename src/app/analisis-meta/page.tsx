@@ -55,24 +55,6 @@ export default async function AnalisisMetaPage() {
 
           <MetaImportUploader brandId={workspace.activeBrand.id} />
 
-          <div className="analysis-grid three">
-            <article>
-              <span>01</span>
-              <b>Ranking ganador</b>
-              <p>Qué anuncio escalar, cuál pausar y cuál iterar.</p>
-            </article>
-            <article>
-              <span>02</span>
-              <b>Lectura de fatiga</b>
-              <p>Señales de caída por frecuencia, CTR o costo.</p>
-            </article>
-            <article>
-              <span>03</span>
-              <b>Brief accionable</b>
-              <p>Qué producir después con base en datos reales.</p>
-            </article>
-          </div>
-
           <div className="meta-calculator-link">
             <div>
               <span className="eyebrow">Rentabilidad</span>

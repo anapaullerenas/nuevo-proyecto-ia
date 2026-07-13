@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { STATIC_BRIEF_DIRECTOR_PROMPT } from "@/lib/ai/prompts";
+import { STATIC_BRIEF_DIRECTOR_PROMPT, STATIC_BRIEF_REVIEWER_PROMPT } from "@/lib/ai/prompts";
 import { normalizeStaticBrief, StaticArchetype, StaticBrief } from "@/lib/ai/static-machine";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+export const maxDuration = 120;
 
 type StaticBriefInput = {
   brandId: string;
@@ -11,6 +13,7 @@ type StaticBriefInput = {
   archetypeId?: string;
   productAssetId?: string;
   serviceNoProduct?: boolean;
+  referenceAssetIds?: string[];
 };
 
 export async function POST(request: NextRequest) {
@@ -68,7 +71,7 @@ export async function POST(request: NextRequest) {
     productAsset = asset;
   }
 
-  const [{ data: recipes }, { data: archetypes }] = await Promise.all([
+  const [{ data: recipes }, { data: archetypes }, { data: references }] = await Promise.all([
     supabase
       .from("brand_recipes")
       .select("rule")
@@ -81,6 +84,13 @@ export async function POST(request: NextRequest) {
       .select("id,name,label_visible,stage,prompt_fragment,structure")
       .eq("active", true)
       .order("sort_order", { ascending: true }),
+    supabase
+      .from("brand_assets")
+      .select("id,file_name,label,metadata")
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .eq("kind", "style_reference")
+      .in("id", Array.isArray(body.referenceAssetIds) && body.referenceAssetIds.length ? body.referenceAssetIds.slice(0, 10) : ["00000000-0000-0000-0000-000000000000"]),
   ]);
 
   try {
@@ -94,6 +104,7 @@ export async function POST(request: NextRequest) {
       serviceNoProduct: Boolean(body.serviceNoProduct),
       recipes: (recipes || []).map((recipe) => String(recipe.rule)),
       archetypes: (archetypes || []) as StaticArchetype[],
+      references: references || [],
     });
 
     const { data: saved, error: saveError } = await supabase
@@ -110,6 +121,7 @@ export async function POST(request: NextRequest) {
           intent,
           product_asset_id: body.productAssetId || null,
           service_no_product: Boolean(body.serviceNoProduct),
+          reference_asset_ids: (references || []).map((reference) => reference.id),
         },
         status: "brief",
       })
@@ -137,6 +149,7 @@ async function createBriefWithOpenAI({
   serviceNoProduct,
   recipes,
   archetypes,
+  references,
 }: {
   brand: Record<string, string | null>;
   intent: string;
@@ -147,9 +160,27 @@ async function createBriefWithOpenAI({
   serviceNoProduct: boolean;
   recipes: string[];
   archetypes: StaticArchetype[];
+  references: Array<{ id: string; file_name: string; label: string | null; metadata: unknown }>;
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("La directora creativa aún no está activa.");
+
+  const context = {
+    marca: brand,
+    intencion_usuario: intent,
+    formato: format,
+    etapa_embudo: funnelStage,
+    arquetipo_solicitado: archetypeId,
+    activo_producto: productAsset,
+    servicio_sin_producto: serviceNoProduct,
+    recetas_ganadoras: recipes,
+    arquetipos_disponibles: archetypes,
+    referencias_visuales_analizadas: references.map((reference) => ({
+      nombre: reference.file_name,
+      analisis: reference.metadata,
+      regla: "Usar sólo estructura, jerarquía y tratamiento visual. No copiar identidad, producto ni texto.",
+    })),
+  };
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -166,17 +197,7 @@ async function createBriefWithOpenAI({
         { role: "system", content: STATIC_BRIEF_DIRECTOR_PROMPT },
         {
           role: "user",
-          content: JSON.stringify({
-            marca: brand,
-            intencion_usuario: intent,
-            formato: format,
-            etapa_embudo: funnelStage,
-            arquetipo_solicitado: archetypeId,
-            activo_producto: productAsset,
-            servicio_sin_producto: serviceNoProduct,
-            recetas_ganadoras: recipes,
-            arquetipos_disponibles: archetypes,
-          }),
+          content: JSON.stringify(context),
         },
       ],
     }),
@@ -191,5 +212,33 @@ async function createBriefWithOpenAI({
   const text = data.choices?.[0]?.message?.content;
   if (!text) throw new Error("La IA no devolvió una ficha editable.");
 
-  return normalizeStaticBrief(JSON.parse(text) as Partial<StaticBrief>, archetypeId);
+  const draft = normalizeStaticBrief(JSON.parse(text) as Partial<StaticBrief>, archetypeId);
+  const review = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini",
+      temperature: 0.2,
+      max_tokens: 1500,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: STATIC_BRIEF_REVIEWER_PROMPT },
+        { role: "user", content: JSON.stringify({ contexto: context, ficha_borrador: draft }) },
+      ],
+    }),
+  });
+
+  if (!review.ok) {
+    const errorText = await review.text();
+    throw new Error(`La revisión creativa falló: ${errorText.slice(0, 180)}`);
+  }
+
+  const reviewData = await review.json();
+  const reviewedText = reviewData.choices?.[0]?.message?.content;
+  if (!reviewedText) throw new Error("La dirección creativa no devolvió una ficha aprobada.");
+
+  return normalizeStaticBrief(JSON.parse(reviewedText) as Partial<StaticBrief>, archetypeId);
 }

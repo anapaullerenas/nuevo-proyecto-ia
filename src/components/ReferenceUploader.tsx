@@ -1,22 +1,51 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { ChangeEvent, useState } from "react";
-import { FileUp, Loader2 } from "lucide-react";
+import { Check, ImageIcon, Loader2, UploadCloud } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-type UploadItem = {
+export type StyleReference = {
   id: string;
-  name: string;
-  status: "subiendo" | "listo" | "error";
+  file_name: string;
+  storage_path: string;
+  bucket_id: string;
+  signed_url?: string | null;
+  metadata?: { analysis_status?: string } | null;
+};
+
+type ReferenceItem = StyleReference & {
+  status: "analizando" | "lista" | "error";
   message?: string;
 };
 
-export function ReferenceUploader({ brandId }: { brandId: string }) {
-  const [items, setItems] = useState<UploadItem[]>([]);
+export function ReferenceUploader({
+  brandId,
+  initialReferences,
+  selectedIds,
+  onSelectionChange,
+}: {
+  brandId: string;
+  initialReferences: StyleReference[];
+  selectedIds: string[];
+  onSelectionChange: (ids: string[]) => void;
+}) {
+  const [items, setItems] = useState<ReferenceItem[]>(
+    initialReferences.map((reference) => ({
+      ...reference,
+      status: reference.metadata?.analysis_status === "error" ? "error" : "lista",
+      message: reference.metadata?.analysis_status === "ready" ? "Estilo analizado" : "Referencia disponible",
+    })),
+  );
   const [isUploading, setIsUploading] = useState(false);
 
+  function toggleReference(id: string) {
+    onSelectionChange(selectedIds.includes(id) ? selectedIds.filter((item) => item !== id) : [...selectedIds, id].slice(-10));
+  }
+
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files || []);
+    const files = Array.from(event.target.files || []).slice(0, Math.max(0, 10 - items.length));
     if (!files.length) return;
 
     setIsUploading(true);
@@ -26,49 +55,66 @@ export function ReferenceUploader({ brandId }: { brandId: string }) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      setItems([{ id: crypto.randomUUID(), name: "Sesion", status: "error", message: "Vuelve a iniciar sesion." }]);
       setIsUploading(false);
       return;
     }
 
-    for (const file of files) {
-      const localId = crypto.randomUUID();
-      setItems((current) => [...current, { id: localId, name: file.name, status: "subiendo" }]);
+    let nextSelectedIds = [...selectedIds];
 
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) continue;
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-      const storagePath = `${user.id}/${brandId}/reference-${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+      const storagePath = `${user.id}/${brandId}/style-reference-${Date.now()}-${crypto.randomUUID()}-${safeName}`;
       const { error: uploadError } = await supabase.storage.from("creative-assets").upload(storagePath, file, {
-        contentType: file.type || "application/octet-stream",
+        contentType: file.type,
         upsert: false,
       });
+      if (uploadError) continue;
 
-      if (uploadError) {
-        setItems((current) =>
-          current.map((item) => (item.id === localId ? { ...item, status: "error", message: uploadError.message } : item)),
-        );
-        continue;
-      }
+      const { data: saved, error: insertError } = await supabase
+        .from("brand_assets")
+        .insert({
+          brand_id: brandId,
+          owner_id: user.id,
+          bucket_id: "creative-assets",
+          storage_path: storagePath,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type,
+          kind: "style_reference",
+          label: "Inspiración visual",
+          metadata: { analysis_status: "processing" },
+        })
+        .select("id,file_name,storage_path,bucket_id,metadata")
+        .single();
+      if (insertError || !saved) continue;
 
-      const { error: insertError } = await supabase.from("uploaded_files").insert({
-        brand_id: brandId,
-        owner_id: user.id,
-        bucket_id: "creative-assets",
-        storage_path: storagePath,
-        file_name: file.name,
-        file_size: file.size,
-        mime_type: file.type,
-        kind: "static_reference",
+      const { data: signed } = await supabase.storage.from("creative-assets").createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+      const item: ReferenceItem = {
+        ...saved,
+        signed_url: signed?.signedUrl || null,
+        status: "analizando",
+        message: "Leyendo estructura y estilo",
+      };
+      setItems((current) => [item, ...current]);
+      nextSelectedIds = [...nextSelectedIds, saved.id].slice(-10);
+      onSelectionChange(nextSelectedIds);
+
+      const analysisResponse = await fetch("/api/static-reference-analysis", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ assetId: saved.id }),
       });
-
+      const analysis = await analysisResponse.json();
       setItems((current) =>
-        current.map((item) =>
-          item.id === localId
+        current.map((reference) =>
+          reference.id === saved.id
             ? {
-                ...item,
-                status: insertError ? "error" : "listo",
-                message: insertError ? insertError.message : "Referencia guardada.",
+                ...reference,
+                status: analysisResponse.ok ? "lista" : "error",
+                message: analysisResponse.ok ? "Estilo analizado" : analysis.error || "No se pudo analizar",
               }
-            : item,
+            : reference,
         ),
       );
     }
@@ -78,22 +124,33 @@ export function ReferenceUploader({ brandId }: { brandId: string }) {
   }
 
   return (
-    <label className="file-drop upload-drop">
-      Referencias
-      <input type="file" multiple accept="image/*,.pdf,.txt" onChange={handleFiles} />
-      <span>Sube anuncios, capturas o referencias. Quedaran guardadas para esta marca.</span>
-      {isUploading && <em>Subiendo referencias...</em>}
+    <div className="reference-uploader">
+      <div className="reference-picker-row">
+        <label className="reference-picker">
+          {isUploading ? <Loader2 className="spin" size={18} /> : <UploadCloud size={18} />}
+          <span><b>{isUploading ? "Preparando referencias..." : "Agregar referencias"}</b><small>JPG, PNG o WebP · máximo 10</small></span>
+          <input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={handleFiles} disabled={isUploading || items.length >= 10} />
+        </label>
+        <p><b>{selectedIds.length}</b> seleccionadas</p>
+      </div>
+
       {items.length > 0 && (
-        <div className="upload-list compact">
+        <div className="reference-thumbnails">
           {items.map((item) => (
-            <div key={item.id} className={item.status}>
-              {isUploading && item.status === "subiendo" ? <Loader2 className="spin" size={13} /> : <FileUp size={13} />}
-              <span>{item.name}</span>
-              <small>{item.message || item.status}</small>
-            </div>
+            <button
+              type="button"
+              key={item.id}
+              className={selectedIds.includes(item.id) ? "selected" : ""}
+              onClick={() => toggleReference(item.id)}
+              disabled={item.status === "analizando"}
+            >
+              {item.signed_url ? <img src={item.signed_url} alt={item.file_name} /> : <ImageIcon size={22} />}
+              <span>{item.status === "analizando" ? <Loader2 className="spin" size={14} /> : <Check size={14} />}</span>
+              <small>{item.message}</small>
+            </button>
           ))}
         </div>
       )}
-    </label>
+    </div>
   );
 }
