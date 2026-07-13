@@ -1,5 +1,6 @@
 import { Copy, ImagePlus, Layers3, WandSparkles } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
+import { ReferenceUploader } from "@/components/ReferenceUploader";
 import { getWorkspace } from "@/lib/workspace";
 
 export default async function CrearEstaticosPage() {
@@ -53,11 +54,7 @@ export default async function CrearEstaticosPage() {
                 02 Variantes
                 <input type="number" min="1" max="12" placeholder="Ej. 4" />
               </label>
-              <label className="file-drop">
-                Referencias
-                <input type="file" multiple accept="image/*,.pdf,.txt" />
-                <span>Sube anuncios, capturas o referencias para analizarlas antes de generar.</span>
-              </label>
+              <ReferenceUploader brandId={workspace.activeBrand.id} />
               <button className="secondary-action" type="button">Copiar prompt madre</button>
             </section>
 

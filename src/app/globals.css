@@ -896,10 +896,92 @@ svg {
 }
 
 .upload-zone button,
-.preview-board button {
+.preview-board button,
+.upload-action {
   color: #632e59;
   background: rgba(255, 255, 255, .76);
   box-shadow: inset 0 0 0 1px rgba(99, 46, 89, .12);
+}
+
+.upload-action {
+  min-height: 42px;
+  border-radius: 999px;
+  padding: 0 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.upload-action input {
+  display: none;
+}
+
+.upload-list {
+  width: 100%;
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+
+.upload-list.compact {
+  margin-top: 8px;
+}
+
+.upload-list div {
+  border: 1px solid rgba(99, 46, 89, .12);
+  border-radius: 14px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  background: rgba(255, 255, 255, .7);
+}
+
+.upload-list.compact div {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.upload-list span {
+  min-width: 0;
+  color: #632e59;
+  font-size: 13px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-list small {
+  color: rgba(99, 46, 89, .68);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.upload-list .listo {
+  border-color: rgba(47, 122, 79, .28);
+}
+
+.upload-list .listo small {
+  color: #2f7a4f;
+}
+
+.upload-list .error {
+  border-color: rgba(154, 35, 35, .28);
+}
+
+.upload-list .error small {
+  color: #9a2323;
+}
+
+.upload-drop em {
+  color: #4f62a7;
+  font-size: 12px;
+  font-style: normal;
 }
 
 .analysis-grid {

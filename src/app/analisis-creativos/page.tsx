@@ -1,5 +1,6 @@
-import { Brain, Clapperboard, ImageUp } from "lucide-react";
+import { Brain } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
+import { CreativeAssetUploader } from "@/components/CreativeAssetUploader";
 import { getWorkspace } from "@/lib/workspace";
 
 const sections = [
@@ -31,14 +32,7 @@ export default async function AnalisisCreativosPage() {
           </div>
 
           <div className="two-column">
-            <div className="upload-zone tall">
-              <Clapperboard size={34} />
-              <b>Video, imagen o URL del anuncio</b>
-              <p>Cuando conectemos IA, aqui se guardara el activo y se analizara con la marca activa.</p>
-              <button disabled>
-                <ImageUp size={16} /> Subir creativo
-              </button>
-            </div>
+            <CreativeAssetUploader brandId={workspace.activeBrand.id} />
             <div className="analysis-map">
               <Brain size={22} />
               <b>Estructura del analisis</b>
@@ -47,7 +41,7 @@ export default async function AnalisisCreativosPage() {
                   <span key={section}>{section}</span>
                 ))}
               </div>
-              <p className="status-warn">El motor de analisis se activara cuando conectemos el servicio de IA.</p>
+              <p className="status-warn">La subida ya queda guardada. El siguiente paso es ejecutar el analisis IA sobre cada archivo.</p>
             </div>
           </div>
         </div>

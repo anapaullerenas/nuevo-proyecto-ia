@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { FileSpreadsheet, UploadCloud } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
+import { MetaImportUploader } from "@/components/MetaImportUploader";
 import { getWorkspace } from "@/lib/workspace";
 
 export default async function AnalisisMetaPage() {
@@ -53,17 +53,7 @@ export default async function AnalisisMetaPage() {
             </div>
           </div>
 
-          <div className="upload-zone">
-            <FileSpreadsheet size={32} />
-            <b>CSV o XLSX de Meta Ads</b>
-            <p>
-              Antes de exportar: marca nombre del anuncio, gasto, impresiones,
-              CTR, CPC, CPM, compras/leads, ROAS, fecha, campana y conjunto.
-            </p>
-            <button disabled>
-              <UploadCloud size={16} /> Subida real pendiente de endpoint
-            </button>
-          </div>
+          <MetaImportUploader brandId={workspace.activeBrand.id} />
 
           <div className="analysis-grid three">
             <article>
