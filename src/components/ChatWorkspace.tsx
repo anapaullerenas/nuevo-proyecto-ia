@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useRef, useState } from "react";
-import { Mic, Pause, SendHorizontal, Sparkles, X } from "lucide-react";
+import { Loader2, Mic, Pause, SendHorizontal, Sparkles, X } from "lucide-react";
 
 const suggestions = [
   "Que creativo producirias esta semana para vender mas?",
@@ -14,7 +14,7 @@ const suggestions = [
 
 type ChatMessage = {
   id: string;
-  role: "user" | "system";
+  role: "user" | "assistant";
   text: string;
   audioUrl?: string;
 };
@@ -23,7 +23,9 @@ export function ChatWorkspace({ brandName }: { brandName: string }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isRecording, setIsRecording] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [audioUrl, setAudioUrl] = useState("");
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [recordingError, setRecordingError] = useState("");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -52,6 +54,7 @@ export function ChatWorkspace({ brandName }: { brandName: string }) {
 
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -64,27 +67,80 @@ export function ChatWorkspace({ brandName }: { brandName: string }) {
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!input.trim() && !audioUrl) return;
+    if ((!input.trim() && !audioBlob) || isSending) return;
 
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      text: input.trim() || "Audio enviado para transcribir.",
-      audioUrl: audioUrl || undefined,
-    };
+    setIsSending(true);
+    setRecordingError("");
 
-    const systemMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "system",
-      text: "Mensaje recibido. La respuesta estrategica se activara cuando conectemos el motor de IA y el consumo de creditos.",
-    };
+    try {
+      let finalText = input.trim();
 
-    setMessages((current) => [...current, userMessage, systemMessage]);
-    setInput("");
-    setAudioUrl("");
+      if (audioBlob) {
+        const formData = new FormData();
+        formData.append("audio", audioBlob, "nota.webm");
+
+        const transcription = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        });
+
+        const transcriptionData = await transcription.json();
+
+        if (!transcription.ok) {
+          setRecordingError(transcriptionData.error || "No se pudo transcribir el audio.");
+          return;
+        }
+
+        finalText = [finalText, transcriptionData.text].filter(Boolean).join("\n\nAudio transcrito: ");
+      }
+
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        text: finalText || "Audio enviado.",
+        audioUrl: audioUrl || undefined,
+      };
+
+      setMessages((current) => [...current, userMessage]);
+      setInput("");
+      setAudioUrl("");
+      setAudioBlob(null);
+
+      const chatResponse = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          message: finalText,
+          messages: messages.map((message) => ({
+            role: message.role,
+            text: message.text,
+          })),
+        }),
+      });
+
+      const chatData = await chatResponse.json();
+
+      if (!chatResponse.ok) {
+        setRecordingError(chatData.error || "No se pudo generar respuesta.");
+        return;
+      }
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: chatData.answer,
+        },
+      ]);
+    } catch {
+      setRecordingError("No se pudo conectar con el asistente. Intenta de nuevo.");
+    } finally {
+      setIsSending(false);
+    }
   }
 
   return (
@@ -124,7 +180,14 @@ export function ChatWorkspace({ brandName }: { brandName: string }) {
       {audioUrl && (
         <div className="audio-chip">
           <audio controls src={audioUrl} />
-          <button type="button" onClick={() => setAudioUrl("")} aria-label="Quitar audio">
+          <button
+            type="button"
+            onClick={() => {
+              setAudioUrl("");
+              setAudioBlob(null);
+            }}
+            aria-label="Quitar audio"
+          >
             <X size={15} />
           </button>
         </div>
@@ -137,17 +200,19 @@ export function ChatWorkspace({ brandName }: { brandName: string }) {
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder="Ej. Que estatico producirias esta semana para esta marca?"
+          disabled={isSending}
         />
         <button
           className={isRecording ? "recording" : ""}
           type="button"
           onClick={toggleRecording}
           aria-label={isRecording ? "Detener audio" : "Grabar audio"}
+          disabled={isSending}
         >
           {isRecording ? <Pause size={18} /> : <Mic size={18} />}
         </button>
-        <button type="submit" aria-label="Enviar mensaje">
-          <SendHorizontal size={18} />
+        <button type="submit" aria-label="Enviar mensaje" disabled={isSending}>
+          {isSending ? <Loader2 className="spin" size={18} /> : <SendHorizontal size={18} />}
         </button>
       </form>
     </>

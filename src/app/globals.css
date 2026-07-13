@@ -819,7 +819,7 @@ svg {
   background: #632e59;
 }
 
-.chat-bubble.system {
+.chat-bubble.assistant {
   justify-self: start;
   background: rgba(255, 255, 255, .78);
 }
@@ -835,6 +835,7 @@ svg {
 .chat-bubble p {
   margin: 0;
   line-height: 1.45;
+  white-space: pre-line;
 }
 
 .chat-bubble.user p,
@@ -842,7 +843,7 @@ svg {
   color: white;
 }
 
-.chat-bubble.system p {
+.chat-bubble.assistant p {
   color: rgba(99, 46, 89, .74);
 }
 
