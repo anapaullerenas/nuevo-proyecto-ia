@@ -25,7 +25,7 @@ export default async function EditarMarcaPage({
             <div>
               <span className="eyebrow">Editar marca</span>
               <h1>{brand.name}</h1>
-              <p>Ajusta la memoria madre. Esto cambiara el contexto para chat, analisis y estaticos.</p>
+              <p>Ajusta la memoria madre. Esto cambiará el contexto para chat, análisis y estáticos.</p>
             </div>
             <Link href="/marcas" className="secondary-action">Cancelar</Link>
           </div>

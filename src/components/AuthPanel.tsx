@@ -18,7 +18,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
     setMessage("");
 
     if (!isSupabaseConfigured()) {
-      setMessage("Supabase aun no esta conectado. Espera a que quede lista la base.");
+      setMessage("Estamos ajustando la plataforma. Intenta de nuevo en unos minutos.");
       return;
     }
 
@@ -72,8 +72,8 @@ export function AuthPanel({ mode }: { mode: Mode }) {
       <h1>{mode === "registro" ? "Empieza con tu cuenta y luego registra tu marca." : "Vuelve a tu centro creativo."}</h1>
       <p>
         {mode === "registro"
-          ? "Despues de crear usuario, la plataforma te lleva al onboarding de marca. Nada aparece precargado."
-          : "Usa el correo y contrasena con los que te registraste."}
+          ? "Después de crear usuario, la plataforma te lleva al onboarding de marca. Nada aparece precargado."
+          : "Usa el correo y contraseña con los que te registraste."}
       </p>
 
       {mode === "registro" && (
@@ -89,13 +89,13 @@ export function AuthPanel({ mode }: { mode: Mode }) {
       </label>
 
       <label>
-        Contrasena
+        Contraseña
         <input
           name="password"
           type="password"
           autoComplete={mode === "registro" ? "new-password" : "current-password"}
           minLength={8}
-          placeholder="Minimo 8 caracteres"
+          placeholder="Mínimo 8 caracteres"
           required
         />
       </label>

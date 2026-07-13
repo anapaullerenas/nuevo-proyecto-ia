@@ -22,10 +22,10 @@ export default async function DashboardPage() {
         <aside className="brand-context">
           <span className="eyebrow">Marca activa</span>
           <h1>{activeBrand.name}</h1>
-          <p>{activeBrand.category || "Categoria pendiente"}</p>
+          <p>{activeBrand.category || "Completa la categoría de tu marca"}</p>
           <dl>
             <div>
-              <dt>Produccion</dt>
+              <dt>Producción</dt>
               <dd>{labelContentOwner(activeBrand.content_owner)}</dd>
             </div>
             <div>
@@ -41,11 +41,10 @@ export default async function DashboardPage() {
         <section className="empty-ops">
           <div className="empty-hero">
             <span className="eyebrow">Dashboard real</span>
-            <h2>Aun no hay analisis, imports ni estaticos.</h2>
+            <h2>Aún no hay análisis, imports ni estáticos.</h2>
             <p>
-              Esta es la pantalla correcta para una cuenta nueva: primero carga
-              datos o conversa con la IA. Los resultados apareceran cuando
-              existan acciones reales en la base.
+              Empieza con una acción concreta: conversa con la IA, sube un
+              creativo o guarda tus números en la calculadora.
             </p>
           </div>
 
@@ -54,11 +53,11 @@ export default async function DashboardPage() {
               <MessageCircle />
               <b>Chat IA</b>
               <p>Preguntar que producir con el contexto de marca guardado.</p>
-              <Link href="/chat" className="module-action">Iniciar conversacion</Link>
+              <Link href="/chat" className="module-action">Iniciar conversación</Link>
             </article>
             <article>
               <ChartNoAxesCombined />
-              <b>Analisis Meta</b>
+              <b>Análisis Meta</b>
               <p>Subir CSV/XLSX exportado desde Meta para detectar ganadores.</p>
               <Link href="/analisis-meta" className="module-action">
                 <UploadCloud size={15} /> Subir export
@@ -66,15 +65,15 @@ export default async function DashboardPage() {
             </article>
             <article>
               <Brain />
-              <b>Analisis creativos</b>
+              <b>Análisis creativos</b>
               <p>Subir video o imagen para obtener score, psicologia y variantes.</p>
               <Link href="/analisis-creativos" className="module-action">Nuevo analisis</Link>
             </article>
             <article>
               <ImagePlus />
-              <b>Crear estaticos</b>
+              <b>Crear estáticos</b>
               <p>Crear desde cero o desde un creativo ganador cuando exista.</p>
-              <Link href="/crear-estaticos" className="module-action">Crear primer estatico</Link>
+              <Link href="/crear-estaticos" className="module-action">Crear primer estático</Link>
             </article>
           </div>
         </section>

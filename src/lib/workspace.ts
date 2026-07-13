@@ -53,7 +53,7 @@ export async function getWorkspace() {
 
 export function labelContentOwner(value: string | null) {
   const labels: Record<string, string> = {
-    owner: "La duena/persona crea contenido",
+    owner: "La dueña/persona crea contenido",
     team: "Equipo interno",
     agency: "Agencia o freelancer",
     mixed: "Mixto",

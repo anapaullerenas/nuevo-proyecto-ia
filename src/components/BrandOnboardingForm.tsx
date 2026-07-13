@@ -28,7 +28,7 @@ export function BrandOnboardingForm({
 
     if (userError || !userData.user) {
       setIsLoading(false);
-      setMessage("Tu sesion expiro. Vuelve a entrar.");
+      setMessage("Tu sesión expiró. Vuelve a entrar.");
       return;
     }
 
@@ -79,7 +79,7 @@ export function BrandOnboardingForm({
           <input name="website" defaultValue={initialBrand?.website || ""} placeholder="https:// o @usuario" />
         </label>
         <label>
-          Categoria
+          Categoría
           <input
             name="category"
             defaultValue={initialBrand?.category || ""}
@@ -88,9 +88,9 @@ export function BrandOnboardingForm({
           />
         </label>
         <label>
-          Quien crea el contenido
+          Quién crea el contenido
           <select name="content_owner" defaultValue={initialBrand?.content_owner || "owner"}>
-            <option value="owner">La persona/duena lo crea</option>
+            <option value="owner">La persona/dueña lo crea</option>
             <option value="team">Tiene equipo interno</option>
             <option value="agency">Lo delega a agencia/freelancer</option>
             <option value="mixed">Mixto</option>
@@ -103,7 +103,7 @@ export function BrandOnboardingForm({
         <textarea
           name="audience"
           defaultValue={initialBrand?.audience || ""}
-          placeholder="A quien le vende, que desea, que objeciones tiene..."
+          placeholder="A quién le vende, qué desea, qué objeciones tiene..."
           required
         />
       </label>
@@ -112,7 +112,7 @@ export function BrandOnboardingForm({
         <textarea
           name="offer"
           defaultValue={initialBrand?.offer || ""}
-          placeholder="Producto, promesa, precio, bonus, garantia, mecanismo..."
+          placeholder="Producto, promesa, precio, bonus, garantía, mecanismo..."
           required
         />
       </label>
@@ -121,7 +121,7 @@ export function BrandOnboardingForm({
         <textarea
           name="voice"
           defaultValue={initialBrand?.voice || ""}
-          placeholder="Como habla, que palabras usa, que nunca diria..."
+          placeholder="Cómo habla, qué palabras usa, qué nunca diría..."
           required
         />
       </label>
@@ -130,14 +130,8 @@ export function BrandOnboardingForm({
         <textarea
           name="creative_goal"
           defaultValue={initialBrand?.creative_goal || ""}
-          placeholder="Ej. encontrar ganadores para Meta, crear estaticos, analizar videos..."
+          placeholder="Ej. encontrar ganadores para Meta, crear estáticos, analizar videos..."
         />
-      </label>
-
-      <label className="file-drop">
-        Archivo de contexto
-        <input name="brand_file" type="file" accept=".pdf,.doc,.docx,.txt,.csv,.xlsx" />
-        <span>Opcional: brief, manual de marca, respuestas de cliente o plantilla llena. La lectura automatica se conecta en la siguiente fase.</span>
       </label>
 
       {message && <p className="form-message">{message}</p>}

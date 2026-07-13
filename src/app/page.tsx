@@ -8,18 +8,13 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { BrandMark, PRODUCT_NAME } from "@/components/BrandIdentity";
 
 export default function Home() {
   return (
     <main className="marketing-page">
       <nav className="public-nav">
-        <Link href="/" className="brand-lockup" aria-label="Proyecto IA">
-          <span className="brand-mark" />
-          <span>
-            <b>Proyecto IA</b>
-            <small>Creative operating studio</small>
-          </span>
-        </Link>
+        <BrandMark subtitle="Creative operating studio" />
         <div>
           <Link href="/login">Entrar</Link>
           <Link href="/registro" className="nav-cta">
@@ -33,11 +28,11 @@ export default function Home() {
           <span className="eyebrow">
             <Sparkles size={16} /> IA para creativas, marcas y performance
           </span>
-          <h1>Tu sistema para decidir, crear y medir anuncios sin perder el hilo.</h1>
+          <h1>{PRODUCT_NAME}: tu sistema para decidir, crear y medir anuncios sin perder el hilo.</h1>
           <p>
             Registra tu marca una vez. Desde ahi la IA usa esa memoria para
             analizar creativos, leer tus exports de Meta, conversar contigo y
-            convertir aprendizajes en nuevos estaticos.
+            convertir aprendizajes en nuevos estáticos.
           </p>
           <div className="hero-actions">
             <Link href="/registro" className="primary-action">
@@ -63,7 +58,7 @@ export default function Home() {
           <div>
             <span>03</span>
             <b>Operacion IA</b>
-            <p>Chat, Meta, creativos, estaticos y decisiones guardadas.</p>
+            <p>Chat, Meta, creativos, estáticos y decisiones guardadas.</p>
           </div>
         </aside>
       </section>
@@ -76,18 +71,18 @@ export default function Home() {
         </article>
         <article>
           <ChartNoAxesCombined />
-          <b>Analisis Meta</b>
+          <b>Análisis Meta</b>
           <p>Sube exports y convierte datos en acciones creativas.</p>
         </article>
         <article>
           <Brain />
-          <b>Analisis creativo</b>
+          <b>Análisis creativo</b>
           <p>Score, psicologia, estructura, variantes y prompts.</p>
         </article>
         <article>
           <ImagePlus />
-          <b>Crear estaticos</b>
-          <p>Brief, referencias, versiones y edicion con IA.</p>
+          <b>Crear estáticos</b>
+          <p>Brief, referencias, versiones y edición con IA.</p>
         </article>
       </section>
 
@@ -96,9 +91,8 @@ export default function Home() {
         <div>
           <b>Acceso pensado para miembros activos</b>
           <p>
-            La base ya contempla estado Skool, saldo de creditos y bloqueo de
-            consumo cuando una membresia no este activa. La integracion directa
-            con Skool se conectara al final del flujo.
+            La base contempla membresía, saldo de créditos y control de acceso
+            para operar con orden desde el primer día.
           </p>
         </div>
       </section>

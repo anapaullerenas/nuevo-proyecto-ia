@@ -14,8 +14,8 @@ export default async function MarcasPage() {
           <div className="panel-heading split">
             <div>
               <span className="eyebrow">Mis marcas</span>
-              <h1>La informacion madre vive aqui.</h1>
-              <p>Cada marca guarda audiencia, oferta, voz y quien produce contenido.</p>
+              <h1>La información madre vive aquí.</h1>
+              <p>Cada marca guarda audiencia, oferta, voz y quién produce contenido.</p>
             </div>
             <Link href="/onboarding" className="soft-button">
               <Plus size={16} /> Agregar marca
@@ -27,15 +27,15 @@ export default async function MarcasPage() {
               <article key={brand.id}>
                 <span>{brand.id === workspace.activeBrand.id ? "Activa" : "Guardada"}</span>
                 <h2>{brand.name}</h2>
-                <p>{brand.category || "Sin categoria"}</p>
+                <p>{brand.category || "Completa la categoría"}</p>
                 <dl>
                   <div>
-                    <dt>Produccion</dt>
+                    <dt>Producción</dt>
                     <dd>{labelContentOwner(brand.content_owner)}</dd>
                   </div>
                   <div>
                     <dt>Objetivo</dt>
-                    <dd>{brand.creative_goal || "Sin objetivo"}</dd>
+                    <dd>{brand.creative_goal || "Define un primer objetivo"}</dd>
                   </div>
                 </dl>
                 <Link href={`/marcas/${brand.id}/editar`} className="inline-action">

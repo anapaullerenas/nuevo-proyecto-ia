@@ -13,26 +13,26 @@ export default async function AnalisisMetaPage() {
         <div className="studio-panel">
           <div className="panel-heading split">
             <div>
-              <span className="eyebrow">Analisis Meta</span>
+              <span className="eyebrow">Análisis Meta</span>
               <h1>Sube el export y detecta anuncios ganadores.</h1>
               <p>
-                Este modulo recibira CSV/XLSX de Meta Ads, normalizara metricas
-                y marcara ganadores por hook, oferta, formato, fatiga y costo.
+                Sube CSV/XLSX de Meta Ads para guardar el reporte de la marca
+                y preparar decisiones de ganadores, fatiga e iteraciones.
               </p>
             </div>
             <div className="status-card compact">
               <b>Estado</b>
-              <span className="status-warn">Subida en preparacion</span>
+              <span className="status-ok">Subida activa</span>
             </div>
           </div>
 
           <div className="export-guide">
             <span className="eyebrow">Antes de exportar desde Meta</span>
-            <h2>Marca estas columnas para que el analisis tenga sentido.</h2>
+            <h2>Marca estas columnas para que el análisis tenga sentido.</h2>
             <div>
               {[
                 "Nombre del anuncio",
-                "Campana y conjunto",
+                "Campaña y conjunto",
                 "Fecha o rango",
                 "Gasto",
                 "Impresiones",
@@ -44,7 +44,7 @@ export default async function AnalisisMetaPage() {
                 "Resultados",
                 "Costo por resultado",
                 "Compras/leads/mensajes",
-                "ROAS o valor de conversion",
+                "ROAS o valor de conversión",
               ].map((item) => (
                 <label key={item}>
                   <input type="checkbox" defaultChecked /> {item}
@@ -59,24 +59,24 @@ export default async function AnalisisMetaPage() {
             <article>
               <span>01</span>
               <b>Ranking ganador</b>
-              <p>Que anuncio escalar, cual pausar y cual iterar.</p>
+              <p>Qué anuncio escalar, cuál pausar y cuál iterar.</p>
             </article>
             <article>
               <span>02</span>
               <b>Lectura de fatiga</b>
-              <p>Senales de caida por frecuencia, CTR o costo.</p>
+              <p>Señales de caída por frecuencia, CTR o costo.</p>
             </article>
             <article>
               <span>03</span>
               <b>Brief accionable</b>
-              <p>Que producir despues con base en datos reales.</p>
+              <p>Qué producir después con base en datos reales.</p>
             </article>
           </div>
 
           <div className="meta-calculator-link">
             <div>
               <span className="eyebrow">Rentabilidad</span>
-              <b>Antes de escalar, calcula tu ROAS objetivo y CPA maximo.</b>
+              <b>Antes de escalar, calcula tu ROAS objetivo y CPA máximo.</b>
               <p>La calculadora vive como herramienta independiente para simular costos, leads, ventas y gasto publicitario.</p>
             </div>
             <Link href="/calculadora-costos" className="soft-button">Abrir calculadora</Link>

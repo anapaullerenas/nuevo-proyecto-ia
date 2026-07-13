@@ -7,10 +7,10 @@ const sections = [
   "Score ganador",
   "Gancho y claridad",
   "Oferta y objeciones",
-  "Psicologia de compra",
+  "Psicología de compra",
   "Receta ganadora",
-  "Que mantener",
-  "Que producir despues",
+  "Qué mantener",
+  "Qué producir después",
   "Variantes recomendadas",
 ];
 
@@ -23,11 +23,11 @@ export default async function AnalisisCreativosPage() {
       <section className="work-page creative-analysis">
         <div className="studio-panel">
           <div className="panel-heading">
-            <span className="eyebrow">Analisis creativos</span>
+            <span className="eyebrow">Análisis creativos</span>
             <h1>Sube imagen o video y recibe una lectura profunda.</h1>
             <p>
-              Este flujo reemplaza el mockup simple: el resultado debe incluir
-              variantes, psicologia, por que funciona, que cambiar y que producir.
+              Analiza anuncios visuales con una lectura clara: score, psicología,
+              señales, receta ganadora, guiones y próximos pasos.
             </p>
           </div>
 
@@ -35,13 +35,13 @@ export default async function AnalisisCreativosPage() {
             <CreativeAssetUploader brandId={workspace.activeBrand.id} />
             <div className="analysis-map">
               <Brain size={22} />
-              <b>Estructura del analisis</b>
+              <b>Estructura del análisis</b>
               <div>
                 {sections.map((section) => (
                   <span key={section}>{section}</span>
                 ))}
               </div>
-              <p className="status-warn">Despues de subir un archivo, presiona Analizar ahora. Imagenes se analizan directo; videos se interpretan con frames clave.</p>
+              <p className="status-warn">Después de subir un archivo, presiona Analizar. Imágenes se leen directo; videos se interpretan con frames clave.</p>
             </div>
           </div>
         </div>

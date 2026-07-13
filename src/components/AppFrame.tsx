@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { WalletCards } from "lucide-react";
 import type { ReactNode } from "react";
+import { BrandMark } from "@/components/BrandIdentity";
 import type { WorkspaceBrand } from "@/lib/workspace";
 
 const navItems = [
   { href: "/chat", label: "Chat IA" },
-  { href: "/analisis-meta", label: "Analisis Meta" },
+  { href: "/analisis-meta", label: "Análisis Meta" },
   { href: "/calculadora-costos", label: "Calculadora" },
-  { href: "/analisis-creativos", label: "Analisis creativos" },
-  { href: "/crear-estaticos", label: "Crear estaticos" },
+  { href: "/analisis-creativos", label: "Análisis creativos" },
+  { href: "/crear-estaticos", label: "Crear estáticos" },
   { href: "/marcas", label: "Mis marcas" },
   { href: "/cuenta", label: "Cuenta" },
 ];
@@ -27,13 +28,7 @@ export function AppFrame({
   return (
     <main className="app-page">
       <header className="app-topbar">
-        <Link href="/dashboard" className="brand-lockup">
-          <span className="brand-mark" />
-          <span>
-            <b>Proyecto IA</b>
-            <small>{brand.name}</small>
-          </span>
-        </Link>
+        <BrandMark href="/dashboard" subtitle={brand.name} />
         <nav aria-label="Navegacion principal">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href} className={active === item.href ? "is-active" : ""}>
@@ -43,7 +38,7 @@ export function AppFrame({
         </nav>
         <Link href="/cuenta" className="credit-pill">
           <WalletCards size={16} />
-          <span>{credits} creditos</span>
+          <span>{credits} créditos</span>
         </Link>
       </header>
       {children}
@@ -54,8 +49,8 @@ export function AppFrame({
 export function SetupState() {
   return (
     <main className="setup-state">
-      <h1>Supabase aun no esta conectado</h1>
-      <p>Cuando las variables esten listas, este modulo guardara datos reales.</p>
+      <h1>Estamos ajustando la plataforma</h1>
+      <p>Vuelve en unos minutos para continuar trabajando con tu marca.</p>
     </main>
   );
 }

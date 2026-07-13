@@ -15,7 +15,7 @@ const body = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Proyecto IA",
+  title: "Anapau iA",
   description:
     "Plataforma unificada para chat IA, análisis Meta, análisis creativo, estáticos, marcas y créditos.",
 };

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BarChart3, CreditCard, Database, UsersRound } from "lucide-react";
+import { BrandMark } from "@/components/BrandIdentity";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAiStatus } from "@/lib/workspace";
 
@@ -9,8 +10,8 @@ export default async function AdminPage() {
   if (!supabase) {
     return (
       <main className="setup-state">
-        <h1>Admin pendiente</h1>
-        <p>Supabase debe estar conectado para ver operacion.</p>
+        <h1>Estamos ajustando la plataforma</h1>
+        <p>Vuelve en unos minutos para revisar operación.</p>
       </main>
     );
   }
@@ -23,7 +24,7 @@ export default async function AdminPage() {
     return (
       <main className="setup-state">
         <h1>Acceso administrativo</h1>
-        <p>Entra con la cuenta duena para revisar usuarios, creditos e integraciones.</p>
+        <p>Entra con la cuenta administradora para revisar usuarios, créditos e integraciones.</p>
         <Link href="/login" className="primary-action">Entrar</Link>
       </main>
     );
@@ -56,13 +57,7 @@ export default async function AdminPage() {
   return (
     <main className="admin-page">
       <header className="admin-topbar">
-        <Link href="/dashboard" className="brand-lockup">
-          <span className="brand-mark" />
-          <span>
-            <b>Proyecto IA</b>
-            <small>Administracion</small>
-          </span>
-        </Link>
+        <BrandMark href="/dashboard" subtitle="Administración" />
         <Link href="/dashboard" className="secondary-action">Volver a plataforma</Link>
       </header>
 
@@ -70,13 +65,13 @@ export default async function AdminPage() {
         <div className="panel-heading split">
           <div>
             <span className="eyebrow">Panel madre</span>
-            <h1>Operacion, creditos y acceso.</h1>
-            <p>Vista para la duena: usuarios registrados, saldo, consumo e integraciones criticas.</p>
+            <h1>Operación, créditos y acceso.</h1>
+            <p>Vista para la administradora: usuarios registrados, saldo, consumo e integraciones críticas.</p>
           </div>
           <div className="status-card compact">
             <b>IA interna</b>
             <span className={ai.openai || ai.anthropic ? "status-ok" : "status-warn"}>
-              {ai.openai || ai.anthropic ? "Conectada" : "Pendiente de llaves"}
+              {ai.openai || ai.anthropic ? "Conectada" : "Requiere configuración"}
             </span>
           </div>
         </div>
@@ -84,24 +79,24 @@ export default async function AdminPage() {
         <div className="admin-metrics">
           <article><UsersRound /><span>Usuarios</span><b>{usersCount || 0}</b></article>
           <article><Database /><span>Marcas</span><b>{brandsCount || 0}</b></article>
-          <article><CreditCard /><span>Creditos vivos</span><b>{totalCredits}</b></article>
+          <article><CreditCard /><span>Créditos vivos</span><b>{totalCredits}</b></article>
           <article><BarChart3 /><span>Gasto estimado IA</span><b>$0.00</b></article>
         </div>
 
         <div className="admin-grid">
           <section>
-            <h2>Reglas de creditos</h2>
-            <p>Saldo inicial sugerido: 300 creditos. Recarga minima: $10. Cada accion debe registrar costo, modulo, usuario, marca y metadata.</p>
+            <h2>Reglas de créditos</h2>
+            <p>Saldo inicial sugerido: 300 créditos. Recarga mínima: $10. Cada acción debe registrar costo, módulo, usuario, marca y metadata.</p>
             <ul>
               <li>Chat IA: bajo consumo, ideal para uso frecuente.</li>
-              <li>Analisis creativo: mayor costo por vision y reporte profundo.</li>
-              <li>Meta import: costo por archivo y tamano de datos.</li>
-              <li>Estaticos: costo mas alto por generacion y variantes.</li>
+              <li>Análisis creativo: mayor costo por visión y reporte profundo.</li>
+              <li>Meta import: costo por archivo y tamaño de datos.</li>
+              <li>Estáticos: costo más alto por generación y variantes.</li>
             </ul>
           </section>
           <section>
             <h2>Skool</h2>
-            <p>La tabla de membresias esta creada. Falta decidir si se valida por webhook, API externa o sincronizacion programada.</p>
+            <p>El acceso por membresía se controla desde la base para activar, pausar o revisar usuarias sin afectar sus marcas.</p>
             <ul>
               <li>Activo: puede entrar y usar saldo.</li>
               <li>Inactivo: bloquea dashboard y muestra renovar acceso.</li>

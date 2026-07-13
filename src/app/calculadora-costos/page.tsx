@@ -13,16 +13,16 @@ export default async function CalculadoraCostosPage() {
         <div className="panel-heading split calculator-hero">
           <div>
             <span className="eyebrow">Calculadora de costos</span>
-            <h1>Decide cuanto puedes invertir sin adivinar.</h1>
+            <h1>Decide cuánto puedes invertir sin adivinar.</h1>
             <p>
-              Una herramienta para entender break even, ROAS objetivo, CPA maximo,
-              CPL maximo y escenarios de pauta antes de escalar anuncios.
+              Una herramienta para entender break even, ROAS objetivo, CPA máximo,
+              CPL máximo y escenarios de pauta antes de escalar anuncios.
             </p>
           </div>
           <div className="calculator-note">
             <Calculator />
             <b>Para decisiones de pauta</b>
-            <p>Usala antes de analizar Meta o lanzar nuevos estaticos.</p>
+            <p>Úsala antes de analizar Meta o lanzar nuevos estáticos.</p>
           </div>
         </div>
 
@@ -33,19 +33,19 @@ export default async function CalculadoraCostosPage() {
             <Target />
             <span>01</span>
             <b>Break even</b>
-            <p>Tu ROAS minimo para no perder dinero despues de costos variables.</p>
+            <p>Tu ROAS mínimo para no perder dinero después de costos variables.</p>
           </article>
           <article>
             <Target />
             <span>02</span>
             <b>CPA objetivo</b>
-            <p>El costo maximo por compra para conservar el margen deseado.</p>
+            <p>El costo máximo por compra para conservar el margen deseado.</p>
           </article>
           <article>
             <Target />
             <span>03</span>
-            <b>CPL maximo</b>
-            <p>Cuanto pagar por lead o mensaje segun tu tasa de cierre real.</p>
+            <b>CPL máximo</b>
+            <p>Cuánto pagar por lead o mensaje según tu tasa de cierre real.</p>
           </article>
         </div>
       </section>

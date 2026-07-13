@@ -21,48 +21,48 @@ export default async function CuentaPage() {
         <article className="studio-panel">
           <div className="panel-heading">
             <span className="eyebrow">Cuenta</span>
-            <h1>Creditos, acceso e integraciones.</h1>
-            <p>Este panel sera donde la usuaria entienda saldo, consumo y estado de acceso.</p>
+            <h1>Créditos, acceso e integraciones.</h1>
+            <p>Revisa saldo, consumo esperado y estado de acceso de tu cuenta.</p>
           </div>
           <div className="account-cards">
             <div>
               <CreditCard />
-              <b>{workspace.walletBalance} creditos disponibles</b>
-              <p>Los creditos se gastaran en chats, analisis, imports y generacion de estaticos.</p>
+              <b>{workspace.walletBalance} créditos disponibles</b>
+              <p>Los créditos se gastan en chats, análisis, imports y generación de estáticos.</p>
             </div>
             <div>
               <ShieldCheck />
-              <b>Acceso por membresia</b>
-              <p>La validacion con Skool se conectara al final para activar o bloquear acceso.</p>
+              <b>Acceso por membresía</b>
+              <p>Tu acceso puede activarse o pausarse según el estado de membresía definido por la administradora.</p>
             </div>
             <div>
               <WalletCards />
               <b>Recargas</b>
-              <p>Mockup listo: paquetes de saldo para probar el esquema antes de conectar pagos.</p>
+              <p>Los paquetes muestran el esquema de recarga que se conectará a pagos cuando se active venta pública.</p>
             </div>
           </div>
           <section className="credit-packages">
             {[
-              { name: "Starter", price: "$10", credits: "1,000 creditos", note: "Para pruebas y uso ligero" },
-              { name: "Growth", price: "$25", credits: "2,800 creditos", note: "Mejor para crear y analizar semanalmente" },
-              { name: "Studio", price: "$50", credits: "6,000 creditos", note: "Para equipos o marcas con pauta activa" },
+              { name: "Starter", price: "$10", credits: "1,000 créditos", note: "Para pruebas y uso ligero" },
+              { name: "Growth", price: "$25", credits: "2,800 créditos", note: "Mejor para crear y analizar semanalmente" },
+              { name: "Studio", price: "$50", credits: "6,000 créditos", note: "Para equipos o marcas con pauta activa" },
             ].map((pack) => (
               <article key={pack.name}>
                 <span>{pack.name}</span>
                 <b>{pack.price}</b>
                 <p>{pack.credits}</p>
                 <small>{pack.note}</small>
-                <button disabled>Agregar saldo</button>
+                <button disabled title="Las recargas se activan cuando se conecte pagos">Próximamente</button>
               </article>
             ))}
           </section>
           <div className="usage-table">
             <b>Referencia de consumo</b>
-            <p>Chat IA: 5-15 creditos · Analisis creativo: 80-150 · Import Meta: 120-250 · Estatico: 250-500.</p>
+            <p>Chat IA: 5-15 créditos · Análisis creativo: 80-150 · Import Meta: 120-250 · Estático: 250-500.</p>
           </div>
           <form action={signOut}>
             <button className="soft-button">
-              <LogOut size={16} /> Cerrar sesion
+              <LogOut size={16} /> Cerrar sesión
             </button>
           </form>
         </article>

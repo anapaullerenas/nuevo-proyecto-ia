@@ -18,6 +18,7 @@ type UploadItem = {
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
+const MAX_VIDEO_SIZE = 200 * 1024 * 1024;
 
 type CreativeAnalysisResult = {
   score: number;
@@ -30,7 +31,10 @@ type Signal = { level?: string; note?: string };
 type CreativeDissection = {
   score?: number;
   verdict?: string;
+  summary?: string;
   winning_reason?: string;
+  why_it_works?: string[];
+  diagnosis?: Record<string, Signal>;
   signals?: {
     scroll_stop?: Signal;
     clarity?: Signal;
@@ -98,8 +102,11 @@ type CreativeDissection = {
   winning_recipe?: string[];
   keep?: string[];
   test?: string[];
+  change?: string[];
+  produce_next?: string[];
   original_script?: string;
   script_variants?: Array<{ name?: string; scenario?: string; script?: string; team_brief?: string[] }>;
+  variants?: Array<{ name?: string; angle?: string; hook?: string; execution?: string }>;
   replication_plan?: {
     voice_tone?: string;
     editing_notes?: string[];
@@ -139,6 +146,21 @@ export function CreativeAssetUploader({ brandId }: { brandId: string }) {
         setItems((current) =>
           current.map((item) =>
             item.id === localId ? { ...item, status: "error", message: "Formato no soportado." } : item,
+          ),
+        );
+        continue;
+      }
+
+      if (assetType === "video" && file.size > MAX_VIDEO_SIZE) {
+        setItems((current) =>
+          current.map((item) =>
+            item.id === localId
+              ? {
+                  ...item,
+                  status: "error",
+                  message: "Este video supera 200 MB. Comprime el archivo o exporta una versión más ligera antes de subirlo.",
+                }
+              : item,
           ),
         );
         continue;
@@ -218,7 +240,7 @@ export function CreativeAssetUploader({ brandId }: { brandId: string }) {
             ? {
                 ...currentItem,
                 analysisStatus: "listo",
-                message: "Analisis listo.",
+                message: "Análisis listo.",
                 analysis: data.analysis,
               }
             : currentItem,
@@ -243,7 +265,7 @@ export function CreativeAssetUploader({ brandId }: { brandId: string }) {
     <div className="upload-zone tall">
       <ImageUp size={34} />
       <b>Subir imagen o video del anuncio</b>
-      <p>Sube el creativo y luego presiona Analizar ahora para recibir una diseccion profunda: score, psicologia, receta, guiones y variantes.</p>
+      <p>Sube imagen o video y recibe una lectura profunda con score, psicología, receta, guiones y variantes.</p>
       <label className="upload-action">
         {isUploading ? <Loader2 className="spin" size={16} /> : <ImageUp size={16} />}
         {isUploading ? "Subiendo..." : "Seleccionar creativo"}
@@ -263,7 +285,7 @@ export function CreativeAssetUploader({ brandId }: { brandId: string }) {
                   disabled={item.analysisStatus === "analizando"}
                 >
                   {item.analysisStatus === "analizando" ? <Loader2 className="spin" size={14} /> : <Brain size={14} />}
-                  {item.analysisStatus === "analizando" ? "Analizando..." : "Analizar ahora"}
+                  {item.analysisStatus === "analizando" ? "Analizando..." : "Analizar · 120 cr"}
                 </button>
               )}
               {item.analysis && <CreativeAnalysisCard result={item.analysis} />}
@@ -276,7 +298,7 @@ export function CreativeAssetUploader({ brandId }: { brandId: string }) {
 }
 
 function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
-  const analysis = result.analysis;
+  const analysis = normalizeClientAnalysis(result.analysis, result);
   const score = analysis.score ?? result.score;
   const verdict = analysis.verdict || result.verdict;
   const hook = analysis.dashboard?.hook;
@@ -295,7 +317,7 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
         </div>
         <div>
           <span className="eyebrow">Lectura profunda</span>
-          <h3>{analysis.winning_reason || "Analisis creativo completo."}</h3>
+          <h3>{analysis.winning_reason || "Análisis creativo completo."}</h3>
           <strong>{verdict}</strong>
         </div>
       </div>
@@ -424,6 +446,36 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
       </div>
     </section>
   );
+}
+
+function normalizeClientAnalysis(analysis: CreativeDissection, result: CreativeAnalysisResult): CreativeDissection {
+  const legacyVariants =
+    analysis.script_variants ||
+    analysis.variants?.map((variant, index) => ({
+      name: variant.name || `Variante ${index + 1}`,
+      scenario: variant.angle,
+      script: [variant.hook, variant.execution].filter(Boolean).join("\n\n"),
+      team_brief: variant.execution ? [variant.execution] : [],
+    }));
+
+  return {
+    ...analysis,
+    score: analysis.score ?? result.score,
+    verdict: analysis.verdict || result.verdict,
+    winning_reason: analysis.winning_reason || analysis.summary || "Análisis creativo listo.",
+    signals:
+      analysis.signals ||
+      (analysis.diagnosis
+        ? {
+            scroll_stop: analysis.diagnosis.hook,
+            clarity: analysis.diagnosis.clarity,
+            offer: analysis.diagnosis.offer,
+          }
+        : undefined),
+    winning_recipe: analysis.winning_recipe?.length ? analysis.winning_recipe : analysis.why_it_works || [],
+    test: analysis.test?.length ? analysis.test : [...(analysis.change || []), ...(analysis.produce_next || [])],
+    script_variants: legacyVariants || [],
+  };
 }
 
 function SignalCard({ title, signal }: { title: string; signal?: Signal }) {

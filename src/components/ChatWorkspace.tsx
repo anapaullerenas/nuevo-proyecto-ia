@@ -170,7 +170,7 @@ export function ChatWorkspace({ brandName }: { brandName: string }) {
             <Sparkles size={22} />
             <b>Empieza con una pregunta o dicta tu idea.</b>
             <p>
-              Puedes pedir hooks, angles, briefs, ideas de estaticos o diagnosticos
+              Puedes pedir hooks, ángulos, briefs, ideas de estáticos o diagnósticos
               usando la memoria de esta marca.
             </p>
           </>
@@ -199,7 +199,7 @@ export function ChatWorkspace({ brandName }: { brandName: string }) {
         <input
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="Ej. Que estatico producirias esta semana para esta marca?"
+          placeholder="Ej. ¿Qué estático producirías esta semana para esta marca?"
           disabled={isSending}
         />
         <button

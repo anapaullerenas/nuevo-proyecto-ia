@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BrandMark } from "@/components/BrandIdentity";
 import { BrandOnboardingForm } from "@/components/BrandOnboardingForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -9,8 +10,8 @@ export default async function OnboardingPage() {
   if (!supabase) {
     return (
       <main className="setup-state">
-        <h1>Supabase aun no esta conectado</h1>
-        <p>Cuando las variables esten listas, este onboarding guardara marcas reales.</p>
+        <h1>Estamos ajustando la plataforma</h1>
+        <p>Vuelve en unos minutos para guardar tu marca.</p>
       </main>
     );
   }
@@ -26,22 +27,16 @@ export default async function OnboardingPage() {
   return (
     <main className="onboarding-page">
       <nav className="public-nav compact">
-        <Link href="/" className="brand-lockup">
-          <span className="brand-mark" />
-          <span>
-            <b>Proyecto IA</b>
-            <small>Marca madre</small>
-          </span>
-        </Link>
+        <BrandMark subtitle="Marca madre" />
       </nav>
       <section className="onboarding-shell">
         <div className="onboarding-intro">
-          <span className="eyebrow">Paso 2 de 3</span>
-          <h1>Registra la informacion madre de tu marca.</h1>
+          <span className="eyebrow">Paso 1 de 3</span>
+          <h1>Registra la información madre de tu marca.</h1>
           <p>
-            Esta informacion sera la base para el chat IA, analisis Meta,
-            analisis creativos y generacion de estaticos. No hay datos
-            precargados: todo empieza con lo que guardes aqui.
+            Esta información será la base para el chat IA, análisis Meta,
+            análisis creativos y generación de estáticos. No hay datos
+            precargados: todo empieza con lo que guardes aquí.
           </p>
           <div className="onboarding-links">
             <Link href="/" className="secondary-action">Cancelar y volver</Link>
