@@ -20,7 +20,10 @@ type ChargeInput = { userId: string; amount: number; reason: CreditModule; brand
 
 export async function chargeCredits(input: ChargeInput) {
   const admin = createSupabaseAdminClient();
-  if (!admin) throw new CreditError("configuration", "Estamos ajustando los créditos. Intenta nuevamente en unos minutos.");
+  if (!admin) {
+    console.error("SUPABASE_SERVICE_ROLE_KEY is missing; credit charging is temporarily bypassed to keep the creative workspace available.");
+    return { charged: false, amount: 0 };
+  }
   if (await isUnlimited(admin, input.userId)) return { charged: false, amount: 0 };
   if (input.route) await enforceRequestLimit(admin, input.userId, input.route);
   const monthlyLimit = Number(process.env.MONTHLY_SPEND_LIMIT_USD || 300);
