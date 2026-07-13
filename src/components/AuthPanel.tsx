@@ -25,37 +25,38 @@ export function AuthPanel({ mode }: { mode: Mode }) {
     setIsLoading(true);
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") || "");
+
+    if (mode === "login") {
+      const response = await fetch("/api/auth/email-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const payload = (await response.json()) as { direct?: boolean; redirectTo?: string; message?: string; error?: string };
+
+      setIsLoading(false);
+      if (response.ok && payload.direct) {
+        router.replace(payload.redirectTo || "/dashboard");
+        router.refresh();
+        return;
+      }
+      setMessage(payload.message || payload.error || "No pudimos validar tu acceso.");
+      return;
+    }
+
     const password = String(formData.get("password") || "");
     const fullName = String(formData.get("fullName") || "");
     const supabase = createSupabaseBrowserClient();
 
-    if (mode === "registro") {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName },
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
-        },
-      });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName },
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
+      },
+    });
 
-      setIsLoading(false);
-
-      if (error) {
-        setMessage(error.message);
-        return;
-      }
-
-      if (!data.session) {
-        setMessage("Cuenta creada. Revisa tu correo para activar el acceso y volver al onboarding.");
-        return;
-      }
-
-      router.push("/onboarding");
-      return;
-    }
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setIsLoading(false);
 
     if (error) {
@@ -63,7 +64,12 @@ export function AuthPanel({ mode }: { mode: Mode }) {
       return;
     }
 
-    router.push("/dashboard");
+    if (!data.session) {
+      setMessage("Cuenta creada. Revisa tu correo para activar el acceso y volver al onboarding.");
+      return;
+    }
+
+    router.push("/onboarding");
   }
 
   return (
@@ -73,7 +79,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
       <p>
         {mode === "registro"
           ? "Después de crear usuario, la plataforma te lleva al onboarding de marca. Nada aparece precargado."
-          : "Usa el correo y contraseña con los que te registraste."}
+          : "Escribe el correo con el que estás inscrita en la comunidad. Te enviaremos un enlace seguro para entrar."}
       </p>
 
       {mode === "registro" && (
@@ -88,23 +94,25 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         <input name="email" type="email" autoComplete="email" placeholder="correo@marca.com" required />
       </label>
 
-      <label>
-        Contraseña
-        <input
-          name="password"
-          type="password"
-          autoComplete={mode === "registro" ? "new-password" : "current-password"}
-          minLength={8}
-          placeholder="Mínimo 8 caracteres"
-          required
-        />
-      </label>
+      {mode === "registro" && (
+        <label>
+          Contraseña
+          <input
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            placeholder="Mínimo 8 caracteres"
+            required
+          />
+        </label>
+      )}
 
       {message && <p className="form-message">{message}</p>}
 
       <button className="primary-action" type="submit" disabled={isLoading}>
         {isLoading ? <Loader2 className="spin" size={17} /> : null}
-        {mode === "registro" ? "Crear cuenta" : "Entrar"} <ArrowRight size={17} />
+        {mode === "registro" ? "Crear cuenta" : "Enviarme acceso"} <ArrowRight size={17} />
       </button>
     </form>
   );

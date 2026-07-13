@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { hasUnlimitedAccessEmail } from "@/lib/auth/access-exceptions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type WorkspaceBrand = {
@@ -53,6 +54,7 @@ export async function getWorkspace() {
   // Skinglow is the owner test workspace. Keep this exception until billing is activated.
   const isUnlimited =
     profile?.role === "admin" ||
+    hasUnlimitedAccessEmail(accountEmail) ||
     unlimitedEmails.includes(accountEmail) ||
     activeBrand.name.trim().toLowerCase() === "skinglow";
 

@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { hasUnlimitedAccessEmail } from "@/lib/auth/access-exceptions";
 
 export const CREDIT_COSTS = {
   chat_message: 3,
@@ -66,7 +67,7 @@ async function isUnlimited(admin: NonNullable<ReturnType<typeof createSupabaseAd
   ]);
   const email = String(profile?.email || authUser.user?.email || "").toLowerCase();
   const allow = (process.env.UNLIMITED_CREDIT_EMAILS || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
-  return profile?.role === "admin" || allow.includes(email) || brand?.name?.trim().toLowerCase() === "skinglow";
+  return profile?.role === "admin" || hasUnlimitedAccessEmail(email) || allow.includes(email) || brand?.name?.trim().toLowerCase() === "skinglow";
 }
 
 async function enforceRequestLimit(admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>, userId: string, route: string) {

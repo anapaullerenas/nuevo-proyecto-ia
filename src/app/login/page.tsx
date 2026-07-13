@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AuthPanel } from "@/components/AuthPanel";
 import { BrandMark } from "@/components/BrandIdentity";
 
@@ -9,12 +8,9 @@ export default function LoginPage() {
         <BrandMark subtitle="Acceso" />
         <h2>Entra a tu sistema creativo.</h2>
         <p>
-          Si todavia no has registrado marca, te llevaremos al onboarding. Si ya
-          existe, verás tu dashboard con datos reales.
+          Usa el correo con el que estás inscrita en la comunidad. Si todavía no
+          has registrado marca, te llevaremos al onboarding.
         </p>
-        <Link href="/registro" className="text-link">
-          Crear cuenta nueva
-        </Link>
       </section>
       <AuthPanel mode="login" />
     </main>
