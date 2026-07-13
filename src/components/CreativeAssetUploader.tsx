@@ -155,6 +155,13 @@ type CreativeDissection = {
     do_not_change?: string[];
   };
   generation_prompts?: Array<{ name?: string; mode?: string; prompt?: string }>;
+  source_coverage?: {
+    transcript_verified?: boolean;
+    transcript_characters?: number;
+    transcript_segments?: number;
+    duration_seconds?: number | null;
+    visual_frames?: number;
+  };
 };
 
 export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: string; initialHistory: CreativeHistoryItem[] }) {
@@ -313,10 +320,41 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
 
     try {
       const frames = item.assetType === "video" && item.file ? await extractVideoFrames(item.file) : [];
+      let audioEvidence: Awaited<ReturnType<typeof extractVideoAudio>> | null = null;
+
+      if (item.assetType === "video" && item.file) {
+        setItems((current) =>
+          current.map((currentItem) =>
+            currentItem.id === item.id
+              ? { ...currentItem, message: "Preparando el audio completo y los momentos clave..." }
+              : currentItem,
+          ),
+        );
+
+        try {
+          audioEvidence = await extractVideoAudio(item.file);
+        } catch (error) {
+          if (item.file.size > MAX_TRANSCRIPTION_FILE_SIZE) {
+            throw new Error(
+              error instanceof Error
+                ? `${error.message} No iniciaré un análisis incompleto.`
+                : "No pude extraer el audio completo. No iniciaré un análisis incompleto.",
+            );
+          }
+        }
+      }
+
+      const requestBody = new FormData();
+      requestBody.append("assetId", item.assetId);
+      requestBody.append("frames", JSON.stringify(frames));
+      if (audioEvidence) {
+        requestBody.append("audio", audioEvidence.file, audioEvidence.file.name);
+        requestBody.append("audioDurationSeconds", String(audioEvidence.durationSeconds));
+      }
+
       const response = await fetch("/api/creative-analysis", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ assetId: item.assetId, frames }),
+        body: requestBody,
       });
       const data = await response.json();
 
@@ -608,6 +646,11 @@ function CreativeAnalysisCard({ result, assetType }: { result: CreativeAnalysisR
         <ReportPanel icon={<FileText size={18} />} title="Guion original" wide>
           {analysis.original_script ? (
             <div className="original-script-block">
+              {analysis.source_coverage?.transcript_verified && (
+                <p className="evidence-note">
+                  <Check size={14} /> Audio completo verificado · {analysis.source_coverage.transcript_segments || 1} segmentos · {analysis.source_coverage.visual_frames || 0} momentos visuales
+                </p>
+              )}
               <p className="script-box">{analysis.original_script}</p>
               <button type="button" onClick={() => copyText(analysis.original_script || "")}><Clipboard size={14} /> Copiar guion</button>
             </div>
@@ -989,19 +1032,23 @@ async function extractVideoFrames(file: File) {
 
     const duration = video.duration || 1;
     const candidates = [
-      0.4,
-      1.2,
-      2.4,
-      duration * 0.22,
-      duration * 0.38,
-      duration * 0.55,
-      duration * 0.72,
-      duration * 0.9,
+      0.2,
+      0.8,
+      1.6,
+      2.8,
+      duration * 0.15,
+      duration * 0.28,
+      duration * 0.42,
+      duration * 0.56,
+      duration * 0.7,
+      duration * 0.82,
+      duration * 0.92,
+      duration * 0.98,
     ];
     const times = candidates
       .map((time) => Math.min(Math.max(time, 0), Math.max(duration - 0.1, 0)))
       .filter((time, index, list) => Number.isFinite(time) && list.findIndex((candidate) => Math.abs(candidate - time) < 0.25) === index)
-      .slice(0, 8);
+      .slice(0, 12);
 
     const frames: Array<{ image: string; timestamp: number }> = [];
     for (const time of times) {
@@ -1011,6 +1058,80 @@ async function extractVideoFrames(file: File) {
     return frames;
   } finally {
     URL.revokeObjectURL(videoUrl);
+  }
+}
+
+const MAX_TRANSCRIPTION_FILE_SIZE = 24 * 1024 * 1024;
+const TRANSCRIPTION_SAMPLE_RATE = 16_000;
+
+async function extractVideoAudio(file: File) {
+  const audioContext = new AudioContext();
+
+  try {
+    const decoded = await audioContext.decodeAudioData(await file.arrayBuffer());
+    const wav = encodeMonoWav(decoded, TRANSCRIPTION_SAMPLE_RATE);
+
+    if (wav.size > MAX_TRANSCRIPTION_FILE_SIZE) {
+      throw new Error("El audio completo todavía supera el límite permitido.");
+    }
+
+    return {
+      file: new File([wav], `${cleanFileName(file.name) || "video"}-audio-completo.wav`, { type: "audio/wav" }),
+      durationSeconds: decoded.duration,
+    };
+  } catch (error) {
+    throw new Error(
+      error instanceof Error && error.message.includes("límite")
+        ? error.message
+        : "Este navegador no pudo preparar la pista de audio del video.",
+    );
+  } finally {
+    await audioContext.close().catch(() => undefined);
+  }
+}
+
+function encodeMonoWav(audio: AudioBuffer, targetSampleRate: number) {
+  const sourceRate = audio.sampleRate;
+  const sampleCount = Math.max(1, Math.ceil(audio.duration * targetSampleRate));
+  const output = new ArrayBuffer(44 + sampleCount * 2);
+  const view = new DataView(output);
+
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + sampleCount * 2, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, targetSampleRate, true);
+  view.setUint32(28, targetSampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, sampleCount * 2, true);
+
+  const channels = Array.from({ length: audio.numberOfChannels }, (_, index) => audio.getChannelData(index));
+  for (let index = 0; index < sampleCount; index += 1) {
+    const sourcePosition = index * sourceRate / targetSampleRate;
+    const before = Math.min(Math.floor(sourcePosition), audio.length - 1);
+    const after = Math.min(before + 1, audio.length - 1);
+    const mix = sourcePosition - before;
+    let sample = 0;
+
+    for (const channel of channels) {
+      sample += channel[before] + (channel[after] - channel[before]) * mix;
+    }
+
+    sample = Math.max(-1, Math.min(1, sample / Math.max(channels.length, 1)));
+    view.setInt16(44 + index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+
+  return new Blob([output], { type: "audio/wav" });
+}
+
+function writeAscii(view: DataView, offset: number, value: string) {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index));
   }
 }
 

@@ -9,11 +9,18 @@ type CreativeAnalysisInput = {
   frames?: Array<string | { image: string; timestamp: number }>;
 };
 
+type ParsedCreativeAnalysisInput = CreativeAnalysisInput & {
+  audioFile?: File;
+  audioDurationSeconds?: number;
+};
+
 type VideoTranscript = {
   text: string;
   segments: Array<{ start: number; end: number; text: string }>;
-  warning?: string;
+  durationSeconds?: number;
 };
+
+const MAX_TRANSCRIPTION_FILE_SIZE = 24 * 1024 * 1024;
 
 export const maxDuration = 300;
 
@@ -32,7 +39,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Inicia sesión para analizar creativos." }, { status: 401 });
   }
 
-  const body = (await request.json()) as CreativeAnalysisInput;
+  let body: ParsedCreativeAnalysisInput;
+  try {
+    body = await parseCreativeAnalysisRequest(request);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "No pude leer el creativo enviado." },
+      { status: 400 },
+    );
+  }
 
   if (!body.assetId) {
     return NextResponse.json({ error: "Falta el creativo a analizar." }, { status: 400 });
@@ -86,14 +101,19 @@ export async function POST(request: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(12);
 
-    const transcript = asset.asset_type === "video" ? await transcribeVideo(supabase, asset) : null;
-    const result = await analyzeWithOpenAI({
+    const transcript = asset.asset_type === "video"
+      ? await transcribeVideo(supabase, asset, body.audioFile, body.audioDurationSeconds)
+      : null;
+    const aiResult = await analyzeWithOpenAI({
       brand,
       asset,
       imageInputs,
       transcript,
       previousRecipes: (recipes || []).map((recipe) => recipe.rule).filter(Boolean),
     });
+    const result = asset.asset_type === "video" && transcript
+      ? attachVerifiedVideoEvidence(aiResult, transcript, imageInputs)
+      : aiResult;
 
     await supabase.from("creative_assets").update({ status: "analyzed" }).eq("id", asset.id).eq("owner_id", user.id);
 
@@ -135,25 +155,38 @@ export async function POST(request: NextRequest) {
 async function transcribeVideo(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
   asset: { storage_path: string; file_name: string | null; mime_type: string | null },
+  extractedAudio?: File,
+  extractedAudioDurationSeconds?: number,
 ): Promise<VideoTranscript> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("La transcripción del video aún no está activa.");
 
-  const { data, error } = await supabase.storage.from("creative-assets").download(asset.storage_path);
-  if (error || !data) throw new Error(error?.message || "No pude descargar el video para escucharlo.");
+  let source: Blob;
+  let sourceName: string;
+  let sourceType: string;
 
-  if (data.size > 24 * 1024 * 1024) {
-    return {
-      text: "",
-      segments: [],
-      warning: "El archivo supera 24 MB; el análisis visual continúa, pero el guion no puede transcribirse con precisión.",
-    };
+  if (extractedAudio?.size) {
+    source = extractedAudio;
+    sourceName = extractedAudio.name || "audio-completo.wav";
+    sourceType = extractedAudio.type || "audio/wav";
+  } else {
+    const { data, error } = await supabase.storage.from("creative-assets").download(asset.storage_path);
+    if (error || !data) throw new Error(error?.message || "No pude descargar el video para escucharlo.");
+    source = data;
+    sourceName = asset.file_name || "creativo.mp4";
+    sourceType = asset.mime_type || data.type || "video/mp4";
+  }
+
+  if (source.size > MAX_TRANSCRIPTION_FILE_SIZE) {
+    throw new Error(
+      "No pude preparar el audio completo sin exceder el límite de transcripción. No se generó un análisis parcial.",
+    );
   }
 
   const form = new FormData();
   form.append(
     "file",
-    new File([data], asset.file_name || "creativo.mp4", { type: asset.mime_type || data.type || "video/mp4" }),
+    new File([source], sourceName, { type: sourceType }),
   );
   form.append("model", "whisper-1");
   form.append("language", "es");
@@ -173,6 +206,7 @@ async function transcribeVideo(
 
   const json = (await response.json()) as {
     text?: string;
+    duration?: number;
     segments?: Array<{ start?: number; end?: number; text?: string }>;
   };
 
@@ -183,6 +217,39 @@ async function transcribeVideo(
       end: Number(segment.end) || 0,
       text: segment.text?.trim() || "",
     })).filter((segment) => segment.text),
+    durationSeconds: Number(json.duration) || extractedAudioDurationSeconds || undefined,
+  };
+}
+
+async function parseCreativeAnalysisRequest(request: NextRequest): Promise<ParsedCreativeAnalysisInput> {
+  const contentType = request.headers.get("content-type") || "";
+
+  if (!contentType.includes("multipart/form-data")) {
+    return (await request.json()) as ParsedCreativeAnalysisInput;
+  }
+
+  const form = await request.formData();
+  const assetId = form.get("assetId");
+  const rawFrames = form.get("frames");
+  const audio = form.get("audio");
+  const rawDuration = form.get("audioDurationSeconds");
+
+  if (typeof assetId !== "string" || !assetId) {
+    throw new Error("Falta el creativo a analizar.");
+  }
+
+  let frames: CreativeAnalysisInput["frames"] = [];
+  if (typeof rawFrames === "string" && rawFrames) {
+    const parsed = JSON.parse(rawFrames) as unknown;
+    if (!Array.isArray(parsed)) throw new Error("Los frames del video no tienen un formato válido.");
+    frames = parsed as CreativeAnalysisInput["frames"];
+  }
+
+  return {
+    assetId,
+    frames,
+    audioFile: audio instanceof File && audio.size ? audio : undefined,
+    audioDurationSeconds: typeof rawDuration === "string" ? Number(rawDuration) || undefined : undefined,
   };
 }
 
@@ -254,7 +321,7 @@ Archivo: ${asset.file_name || "Sin nombre"}
 Frames visuales verificados: ${imageInputs.filter((input) => input.type === "input_image").length}
 
 TRANSCRIPCION REAL DEL AUDIO
-${transcript?.warning || (transcript?.text ? transcript.text : "No aplica o no hay audio comprobable.")}
+${transcript?.text ? transcript.text : "No aplica o no hay audio comprobable."}
 
 SEGMENTOS CON TIEMPOS
 ${transcript?.segments.length
@@ -304,6 +371,34 @@ ${transcript?.segments.length
     ...normalizeAnalysisShape(json),
     score: clampNumber(json.score, 0, 100),
     verdict: normalizeVerdict(json.verdict, json.score),
+  };
+}
+
+function attachVerifiedVideoEvidence(
+  result: ReturnType<typeof normalizeAnalysisShape> & { score: number; verdict: string },
+  transcript: VideoTranscript,
+  imageInputs: Array<{ type: string; image_url?: string; text?: string }>,
+) {
+  const structuralAnalysis = isRecord(result.structural_analysis) ? result.structural_analysis : {};
+  const verifiedTranscription = transcript.segments.map((segment) => ({
+    second: formatSeconds(segment.start),
+    text: segment.text,
+  }));
+
+  return {
+    ...result,
+    original_script: transcript.text,
+    structural_analysis: {
+      ...structuralAnalysis,
+      transcription: verifiedTranscription,
+    },
+    source_coverage: {
+      transcript_verified: Boolean(transcript.text),
+      transcript_characters: transcript.text.length,
+      transcript_segments: transcript.segments.length,
+      duration_seconds: transcript.durationSeconds || null,
+      visual_frames: imageInputs.filter((input) => input.type === "input_image").length,
+    },
   };
 }
 
@@ -371,6 +466,7 @@ function normalizeAnalysisShape(json: Record<string, unknown>) {
     script_variants: toArray(json.script_variants || json.variants),
     replication_plan: isRecord(json.replication_plan) ? json.replication_plan : {},
     generation_prompts: toArray(json.generation_prompts),
+    source_coverage: isRecord(json.source_coverage) ? json.source_coverage : {},
   };
 }
 

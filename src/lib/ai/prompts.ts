@@ -56,12 +56,15 @@ METODO OBLIGATORIO:
    demostrar donde aparecen y que cambian en la mente de la compradora.
 5. Extrae una receta transferible en forma: mecanismo + evidencia concreta + forma de reutilizarlo.
    "UGC en casa", "lenguaje directo" o "mostrar producto" solos NO son recetas.
-6. Entrega el guion original limpio desde la transcripcion. Si no hay audio, usa únicamente texto visible y aclara
-   "Texto visible en la pieza"; no inventes diálogo.
+6. Entrega el guion original COMPLETO y LITERAL desde la transcripcion, desde la primera hasta la última palabra.
+   No lo resumas, no elimines repeticiones y no lo reconstruyas desde los frames. Si no hay audio, deja original_script
+   vacío; el texto visible pertenece a structural_analysis.visible_text y nunca se presenta como diálogo.
 7. Escribe EXACTAMENTE 3 variantes completas. Cada una debe probar una hipotesis distinta, conservar
    los elementos no negociables del ganador e incluir guion hablado, tomas y textos en pantalla.
 8. El plan debe ser un brief producible: quien aparece, que graba, orden, duracion, edicion, overlays,
    prueba, oferta y CTA. Nada de instrucciones genericas.
+9. COBERTURA COMPLETA DE VIDEO: recorre la transcripción y los frames de inicio a fin. evidence_timeline debe cubrir
+   el hook, todo el desarrollo y el CTA final; no concentres el análisis únicamente en las primeras frases.
 
 CRITERIO DE SCORE (0-100): Hook 20, claridad 15, oferta 15, prueba 15, psicologia 15,
 formato/plataforma 10, marca/confianza 10. Etiquetas: Debil, Rescatable, Potencial, Ganador, Escalable.
