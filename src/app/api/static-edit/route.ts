@@ -4,6 +4,7 @@ import { getImageSize, StaticBrief } from "@/lib/ai/static-machine";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
+import { appendInputFidelityWhenSupported, imageApiErrorFromResponse, imageGenerationFailure } from "@/lib/ai/image-api-errors";
 
 export const maxDuration = 300;
 
@@ -79,7 +80,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "static_edit", source.brand_id);
     console.error("static edit failed", error);
-    return NextResponse.json({ error: "No pude aplicar esa corrección sin comprometer la imagen. Intenta describir un solo cambio concreto." }, { status: 500 });
+    const failure = imageGenerationFailure(error);
+    return NextResponse.json({ error: failure.message, code: failure.code }, { status: failure.status });
   }
 }
 
@@ -87,16 +89,17 @@ async function editWithImageModel(source: Buffer, format: string, quality: "medi
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("Image editing is not configured");
   const form = new FormData();
-  form.append("model", process.env.OPENAI_IMAGE_MODEL || "gpt-image-2");
+  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
+  form.append("model", model);
   form.append("size", getImageSize(format));
   form.append("quality", quality);
   form.append("n", "1");
   form.append("output_format", "png");
-  form.append("input_fidelity", "high");
+  appendInputFidelityWhenSupported(form, model);
   form.append("image[]", new Blob([new Uint8Array(source)], { type: "image/png" }), "version-original.png");
   form.append("prompt", `Edita esta pieza publicitaria. Aplica SOLAMENTE este cambio: ${instruction}. Conserva exactamente composición, dimensiones, producto, envase, iluminación, modelo, logo, colores y todos los demás textos. No rediseñes la pieza. No añadas elementos. Devuelve una sola imagen terminada.`);
   const response = await fetch("https://api.openai.com/v1/images/edits", { method: "POST", headers: { authorization: `Bearer ${apiKey}` }, body: form });
-  if (!response.ok) throw new Error(`Image edit ${response.status}`);
+  if (!response.ok) throw await imageApiErrorFromResponse(response);
   const data = await response.json();
   const b64 = data.data?.[0]?.b64_json;
   if (!b64) throw new Error("No image returned");

@@ -4,6 +4,7 @@ import { compileDesignPrompt, getImageSize, normalizeStaticBrief, StaticArchetyp
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
+import { appendInputFidelityWhenSupported, ImageApiError, imageApiErrorFromResponse, imageGenerationFailure } from "@/lib/ai/image-api-errors";
 
 export const maxDuration = 300;
 
@@ -233,9 +234,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, quality === "high" ? "static_generate_high" : "static_generate_medium", brand.id);
     console.error("static generation failed", error);
+    const failure = imageGenerationFailure(error);
     return NextResponse.json(
-      { error: "No pudimos completar esta imagen con la calidad necesaria. Tus créditos fueron devueltos; revisa la foto de producto e intenta nuevamente." },
-      { status: 500 },
+      { error: failure.message, code: failure.code },
+      { status: failure.status },
     );
   }
 }
@@ -314,6 +316,7 @@ async function generateImage({
       try {
         return await generateImageEdit({ apiKey, prompt, format, quality, files });
       } catch (error) {
+        if (error instanceof ImageApiError) throw error;
         if (productAsset) {
           console.error("image reference rejected", error);
           throw new Error("No generamos una sustitución falsa del producto. Revisa la foto original e intenta de nuevo.");
@@ -341,13 +344,14 @@ async function generateImageEdit({
   files: Array<{ blob: Blob; name: string }>;
 }) {
   const form = new FormData();
-  form.append("model", process.env.OPENAI_IMAGE_MODEL || "gpt-image-2");
+  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
+  form.append("model", model);
   form.append("prompt", prompt);
   form.append("size", getImageSize(format));
   form.append("quality", quality);
   form.append("n", "1");
   form.append("output_format", "png");
-  form.append("input_fidelity", "high");
+  appendInputFidelityWhenSupported(form, model);
   files.forEach((file) => form.append("image[]", file.blob, file.name));
 
   const response = await fetch("https://api.openai.com/v1/images/edits", {
@@ -357,8 +361,7 @@ async function generateImageEdit({
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText.slice(0, 220));
+    throw await imageApiErrorFromResponse(response);
   }
 
   const data = await response.json();
@@ -482,8 +485,7 @@ async function generateImageFromPrompt({
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText.slice(0, 220));
+    throw await imageApiErrorFromResponse(response);
   }
 
   const data = await response.json();
