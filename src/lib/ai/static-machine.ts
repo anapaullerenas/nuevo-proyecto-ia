@@ -104,21 +104,21 @@ export function normalizeStaticBrief(value: Partial<StaticBrief> | null | undefi
     arquetipo: value?.arquetipo || fallbackArchetype,
     arquetipo_label: value?.arquetipo_label || "Automático",
     concepto: value?.concepto || "Concepto pendiente",
-    hook_visual: value?.hook_visual || "Producto protagonista con jerarquía clara.",
-    texto_principal: clampWords(value?.texto_principal || "Beneficio claro", 6),
-    texto_secundario: clampWords(value?.texto_secundario || "Oferta fácil de entender", 8),
-    cta: clampWords(value?.cta || "Pide el tuyo", 4),
+    hook_visual: value?.hook_visual || "Oferta o resultado protagonista con jerarquía clara.",
+    texto_principal: clampWords(typeof value?.texto_principal === "string" ? value.texto_principal : "Beneficio claro", 6),
+    texto_secundario: clampWords(typeof value?.texto_secundario === "string" ? value.texto_secundario : "Oferta fácil de entender", 8),
+    cta: clampWords(typeof value?.cta === "string" ? value.cta : "Conoce más", 4),
     logo_usage: ["none", "subtle", "prominent"].includes(value?.logo_usage || "") ? value!.logo_usage! : "subtle",
     cta_usage: ["none", "text", "button"].includes(value?.cta_usage || "") ? value!.cta_usage! : "text",
     disclaimer: value?.disclaimer?.trim() || "",
     text_render_mode: renderMode,
     composicion: {
       zona_superior: value?.composicion?.zona_superior || "Texto principal",
-      zona_media: value?.composicion?.zona_media || "Producto o resultado protagonista",
+      zona_media: value?.composicion?.zona_media || "Oferta o resultado protagonista",
       zona_inferior: value?.composicion?.zona_inferior || "CTA visible",
     },
     art_direction: {
-      decision_visual_fuerte: value?.art_direction?.decision_visual_fuerte || "Producto o persona con una sola acción física y jerarquía inequívoca.",
+      decision_visual_fuerte: value?.art_direction?.decision_visual_fuerte || "Oferta, resultado o persona con una sola acción clara y jerarquía inequívoca.",
       iluminacion: value?.art_direction?.iluminacion || "Luz lateral suave con sombras de contacto y reflejos físicamente plausibles.",
       camara_y_encuadre: value?.art_direction?.camara_y_encuadre || "Encuadre frontal a 3/4, sujeto principal al 45% del lienzo y márgenes de 8%.",
       superficie_y_entorno: value?.art_direction?.superficie_y_entorno || "Una escena real coherente con la marca, sin fondos compuestos.",
@@ -149,11 +149,11 @@ function formatArchetypeRecipe(archetype?: StaticArchetype | null) {
   const blueprint = (structure.reference_blueprint || {}) as Record<string, unknown>;
   const zones = (structure.estructura || structure.zones || {}) as Record<string, unknown>;
   const rules = Array.isArray(structure.rules) ? structure.rules : [];
-  const hierarchy = Array.isArray(blueprint.hierarchy) ? blueprint.hierarchy.join(" → ") : "headline → imagen/producto → apoyo";
+  const hierarchy = Array.isArray(blueprint.hierarchy) ? blueprint.hierarchy.join(" → ") : "headline → visual principal → apoyo";
   const lines = [
     `- Arquitectura: ${String(blueprint.layout || "Composición clara basada en el arquetipo elegido.")}`,
     `- Jerarquía exacta: ${hierarchy}.`,
-    `- Tratamiento del producto: ${String(blueprint.product_treatment || "Producto fiel, reconocible y con escala protagonista.")}`,
+    `- Tratamiento de la oferta: ${String(blueprint.product_treatment || "Oferta, resultado o activo principal reconocible y protagonista.")}`,
     `- Patrón de copy: ${String(blueprint.copy_pattern || "Copy breve y escaneable.")}`,
     `- Densidad: ${String(blueprint.density || "Baja, con aire visual.")}`,
     `- Comportamiento del CTA: ${String(blueprint.cta_behavior || "Sólo cuando ayude a completar la acción.")}`,
@@ -166,6 +166,7 @@ function formatArchetypeRecipe(archetype?: StaticArchetype | null) {
 export function compileDesignPrompt({
   brandName,
   brandVoice,
+  brandCategory,
   format,
   ficha,
   archetype,
@@ -177,6 +178,7 @@ export function compileDesignPrompt({
 }: {
   brandName: string;
   brandVoice?: string | null;
+  brandCategory?: string | null;
   format: string;
   ficha: StaticBrief;
   archetype?: StaticArchetype | null;
@@ -191,7 +193,7 @@ export function compileDesignPrompt({
     format.includes("9:16")
       ? `REGLA INNEGOCIABLE PARA STORY/REEL:
 - Deja libre el 14% superior y el 20% inferior del lienzo.
-- Todo texto, producto, CTA y logo deben vivir en la zona segura central.
+- Todo texto, visual principal, CTA y logo deben vivir en la zona segura central.
 - Las franjas superior e inferior solo pueden llevar fondo, textura o ambiente.`
       : "Mantén márgenes amplios para que el anuncio respire y sea legible en celular.";
 
@@ -213,17 +215,24 @@ REGLAS ABSOLUTAS DE TEXTO:
 - Legible en un teléfono a 400px de ancho.
 - Alto contraste, máximo 20% del área total con texto.`;
 
+  const normalizedCategory = String(brandCategory || "").toLowerCase();
+  const categoryRules = /(skin|piel|belleza|beauty|cosm[eé]tic|bienestar|salud)/i.test(normalizedCategory)
+    ? `- Para esta categoría usa formulaciones prudentes como "ayuda a" o "visiblemente". Evita absolutos como "elimina", "cura", "borra" o "garantizado".
+- No señales inseguridades corporales ni inventes resultados.`
+    : `- Usa exclusivamente objetos, escenarios, beneficios y vocabulario de la marca activa.
+- No importes productos, partes del cuerpo, ingredientes ni supuestos de otra categoría.`;
+
   return `Diseña un anuncio estático publicitario profesional para Meta/Instagram. NO es una ilustración ni arte conceptual: debe verse como un anuncio terminado listo para pautar.
 
 FORMATO: ${canvas}
 CALIDAD: ${quality}
 MARCA: ${brandName}
-VOZ DE MARCA: ${brandVoice || "femenina, clara, premium y directa"}
+VOZ DE MARCA: ${brandVoice || "clara, específica y coherente con la identidad de la marca"}
 ARQUETIPO: ${ficha.arquetipo_label || archetype?.label_visible || "Automático"}
-MECÁNICA DEL ARQUETIPO: ${archetype?.prompt_fragment || "Jerarquía clara, producto/resultado protagonista y CTA visible."}
+MECÁNICA DEL ARQUETIPO: ${archetype?.prompt_fragment || "Jerarquía clara, oferta o resultado protagonista y CTA sólo cuando aporte."}
 RECETA VISUAL DE LA REFERENCIA ELEGIDA:
 ${formatArchetypeRecipe(archetype)}
-- La referencia define arquitectura, ritmo y jerarquía. Está terminantemente prohibido copiar su marca, producto, texto, colores, claims o identidad.
+- La referencia define arquitectura, ritmo y jerarquía. Está terminantemente prohibido copiar su categoría, marca, oferta, texto, colores, claims o identidad.
 VARIANTE: ${variantIndex || 1}
 MOVIMIENTO CREATIVO OBLIGATORIO: ${variationMoves[((variantIndex || 1) - 1) % variationMoves.length]}
 ${(variantIndex || 1) > 1 ? "Esta variante debe distinguirse de las demás por escena, mecanismo visual, sujeto o arquitectura. Cambiar sólo color, crop, sombra o tipografía NO cuenta como variante." : ""}
@@ -254,43 +263,43 @@ ${textDirection}
 MARCA Y ESTILO:
 - Paleta prioritaria: ${ficha.paleta.join(", ")}
 - Emoción objetivo: ${ficha.emocion_objetivo}
-- Estética femenina, refinada, actual y pagable; nada barato, saturado ni de plantilla.
+- Estética fiel a la identidad y categoría de la marca; refinada, actual y sin apariencia de plantilla.
 - ${serviceNoProduct ? "Es un servicio: representa resultado, autoridad, confianza o transformación." : "El producto adjunto es FUENTE DE VERDAD. Conserva exactamente geometría, proporciones, tapa, envase, etiqueta, logotipo, colores y rasgos identificables. No inventes, reescribas ni sustituyas el empaque."}
 
 DOCTRINA VISUAL OBLIGATORIA:
 - Una sola idea entendible en 2 segundos.
-- Producto o sujeto hero ocupa entre 35% y 60% del lienzo.
+- La oferta, producto, persona, resultado o interfaz protagonista ocupa entre 35% y 60% del lienzo, según la categoría.
 - Al menos 30% del lienzo debe permanecer visualmente limpio.
-- Jerarquía: headline, imagen/producto y apoyo${visibleCta ? ", con CTA sólo si aporta a la acción" : ""}.
+- Jerarquía: headline, visual principal y apoyo${visibleCta ? ", con CTA sólo si aporta a la acción" : ""}.
 - Máximo 4 zonas de texto. Sólo un módulo secundario: una prueba, una cifra, una oferta, una comparación o hasta 3 apoyos breves.
-- Estética de anuncio DTC premium hecho por dirección de arte: fotográfico, táctil, limpio y con una decisión visual fuerte.
+- Estética de anuncio de performance hecho por dirección de arte: fotográfico, táctil, limpio y con una decisión visual fuerte.
 - Luz premium de campaña, composición limpia, una sola pieza dominante y comprensión en un vistazo a tamaño pulgar.
-- Piel real con textura y poros; nada plástico o aerografiado. Manos correctas y modelos adultas genéricas, nunca figuras públicas.
+- Si aparecen personas, deben verse reales y naturales; manos correctas, diversidad coherente con la audiencia y nunca figuras públicas.
 - Fotografía comercial creíble: física, escala, sombras de contacto, reflejos y materiales plausibles; pequeñas imperfecciones ópticas naturales.
 - Nada de brillo plástico, simetría imposible, objetos flotantes, UI falsa, chat inventado o escenografía sintética salvo que el arquetipo lo exija.
 
 REGLAS DE ORO DEL CATÁLOGO:
-1. UNA idea y un producto héroe —o lineup ordenado— por pieza.
+1. UNA idea y un protagonista claro —oferta, producto, persona, resultado o interfaz— por pieza.
 2. Nada toca bordes: padding 6-8% en los cuatro lados y mínimo 30% de aire.
 3. Headline de 2-4 palabras por línea, máximo dos familias y una sola palabra acentuada.
 4. Máximo un sticker, badge o roundel.
 5. Máximo cuatro beneficios de cuatro palabras cada uno, con estilo consistente.
-6. Fotografía real y táctil: gotas, polvo, uñas, piel y materiales físicamente creíbles.
+6. Fotografía real y táctil: materiales, superficies, personas y texturas físicamente creíbles cuando correspondan.
 7. El fondo toma una sola decisión: escena única, color plano o gradiente suave.
 8. Si el formato es nativo, debe parecer contenido orgánico creíble, no una parodia de UI.
 9. Disclaimer pequeño al pie y sin competir.
 10. Dos o tres colores de marca más un neutro; nunca una paleta descontrolada.
 
 PUERTA DE RELEVANCIA COMERCIAL:
-- Debe reconocerse para quién es, qué tensión humana resuelve, qué transformación promete, cuál es la razón para creer y qué producto ofrece.
-- El copy habla como la clienta, no como ficha técnica.
-- No inventes cifras, certificaciones, testimonios, ingredientes, resultados ni claims.
-- En skincare/bienestar usa formulaciones como "ayuda a", "se ve más uniforme" y "visiblemente". Prohibido: "elimina", "cura", "borra" y "garantizado".
+- Debe reconocerse para quién es, qué tensión humana resuelve, qué transformación promete, cuál es la razón para creer y qué oferta presenta.
+- El copy habla como la audiencia real, no como ficha técnica.
+- No inventes cifras, certificaciones, testimonios, atributos, resultados ni claims.
+${categoryRules}
 - Sin antes/después dramático ni lenguaje que señale inseguridades corporales.
 
 ${styleReferenceCount > 0 ? `REFERENCIAS DE ESTILO (${styleReferenceCount}):
 - Los archivos marcados como inspiración aportan formato, jerarquía, densidad, ritmo, encuadre y tratamiento fotográfico.
-- Nunca copies sus logos, productos, textos, colores de marca ni identidad.` : "No hay referencias de estilo seleccionadas; crea una dirección original coherente con la marca."}
+- Nunca copies su categoría, logos, ofertas, textos, colores de marca ni identidad.` : "No hay referencias de estilo seleccionadas; crea una dirección original coherente con la marca."}
 
 ${brandAssetCount > 0 ? `ACTIVOS REALES DE MARCA (${brandAssetCount}):
 - El producto adjunto, cuando exista, es fuente de verdad de packaging y debe conservarse con máxima fidelidad.
@@ -301,7 +310,7 @@ PROHIBICIONES:
 - No deformes manos, rostros, empaques o etiquetas.
 - No uses aspecto de banco de imágenes, fondos oscuros pesados ni degradados sucios.
 - Evita: cheap, low quality, plastic skin, fake model, distorted hands, extra fingers, misspelled text, warped packaging, wrong label, cluttered layout, watermark, logo soup, oversaturated, HDR halo, stock photo look.
-- Sin card soup, mosaicos densos, exceso de iconos, mini callouts, piel plástica, decoraciones de IA ni composición de folleto.
+- Sin card soup, mosaicos densos, exceso de iconos, mini callouts, personas plásticas, decoraciones de IA ni composición de folleto.
 - Las instrucciones, nombres de secciones, códigos de color, medidas y markdown nunca son texto visible.
 - Evita composición genérica; debe sentirse como una pieza pensada por dirección creativa.
 

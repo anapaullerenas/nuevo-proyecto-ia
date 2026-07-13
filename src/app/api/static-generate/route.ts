@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
   const { data: brand } = await supabase
     .from("brands")
-    .select("id,name,voice")
+    .select("id,name,voice,category")
     .eq("id", body.brandId)
     .eq("owner_id", user.id)
     .maybeSingle();
@@ -132,6 +132,7 @@ export async function POST(request: NextRequest) {
       const prompt = compileDesignPrompt({
         brandName: brand.name,
         brandVoice: brand.voice,
+        brandCategory: brand.category,
         format: body.format,
         ficha: variantFicha,
         archetype: variantArchetype,

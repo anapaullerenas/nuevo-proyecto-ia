@@ -10,9 +10,9 @@ export const maxDuration = 120;
 
 const externalReferencePatterns = {
   none: { regla: "Dirección original basada en la marca y el objetivo." },
-  product_context: { nombre: "Producto en contexto", estructura: "Escena real, producto protagonista y anotaciones breves de ingredientes o beneficios.", regla: "Usar sólo jerarquía y encuadre; nunca copiar identidad, producto ni texto ajenos." },
-  creator_bundle: { nombre: "Creadora + producto", estructura: "Presencia humana auténtica, producto en mano, luz cálida y composición de prueba social.", regla: "Usar sólo estructura y naturalidad; conservar identidad y activos propios." },
-  aspirational_demo: { nombre: "Resultado aspiracional", estructura: "Resultado visible primero, producto como respaldo y tipografía editorial con mucho aire.", regla: "Inspirarse en la lectura visual sin replicar identidad o claims ajenos." },
+  product_context: { nombre: "Oferta en contexto", estructura: "Escena real con la oferta, el resultado o el activo principal como protagonista y anotaciones breves de beneficios verificables.", regla: "Usar sólo jerarquía y encuadre; nunca copiar categoría, identidad, oferta ni texto ajenos." },
+  creator_bundle: { nombre: "Creadora + oferta", estructura: "Presencia humana auténtica explicando, mostrando o demostrando la oferta con luz natural y prueba social.", regla: "Usar sólo estructura y naturalidad; conservar la identidad y los activos propios." },
+  aspirational_demo: { nombre: "Resultado aspiracional", estructura: "Resultado o transformación primero, oferta como respaldo y tipografía editorial con mucho aire.", regla: "Inspirarse en la lectura visual sin replicar categoría, identidad o claims ajenos." },
 } as const;
 
 type StaticBriefInput = {
@@ -222,6 +222,8 @@ async function createBriefWithOpenAI({
     })),
     estructura_externa_elegida: externalReferencePatterns[externalReference],
     identidad_visual_persistente: visualIdentity,
+    neutralidad_de_categoria: "Usa exclusivamente la categoría, oferta, audiencia, claims y objetos de la marca activa. Los ejemplos sólo calibran estructura y calidad.",
+    reglas_de_categoria: categoryRules(String(brand.category || "")),
     ejemplos_de_ficha_excelente: goldenBriefs.filter((brief) => archetypeId === "automatico" || brief.archetype_id === archetypeId).slice(0, 3),
   };
 
@@ -268,6 +270,21 @@ async function createBriefWithOpenAI({
   }
 
   return lockRequestedArchetype(reviewed, archetypeId);
+}
+
+function categoryRules(category: string) {
+  const normalized = category.toLowerCase();
+  if (/(skin|piel|belleza|beauty|cosm[eé]tic|bienestar|salud)/i.test(normalized)) {
+    return [
+      "Usa formulaciones prudentes como ayuda a o visiblemente.",
+      "Evita absolutos como elimina, cura, borra o garantizado.",
+      "No señales inseguridades corporales ni inventes resultados.",
+    ];
+  }
+  return [
+    "Usa únicamente vocabulario, objetos, claims y escenarios presentes en la memoria de esta marca.",
+    "No importes restricciones, productos ni supuestos de otras industrias.",
+  ];
 }
 
 function lockRequestedArchetype(brief: StaticBrief, requestedArchetype: string) {

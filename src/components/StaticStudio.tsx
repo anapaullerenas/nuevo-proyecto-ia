@@ -94,9 +94,9 @@ type StudioMemory = { assetId?: string; format?: string; serviceNoProduct?: bool
 const formats = ["1:1 Feed", "4:5 Feed", "9:16 Story/Reel"];
 const stages = ["Descubrimiento", "Consideración", "Conversión", "Retargeting"];
 const examples = [
-  "Ej: Quiero presentar el producto a personas que todavía no conocen la marca.",
-  "Ej: Quiero explicar por qué el producto vale lo que cuesta sin sonar técnica.",
-  "Ej: Quiero una pieza directa para vender el pack antes del domingo.",
+  "Ej: Quiero presentar mi oferta a personas que todavía no conocen la marca.",
+  "Ej: Quiero explicar por qué esta solución vale lo que cuesta sin sonar técnica.",
+  "Ej: Quiero una pieza directa para impulsar registros, reservas o ventas esta semana.",
 ];
 
 export function StaticStudio({
@@ -365,7 +365,7 @@ export function StaticStudio({
               {identityReady ? <Check /> : <ImageIcon />}
               <span>
                 <b>Identidad de {brandName}</b>
-                <small>{initialAssets.length} productos · {initialReferences.length} referencias · {initialLogos.length} logotipos · todo opcional</small>
+                <small>{initialAssets.length} activos de producto · {initialReferences.length} referencias · {initialLogos.length} logotipos · todo opcional</small>
               </span>
             </div>
             <Link href={`/marcas/${brandId}/editar`}>{identityReady ? "Administrar" : "Agregar contexto"}</Link>
@@ -375,12 +375,12 @@ export function StaticStudio({
             <details open={openStep === "setup"} onToggle={(event) => event.currentTarget.open && setOpenStep("setup")}>
               <summary>
                 <StepNumber number="01" done={productReady} />
-                <span><b>Producto y formato</b><small>{selectedProductLabel(initialAssets, selectedAssetId, serviceNoProduct)} · {format}</small></span>
+                <span><b>Activo principal y formato</b><small>{selectedProductLabel(initialAssets, selectedAssetId, serviceNoProduct)} · {format}</small></span>
                 <ChevronDown />
               </summary>
               <div className="studio-step-body setup-grid">
                 <div>
-                  <label className="field-label">Producto</label>
+                  <label className="field-label">Foto de producto o activo principal</label>
                   <div className="compact-product-row">
                     {initialAssets.map((asset, index) => {
                       const label = assetDisplayLabel(asset, index);
@@ -400,7 +400,7 @@ export function StaticStudio({
                   </div>
                   <label className="service-toggle compact">
                     <input type="checkbox" checked={serviceNoProduct} onChange={(event) => setServiceNoProduct(event.target.checked)} />
-                    <span>Esta pieza no necesita producto.</span>
+                    <span>Esta pieza no necesita una foto de producto.</span>
                   </label>
                 </div>
                 <div>
@@ -458,7 +458,7 @@ export function StaticStudio({
                         {selectedArchetype.visual_keys?.map((key) => <span key={key}>{key}</span>)}
                       </div>
                       <small><b>Úsalo cuando</b>{selectedArchetype.use_when}</small>
-                      <div className="archetype-recipe-note"><WandSparkles size={16} /><span>La plataforma tomará esta arquitectura visual para construir el prompt, usando tu producto, tus textos y tu identidad.</span></div>
+                      <div className="archetype-recipe-note"><WandSparkles size={16} /><span>La plataforma tomará esta arquitectura visual y la adaptará a tu oferta, tus textos y tu identidad.</span></div>
                     </div>
                   </div>
                 ) : (
@@ -561,7 +561,7 @@ export function StaticStudio({
 
               <div className="image-correction-bar">
                 <div><Pencil size={18} /><span><b>¿Quieres corregir algo?</b> Describe únicamente el cambio. La versión actual no se borrará.</span></div>
-                <textarea ref={correctionRef} value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={'Ej: Cambia “axilas” por “entrepierna”. Mantén todo lo demás exactamente igual.'} />
+                <textarea ref={correctionRef} value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder="Ej: Quita el botón de llamada a la acción y conserva todo lo demás exactamente igual." />
                 <button type="button" onClick={handleCorrection} disabled={busy === "edit"}>{busy === "edit" ? <Loader2 className="spin" /> : <RefreshCw />} {busy === "edit" ? "Corrigiendo…" : unlimitedCredits ? "Crear versión corregida · incluido" : "Crear versión corregida · 80 cr"}</button>
               </div>
             </>
@@ -675,7 +675,7 @@ export function StaticStudio({
             <p>{referencePreview.short_description}</p>
             <div className="archetype-visual-keys">{referencePreview.visual_keys?.map((key) => <span key={key}>{key}</span>)}</div>
             <small><b>Ideal para</b>{referencePreview.use_when}</small>
-            <div className="reference-identity-note"><Sparkles size={17} /><span>Se imita la lógica de composición, nunca la marca, el producto, los colores ni el texto de esta referencia.</span></div>
+            <div className="reference-identity-note"><Sparkles size={17} /><span>Se reutiliza la lógica de composición, nunca la marca, la categoría, la oferta, los colores ni el texto de esta referencia.</span></div>
           </aside>
         </div>
       )}
@@ -692,7 +692,7 @@ function formatClass(value: string) {
 }
 
 function selectedProductLabel(assets: BrandAsset[], id: string, service: boolean) {
-  if (service) return "Sin producto";
+  if (service) return "Sin foto de producto";
   const index = assets.findIndex((item) => item.id === id);
   return index >= 0 ? assetDisplayLabel(assets[index], index) : "Elige producto";
 }

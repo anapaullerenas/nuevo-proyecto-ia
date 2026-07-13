@@ -60,14 +60,13 @@ export function creditErrorStatus(error: unknown) {
 }
 
 async function isUnlimited(admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>, userId: string) {
-  const [{ data: profile }, { data: authUser }, { data: brand }] = await Promise.all([
+  const [{ data: profile }, { data: authUser }] = await Promise.all([
     admin.from("profiles").select("role,email").eq("id", userId).maybeSingle(),
     admin.auth.admin.getUserById(userId),
-    admin.from("brands").select("name").eq("owner_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const email = String(profile?.email || authUser.user?.email || "").toLowerCase();
   const allow = (process.env.UNLIMITED_CREDIT_EMAILS || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
-  return profile?.role === "admin" || hasUnlimitedAccessEmail(email) || allow.includes(email) || brand?.name?.trim().toLowerCase() === "skinglow";
+  return profile?.role === "admin" || hasUnlimitedAccessEmail(email) || allow.includes(email);
 }
 
 async function enforceRequestLimit(admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>, userId: string, route: string) {

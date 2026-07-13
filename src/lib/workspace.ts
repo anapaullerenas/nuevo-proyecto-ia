@@ -51,12 +51,10 @@ export async function getWorkspace() {
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean);
   const accountEmail = (profile?.email || user.email || "").toLowerCase();
-  // Skinglow is the owner test workspace. Keep this exception until billing is activated.
   const isUnlimited =
     profile?.role === "admin" ||
     hasUnlimitedAccessEmail(accountEmail) ||
-    unlimitedEmails.includes(accountEmail) ||
-    activeBrand.name.trim().toLowerCase() === "skinglow";
+    unlimitedEmails.includes(accountEmail);
 
   return {
     supabase,
