@@ -3,9 +3,24 @@
 /* eslint-disable @next/next/no-img-element */
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Download, Expand, ImageIcon, Loader2, Pencil, RefreshCw, Sparkles, WandSparkles, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  Download,
+  Expand,
+  Eye,
+  ImageIcon,
+  Images,
+  Loader2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  WandSparkles,
+  X,
+} from "lucide-react";
 import type { StyleReference } from "@/components/ReferenceUploader";
 
 type BrandAsset = {
@@ -68,6 +83,9 @@ type GeneratedStatic = {
   created_at?: string;
 };
 
+type OpenStep = "setup" | "style" | "intent";
+type StudioMemory = { assetId?: string; format?: string; serviceNoProduct?: boolean };
+
 const formats = ["1:1 Feed", "4:5 Feed", "9:16 Story/Reel"];
 const stages = ["Descubrimiento", "Consideración", "Conversión", "Retargeting"];
 const examples = [
@@ -95,7 +113,6 @@ export function StaticStudio({
   initialReferences: StyleReference[];
   unlimitedCredits?: boolean;
 }) {
-  const router = useRouter();
   const [selectedAssetId, setSelectedAssetId] = useState(initialAssets[0]?.id || "");
   const [serviceNoProduct, setServiceNoProduct] = useState(false);
   const [format, setFormat] = useState("4:5 Feed");
@@ -107,25 +124,55 @@ export function StaticStudio({
   const [brief, setBrief] = useState<StaticBrief | null>(null);
   const [creativeId, setCreativeId] = useState<string | null>(null);
   const [gallery, setGallery] = useState(initialGallery);
-  const [selectedCreative, setSelectedCreative] = useState<GeneratedStatic | null>(initialGallery[0] || null);
+  const [selectedCreative, setSelectedCreative] = useState<GeneratedStatic | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<"brief" | "generate" | "edit" | null>(null);
   const [exampleIndex, setExampleIndex] = useState(0);
-  const [openStep, setOpenStep] = useState<"setup" | "style" | "intent" | "brief">("setup");
+  const [openStep, setOpenStep] = useState<OpenStep>("intent");
   const [correction, setCorrection] = useState("");
   const [fullScreen, setFullScreen] = useState(false);
   const [remainingProposals, setRemainingProposals] = useState(0);
   const [variantOffset, setVariantOffset] = useState(0);
-  const stageRef = useRef<HTMLDivElement>(null);
+  const [galleryVisible, setGalleryVisible] = useState(12);
+  const [memoryReady, setMemoryReady] = useState(false);
+  const stageRef = useRef<HTMLElement>(null);
+  const correctionRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => setExampleIndex((current) => (current + 1) % examples.length), 3000);
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(`static-studio-memory:${brandId}`);
+        const memory = raw ? JSON.parse(raw) as StudioMemory : null;
+        if (memory?.assetId && initialAssets.some((asset) => asset.id === memory.assetId)) {
+          setSelectedAssetId(memory.assetId);
+        }
+        if (memory?.format && formats.includes(memory.format)) setFormat(memory.format);
+        if (typeof memory?.serviceNoProduct === "boolean") setServiceNoProduct(memory.serviceNoProduct);
+      } catch {
+        // A damaged local preference should never block the studio.
+      } finally {
+        setMemoryReady(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [brandId, initialAssets]);
+
+  useEffect(() => {
+    if (!memoryReady) return;
+    const memory: StudioMemory = { assetId: selectedAssetId, format, serviceNoProduct };
+    window.localStorage.setItem(`static-studio-memory:${brandId}`, JSON.stringify(memory));
+  }, [brandId, format, memoryReady, selectedAssetId, serviceNoProduct]);
+
   const identityReady = initialLogos.length > 0 && initialReferences.length >= 5;
   const productReady = serviceNoProduct || Boolean(selectedAssetId);
   const selectedUrl = selectedCreative?.public_url || selectedCreative?.signed_url || "";
+  const latestCreative = gallery[0] || null;
+  const visibleGallery = gallery.slice(0, galleryVisible);
 
   async function handleCreateBrief(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -134,6 +181,9 @@ export function StaticStudio({
     if (!productReady) return setMessage("Elige un producto para este anuncio.");
     if (intent.trim().length < 16) return setMessage("Cuéntanos un poco más sobre lo que quieres comunicar.");
     setBusy("brief");
+    setSelectedCreative(null);
+    setCorrection("");
+    stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     try {
       const response = await fetch("/api/static-brief", {
         method: "POST",
@@ -156,9 +206,7 @@ export function StaticStudio({
       setCreativeId(data.creativeId);
       setRemainingProposals(0);
       setVariantOffset(0);
-      setOpenStep("brief");
-      setMessage("Dirección lista. Revisa el texto y genera la imagen.");
-      router.refresh();
+      setMessage("Dirección lista. Revisa el texto en el lienzo y genera la imagen.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo preparar el anuncio.");
     } finally {
@@ -198,8 +246,7 @@ export function StaticStudio({
       const pending = variantOffset === 0 ? Math.max(0, proposals - 1) : Math.max(0, remainingProposals - 1);
       setRemainingProposals(pending);
       setVariantOffset((current) => current + 1);
-      setMessage(pending > 0 ? `Propuesta creada y guardada. Revísala antes de generar ${pending === 1 ? "la siguiente" : `las ${pending} restantes`}.` : "Propuesta creada y guardada.");
-      router.refresh();
+      setMessage(pending > 0 ? `Propuesta creada y guardada. Revísala antes de generar ${pending === 1 ? "la siguiente" : `las ${pending} restantes`}.` : "Propuesta creada y guardada en la galería.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo generar la imagen.");
     } finally {
@@ -224,7 +271,6 @@ export function StaticStudio({
       setSelectedCreative(edited);
       setCorrection("");
       setMessage(`Corrección guardada como versión ${edited.version}. La anterior sigue disponible.`);
-      router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo corregir la imagen.");
     } finally {
@@ -236,101 +282,338 @@ export function StaticStudio({
     setBrief((current) => current ? { ...current, [key]: value } : current);
   }
 
+  function resetPiece() {
+    setIntent("");
+    setStage("Conversión");
+    setArchetypeId("automatico");
+    setProposals(1);
+    setQuality("medium");
+    setBrief(null);
+    setCreativeId(null);
+    setSelectedCreative(null);
+    setCorrection("");
+    setRemainingProposals(0);
+    setVariantOffset(0);
+    setMessage("");
+    setOpenStep("intent");
+    window.requestAnimationFrame(() => stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  function viewCreative(item: GeneratedStatic) {
+    setBrief(null);
+    setSelectedCreative(item);
+    setCorrection("");
+    setMessage("");
+    window.requestAnimationFrame(() => stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  function editCreative(item: GeneratedStatic, newVersion = false) {
+    setBrief(null);
+    setSelectedCreative(item);
+    setCorrection("");
+    setMessage(newVersion
+      ? "Describe un cambio concreto para crear una nueva versión sin borrar la anterior."
+      : "Esta pieza está lista para corregirse. Escribe un solo cambio puntual.");
+    window.setTimeout(() => {
+      stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      correctionRef.current?.focus();
+    }, 60);
+  }
+
+  function trackDownload(item: GeneratedStatic) {
+    void fetch(`/api/static-download/${item.id}`, { method: "POST" });
+  }
+
+  const canvasTitle = selectedCreative
+    ? "Tu pieza, en tamaño real"
+    : brief
+      ? "La ficha está lista para producir"
+      : "Un lienzo listo para tu próxima idea";
+
   return (
-    <div className="static-editor">
-      <section className="creative-canvas" ref={stageRef}>
-        <header className="creative-canvas-head">
-          <div><span className="eyebrow">Mesa de creación</span><h2>{selectedCreative ? "Tu anuncio, en tamaño real" : "Aquí aparecerá tu anuncio"}</h2></div>
-          {selectedCreative && <span className="canvas-version">{selectedCreative.format} · versión {selectedCreative.version}</span>}
+    <div className="static-editor static-editor-always-ready">
+      <div className="static-workspace">
+        <aside className="studio-creation-flow" aria-label="Flujo de creación">
+          <div className="studio-flow-header">
+            <span className="eyebrow">Nueva pieza</span>
+            <h2>De la idea al anuncio.</h2>
+            <p>Tu marca ya está preparada. Solo dinos qué quieres comunicar hoy.</p>
+          </div>
+
+          <div className="studio-readiness">
+            <div className={identityReady ? "ready" : ""}>
+              {identityReady ? <Check /> : <ImageIcon />}
+              <span>
+                <b>Identidad de {brandName}</b>
+                <small>{initialAssets.length} productos · {initialReferences.length} referencias · logo {initialLogos.length ? "listo" : "pendiente"}</small>
+              </span>
+            </div>
+            <Link href={`/marcas/${brandId}/editar`}>{identityReady ? "Administrar" : "Completar"}</Link>
+          </div>
+
+          <form className="studio-steps" onSubmit={handleCreateBrief}>
+            <details open={openStep === "setup"} onToggle={(event) => event.currentTarget.open && setOpenStep("setup")}>
+              <summary>
+                <StepNumber number="01" done={productReady} />
+                <span><b>Producto y formato</b><small>{selectedProductLabel(initialAssets, selectedAssetId, serviceNoProduct)} · {format}</small></span>
+                <ChevronDown />
+              </summary>
+              <div className="studio-step-body setup-grid">
+                <div>
+                  <label className="field-label">Producto</label>
+                  <div className="compact-product-row">
+                    {initialAssets.map((asset, index) => {
+                      const label = assetDisplayLabel(asset, index);
+                      return (
+                        <button
+                          type="button"
+                          key={asset.id}
+                          className={selectedAssetId === asset.id && !serviceNoProduct ? "selected" : ""}
+                          onClick={() => { setSelectedAssetId(asset.id); setServiceNoProduct(false); }}
+                        >
+                          {asset.signed_url && <img src={asset.signed_url} alt={label} />}
+                          <span>{label}</span>
+                          {selectedAssetId === asset.id && !serviceNoProduct && <Check />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <label className="service-toggle compact">
+                    <input type="checkbox" checked={serviceNoProduct} onChange={(event) => setServiceNoProduct(event.target.checked)} />
+                    <span>Esta pieza no necesita producto.</span>
+                  </label>
+                </div>
+                <div>
+                  <label className="field-label">Formato</label>
+                  <div className="format-capsules">
+                    {formats.map((item) => (
+                      <button type="button" key={item} className={format === item ? "selected" : ""} onClick={() => setFormat(item)}>
+                        <span className={`format-icon ${formatClass(item)}`} />
+                        <b>{item}</b>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details open={openStep === "style"} onToggle={(event) => event.currentTarget.open && setOpenStep("style")}>
+              <summary>
+                <StepNumber number="02" done />
+                <span><b>Etapa y estructura</b><small>{stage} · {archetypeId === "automatico" ? "Automático" : archetypes.find((item) => item.id === archetypeId)?.label_visible}</small></span>
+                <ChevronDown />
+              </summary>
+              <div className="studio-step-body">
+                <div className="stage-tabs compact-tabs">
+                  {stages.map((item) => <button key={item} type="button" className={stage === item ? "selected" : ""} onClick={() => setStage(item)}>{item}</button>)}
+                </div>
+                <div className="archetype-section-heading">
+                  <div><span className="eyebrow">Estructura del anuncio</span><b>Elige visualmente cómo se contará la idea.</b></div>
+                  <small>Son referencias de composición. La pieza final usará tu identidad.</small>
+                </div>
+                <div className="archetype-carousel">
+                  <button type="button" className={archetypeId === "automatico" ? "selected automatic" : "automatic"} onClick={() => setArchetypeId("automatico")}>
+                    <div className="archetype-auto-visual"><Sparkles /></div>
+                    <b>Automático</b>
+                    <span>La directora elige la estructura más adecuada.</span>
+                  </button>
+                  {archetypes.map((item) => (
+                    <button type="button" data-archetype={item.id} key={item.id} className={archetypeId === item.id ? "selected" : ""} onClick={() => setArchetypeId(item.id)}>
+                      <ArchetypeMockup id={item.id} />
+                      <b>{item.label_visible}</b>
+                      <span>{structureDescription(item.id)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </details>
+
+            <details className="intent-focus-step" open={openStep === "intent"} onToggle={(event) => event.currentTarget.open && setOpenStep("intent")}>
+              <summary>
+                <StepNumber number="03" done={intent.trim().length >= 16} />
+                <span><b>Qué quieres comunicar</b><small>{intent ? `${intent.slice(0, 74)}${intent.length > 74 ? "…" : ""}` : "Escribe la intención de esta pieza"}</small></span>
+                <ChevronDown />
+              </summary>
+              <div className="studio-step-body intent-step">
+                <textarea autoFocus value={intent} onChange={(event) => setIntent(event.target.value)} placeholder={examples[exampleIndex]} />
+                <div className="proposal-controls">
+                  <fieldset>
+                    <legend>Cantidad de propuestas nuevas</legend>
+                    <div>{[1, 2, 3].map((count) => <button key={count} type="button" className={proposals === count ? "selected" : ""} onClick={() => setProposals(count)}>{count}</button>)}</div>
+                    <small>Son conceptos nuevos para explorar, no variaciones de un ganador.</small>
+                  </fieldset>
+                  <label>Calidad
+                    <select value={quality} onChange={(event) => setQuality(event.target.value === "high" ? "high" : "medium")}>
+                      <option value="medium">Estándar{unlimitedCredits ? " · incluida" : ""}</option>
+                      <option value="high">Alta{unlimitedCredits ? " · incluida" : ""}</option>
+                    </select>
+                  </label>
+                </div>
+                <button className="primary-action prepare-action studio-create-brief" type="submit" disabled={busy === "brief" || busy === "generate"}>
+                  {busy === "brief" ? <Loader2 className="spin" /> : <Pencil />}
+                  {busy === "brief" ? "Preparando dirección…" : unlimitedCredits ? "Crear ficha del anuncio · incluido" : "Crear ficha del anuncio · 15 cr"}
+                </button>
+              </div>
+            </details>
+
+            {message && <p className="form-message studio-message" aria-live="polite">{message}</p>}
+          </form>
+        </aside>
+
+        <section className="creative-canvas" ref={stageRef}>
+          <header className="creative-canvas-head">
+            <div><span className="eyebrow">Lienzo de producción</span><h2>{canvasTitle}</h2></div>
+            {selectedCreative ? (
+              <div className="canvas-head-actions">
+                <span className="canvas-version">{selectedCreative.format} · versión {selectedCreative.version}</span>
+                <button type="button" onClick={resetPiece} disabled={busy !== null}><Plus size={16} /> Crear otra pieza</button>
+              </div>
+            ) : (
+              <span className="canvas-version">{format}</span>
+            )}
+          </header>
+
+          {busy === "generate" ? (
+            <div className={`generation-stage ${formatClass(format)}`} aria-live="polite">
+              <div className="generation-pulse">
+                <WandSparkles />
+                <b>Construyendo {proposals === 1 ? "tu propuesta" : "la siguiente propuesta"}…</b>
+                <span>La imagen se guardará automáticamente en tu galería.</span>
+                <div className="generation-progress-steps"><i>Composición</i><i>Producto y copy</i><i>Revisión final</i></div>
+              </div>
+            </div>
+          ) : selectedCreative && selectedUrl ? (
+            <>
+              <div className="canvas-viewer">
+                <div className={`canvas-image-shell ${formatClass(selectedCreative.format)}`}>
+                  <img src={selectedUrl} alt={`Anuncio generado para ${brandName}`} />
+                  <button type="button" className="expand-canvas" onClick={() => setFullScreen(true)}><Expand size={17} /> Ver pantalla completa</button>
+                </div>
+                <div className="canvas-actions">
+                  <div><span>{selectedCreative.ficha?.arquetipo_label || "Anuncio estático"}</span><b>{selectedCreative.ficha?.texto_principal || "Propuesta generada"}</b></div>
+                  <div className="canvas-primary-actions">
+                    {remainingProposals > 0 && <button type="button" onClick={handleGenerate} disabled={busy !== null}><WandSparkles size={16} /> Generar siguiente</button>}
+                    <a href={selectedUrl} onClick={() => trackDownload(selectedCreative)} download={downloadName(brandName, selectedCreative)}><Download size={17} /> Descargar en alta calidad</a>
+                  </div>
+                </div>
+              </div>
+
+              {gallery.length > 1 && (
+                <div className="proposal-filmstrip" aria-label="Propuestas y versiones">
+                  {gallery.slice(0, 8).map((item, index) => {
+                    const url = creativeUrl(item);
+                    return (
+                      <button type="button" key={item.id} className={selectedCreative.id === item.id ? "selected" : ""} onClick={() => viewCreative(item)}>
+                        {url && <img src={url} alt={`Propuesta ${index + 1}`} />}
+                        <span>{item.status === "edited" ? `Edición v${item.version}` : `Propuesta ${index + 1}`}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="image-correction-bar">
+                <div><Pencil size={18} /><span><b>¿Quieres corregir algo?</b> Describe únicamente el cambio. La versión actual no se borrará.</span></div>
+                <textarea ref={correctionRef} value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={'Ej: Cambia “axilas” por “entrepierna”. Mantén todo lo demás exactamente igual.'} />
+                <button type="button" onClick={handleCorrection} disabled={busy === "edit"}>{busy === "edit" ? <Loader2 className="spin" /> : <RefreshCw />} {busy === "edit" ? "Corrigiendo…" : unlimitedCredits ? "Crear versión corregida · incluido" : "Crear versión corregida · 80 cr"}</button>
+              </div>
+            </>
+          ) : brief ? (
+            <div className="canvas-brief-state brief-editor">
+              <div className="canvas-brief-intro">
+                <div><span>{brief.arquetipo_label}</span><b>Aprobada · {brief.review_score}/100</b></div>
+                <p>{brief.review_summary}</p>
+              </div>
+              <label>Concepto<textarea value={brief.concepto} onChange={(event) => updateBrief("concepto", event.target.value)} /></label>
+              <div className="copy-grid">
+                <label>Texto principal<input value={brief.texto_principal} onChange={(event) => updateBrief("texto_principal", event.target.value)} /></label>
+                <label>Texto secundario<input value={brief.texto_secundario} onChange={(event) => updateBrief("texto_secundario", event.target.value)} /></label>
+                <label>CTA<input value={brief.cta} disabled={brief.cta_usage === "none"} onChange={(event) => updateBrief("cta", event.target.value)} /></label>
+              </div>
+              <div className="creative-usage-controls">
+                <label>Logotipo<select value={brief.logo_usage} onChange={(event) => updateBrief("logo_usage", event.target.value as StaticBrief["logo_usage"])}><option value="none">No usar</option><option value="subtle">Discreto</option><option value="prominent">Protagonista</option></select></label>
+                <label>Call to action<select value={brief.cta_usage} onChange={(event) => updateBrief("cta_usage", event.target.value as StaticBrief["cta_usage"])}><option value="none">Sin CTA</option><option value="text">Texto discreto</option><option value="button">Botón</option></select></label>
+              </div>
+              <label>Disclaimer o texto legal<input value={brief.disclaimer || ""} onChange={(event) => updateBrief("disclaimer", event.target.value)} placeholder="Déjalo vacío si no aplica" /></label>
+              <details className="art-direction-details">
+                <summary>Ver cómo se fotografiará y compondrá</summary>
+                <p>{brief.hook_visual}</p>
+                <div className="direction-zones"><span><b>Decisión visual</b>{brief.art_direction.decision_visual_fuerte}</span><span><b>Luz</b>{brief.art_direction.iluminacion}</span><span><b>Cámara</b>{brief.art_direction.camara_y_encuadre}</span><span><b>Entorno</b>{brief.art_direction.superficie_y_entorno}</span><span><b>Props</b>{brief.art_direction.props}</span><span><b>Color</b>{brief.art_direction.tratamiento_color}</span></div>
+              </details>
+              <div className="brief-generate-row">
+                <div><span>{proposals} {proposals === 1 ? "propuesta" : "propuestas"} · {format}</span><small>{unlimitedCredits ? "Incluido en tu cuenta" : `${quality === "high" ? 250 : 120} créditos por propuesta`}</small></div>
+                <button type="button" onClick={handleGenerate} disabled={busy !== null}><WandSparkles /> Generar imagen</button>
+              </div>
+            </div>
+          ) : (
+            <div className="studio-blank-state">
+              <div className={`blank-format-frame ${formatClass(format)}`}>
+                <ImageIcon size={34} />
+                <b>Aquí aparecerá tu próximo anuncio</b>
+                <p>{format} · cambia el formato y este lienzo se ajustará en vivo.</p>
+              </div>
+            </div>
+          )}
+
+          {!selectedCreative && !brief && busy === null && latestCreative && (
+            <article className="last-creation-card">
+              {creativeUrl(latestCreative) && <img src={creativeUrl(latestCreative)} alt="Última creación" />}
+              <div><span>Tu última creación</span><b>{creativeTitle(latestCreative)}</b><small>{formatCreativeDate(latestCreative.created_at)}</small></div>
+              <div className="last-creation-actions">
+                <button type="button" onClick={() => viewCreative(latestCreative)}><Eye size={14} /> Ver</button>
+                <button type="button" onClick={() => editCreative(latestCreative)}><Pencil size={14} /> Editar</button>
+                <a href={creativeUrl(latestCreative)} onClick={() => trackDownload(latestCreative)} download={downloadName(brandName, latestCreative)} aria-label="Descargar última creación"><Download size={15} /></a>
+              </div>
+            </article>
+          )}
+        </section>
+      </div>
+
+      <section className="studio-gallery" aria-labelledby="studio-gallery-title">
+        <header>
+          <div><span className="eyebrow">Archivo creativo</span><h2 id="studio-gallery-title">Galería de {brandName}</h2><p>Cada pieza y cada corrección quedan disponibles para volver a abrirse.</p></div>
+          {gallery.length > 0 && <span className="gallery-count"><Images size={16} /> {gallery.length} {gallery.length === 1 ? "pieza" : "piezas"}</span>}
         </header>
 
-        {busy === "generate" ? (
-          <div className={`generation-stage ${formatClass(format)}`}><div className="generation-pulse"><WandSparkles /><b>Construyendo {proposals === 1 ? "tu propuesta" : `${proposals} propuestas`}…</b><span>Composición, producto, copy y logo</span></div></div>
-        ) : selectedCreative && selectedUrl ? (
-          <div className="canvas-viewer">
-            <div className={`canvas-image-shell ${formatClass(selectedCreative.format)}`}>
-              <img src={selectedUrl} alt={`Anuncio generado para ${brandName}`} />
-              <button type="button" className="expand-canvas" onClick={() => setFullScreen(true)}><Expand size={17} /> Ver pantalla completa</button>
-            </div>
-            <div className="canvas-actions">
-              <div><span>{selectedCreative.ficha?.arquetipo_label || "Anuncio estático"}</span><b>{selectedCreative.ficha?.texto_principal || "Propuesta generada"}</b></div>
-              <a href={selectedUrl} onClick={() => { void fetch(`/api/static-download/${selectedCreative.id}`, { method: "POST" }); }} download={`${brandName}_${selectedCreative.format}_v${selectedCreative.version}.png`}><Download size={17} /> Descargar en alta calidad</a>
-            </div>
-          </div>
+        {gallery.length === 0 ? (
+          <div className="studio-gallery-empty"><ImageIcon /><b>Tus piezas aparecerán aquí.</b><p>Crea la primera desde el flujo de arriba.</p><span>↑</span></div>
         ) : (
-          <div className="canvas-empty"><ImageIcon size={42} /><b>La imagen será la protagonista.</b><p>Completa los tres pasos de abajo. Cuando generes, no tendrás que volver a buscar el resultado.</p></div>
-        )}
-
-        {gallery.length > 0 && (
-          <div className="proposal-filmstrip" aria-label="Propuestas y versiones">
-            {gallery.map((item, index) => {
-              const url = item.public_url || item.signed_url || "";
-              return <button type="button" key={item.id} className={selectedCreative?.id === item.id ? "selected" : ""} onClick={() => setSelectedCreative(item)}>{url && <img src={url} alt={`Propuesta ${index + 1}`} />}<span>{item.status === "edited" ? `Edición v${item.version}` : `Propuesta ${index + 1}`}</span></button>;
-            })}
-          </div>
-        )}
-
-        {selectedCreative && (
-          <div className="image-correction-bar">
-            <div><Pencil size={18} /><span><b>¿Quieres corregir algo?</b> Describe únicamente el cambio. La versión actual no se borrará.</span></div>
-            <textarea value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={'Ej: Cambia “axilas” por “entrepierna”. Mantén todo lo demás exactamente igual.'} />
-            <button type="button" onClick={handleCorrection} disabled={busy === "edit"}>{busy === "edit" ? <Loader2 className="spin" /> : <RefreshCw />} {busy === "edit" ? "Corrigiendo en tiempo real…" : unlimitedCredits ? "Crear versión corregida · incluido" : "Crear versión corregida"}</button>
-          </div>
+          <>
+            <div className="studio-gallery-grid">
+              {visibleGallery.map((item) => {
+                const url = creativeUrl(item);
+                return (
+                  <article key={item.id} className={selectedCreative?.id === item.id ? "selected" : ""}>
+                    <button type="button" className="gallery-piece-preview" onClick={() => viewCreative(item)}>
+                      {url ? <img src={url} alt={creativeTitle(item)} /> : <ImageIcon />}
+                      <span>{item.ficha?.arquetipo_label || "Anuncio estático"}</span>
+                    </button>
+                    <div className="gallery-piece-meta">
+                      <b>{creativeTitle(item)}</b>
+                      <span>{item.format} · v{item.version}</span>
+                      <small>{formatCreativeDate(item.created_at)}</small>
+                    </div>
+                    <div className="gallery-piece-actions">
+                      <button type="button" onClick={() => viewCreative(item)}><Eye /> Ver</button>
+                      <button type="button" onClick={() => editCreative(item)}><Pencil /> Editar</button>
+                      <button type="button" onClick={() => editCreative(item, true)}><Copy /> Nueva versión</button>
+                      {url && <a href={url} onClick={() => trackDownload(item)} download={downloadName(brandName, item)}><Download /> Descargar</a>}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            {galleryVisible < gallery.length && <button type="button" className="gallery-load-more" onClick={() => setGalleryVisible((current) => current + 12)}>Cargar 12 piezas más</button>}
+          </>
         )}
       </section>
 
-      <div className="studio-readiness">
-        <div className={identityReady ? "ready" : ""}>{identityReady ? <Check /> : <ImageIcon />}<span><b>Identidad de {brandName}</b><small>{initialAssets.length} productos · {initialReferences.length} referencias · logo {initialLogos.length ? "listo" : "pendiente"}</small></span></div>
-        <Link href={`/marcas/${brandId}/editar`}>{identityReady ? "Administrar kit visual" : "Completar en Mis marcas"}</Link>
-      </div>
-
-      <form className="studio-steps" onSubmit={handleCreateBrief}>
-        <details open={openStep === "setup"} onToggle={(event) => event.currentTarget.open && setOpenStep("setup")}>
-          <summary><StepNumber number="01" done={productReady} /><span><b>Producto y formato</b><small>{selectedProductLabel(initialAssets, selectedAssetId, serviceNoProduct)} · {format}</small></span><ChevronDown /></summary>
-          <div className="studio-step-body setup-grid">
-            <div><label className="field-label">Producto</label><div className="compact-product-row">{initialAssets.map((asset) => <button type="button" key={asset.id} className={selectedAssetId === asset.id && !serviceNoProduct ? "selected" : ""} onClick={() => { setSelectedAssetId(asset.id); setServiceNoProduct(false); }}>{asset.signed_url && <img src={asset.signed_url} alt={asset.label || asset.file_name} />}<span>{asset.label || cleanLabel(asset.file_name)}</span>{selectedAssetId === asset.id && !serviceNoProduct && <Check />}</button>)}</div><label className="service-toggle compact"><input type="checkbox" checked={serviceNoProduct} onChange={(event) => setServiceNoProduct(event.target.checked)} /><span>Esta pieza no necesita producto.</span></label></div>
-            <div><label className="field-label">Formato</label><div className="format-capsules">{formats.map((item) => <button type="button" key={item} className={format === item ? "selected" : ""} onClick={() => setFormat(item)}><span className={`format-icon ${formatClass(item)}`} /><b>{item}</b></button>)}</div></div>
-          </div>
-        </details>
-
-        <details open={openStep === "style"} onToggle={(event) => event.currentTarget.open && setOpenStep("style")}>
-          <summary><StepNumber number="02" done /><span><b>Etapa y estructura visual</b><small>{stage} · {archetypeId === "automatico" ? "Automático" : archetypes.find((item) => item.id === archetypeId)?.label_visible}</small></span><ChevronDown /></summary>
-          <div className="studio-step-body">
-            <div className="stage-tabs compact-tabs">{stages.map((item) => <button key={item} type="button" className={stage === item ? "selected" : ""} onClick={() => setStage(item)}>{item}</button>)}</div>
-            <div className="archetype-section-heading"><div><span className="eyebrow">Formatos de anuncio</span><b>Elige visualmente cómo se contará la idea.</b></div><small>Las imágenes son referencias de estructura. Tu pieza usará únicamente tu marca y tus productos.</small></div>
-            <div className="archetype-carousel">
-              <button type="button" className={archetypeId === "automatico" ? "selected automatic" : "automatic"} onClick={() => setArchetypeId("automatico")}><div className="archetype-auto-visual"><Sparkles /></div><b>Automático</b><span>La directora elige la estructura más adecuada.</span></button>
-              {archetypes.map((item) => <button type="button" data-archetype={item.id} key={item.id} className={archetypeId === item.id ? "selected" : ""} onClick={() => setArchetypeId(item.id)}><ArchetypeMockup id={item.id} /><b>{item.label_visible}</b><span>{structureDescription(item.id)}</span></button>)}
-            </div>
-          </div>
-        </details>
-
-        <details open={openStep === "intent"} onToggle={(event) => event.currentTarget.open && setOpenStep("intent")}>
-          <summary><StepNumber number="03" done={intent.trim().length >= 16} /><span><b>Qué quieres comunicar</b><small>{intent ? `${intent.slice(0, 74)}${intent.length > 74 ? "…" : ""}` : "Contexto, cantidad y calidad"}</small></span><ChevronDown /></summary>
-          <div className="studio-step-body intent-step">
-            <textarea value={intent} onChange={(event) => setIntent(event.target.value)} placeholder={examples[exampleIndex]} />
-            <div className="proposal-controls"><fieldset><legend>Cantidad de propuestas nuevas</legend><div>{[1, 2, 3].map((count) => <button key={count} type="button" className={proposals === count ? "selected" : ""} onClick={() => setProposals(count)}>{count}</button>)}</div><small>No son variaciones de un ganador; son conceptos nuevos para explorar.</small></fieldset><label>Calidad<select value={quality} onChange={(event) => setQuality(event.target.value === "high" ? "high" : "medium")}><option value="medium">Estándar{unlimitedCredits ? " · incluida" : ""}</option><option value="high">Alta{unlimitedCredits ? " · incluida" : ""}</option></select></label></div>
-            <button className="primary-action prepare-action" type="submit" disabled={busy === "brief" || busy === "generate"}>{busy === "brief" ? <Loader2 className="spin" /> : <Pencil />} {busy === "brief" ? "Preparando dirección…" : "Preparar anuncio"}</button>
-          </div>
-        </details>
-
-        {brief && (
-          <details open={openStep === "brief"} onToggle={(event) => event.currentTarget.open && setOpenStep("brief")} className="brief-step">
-            <summary><StepNumber number="04" done /><span><b>Texto y dirección aprobados</b><small>{brief.arquetipo_label} · {brief.review_score}/100</small></span><ChevronDown /></summary>
-            <div className="studio-step-body brief-editor">
-              <label>Concepto<textarea value={brief.concepto} onChange={(event) => updateBrief("concepto", event.target.value)} /></label>
-              <div className="copy-grid"><label>Texto principal<input value={brief.texto_principal} onChange={(event) => updateBrief("texto_principal", event.target.value)} /></label><label>Texto secundario<input value={brief.texto_secundario} onChange={(event) => updateBrief("texto_secundario", event.target.value)} /></label><label>CTA<input value={brief.cta} disabled={brief.cta_usage === "none"} onChange={(event) => updateBrief("cta", event.target.value)} /></label></div>
-              <div className="creative-usage-controls"><label>Logotipo<select value={brief.logo_usage} onChange={(event) => updateBrief("logo_usage", event.target.value as StaticBrief["logo_usage"])}><option value="none">No usar</option><option value="subtle">Discreto</option><option value="prominent">Protagonista</option></select></label><label>Call to action<select value={brief.cta_usage} onChange={(event) => updateBrief("cta_usage", event.target.value as StaticBrief["cta_usage"])}><option value="none">Sin CTA</option><option value="text">Texto discreto</option><option value="button">Botón</option></select></label></div>
-              <label>Disclaimer o texto legal<input value={brief.disclaimer || ""} onChange={(event) => updateBrief("disclaimer", event.target.value)} placeholder="Déjalo vacío si no aplica" /></label>
-              <details className="art-direction-details"><summary>Ver cómo se fotografiará y compondrá</summary><p>{brief.hook_visual}</p><div className="direction-zones"><span><b>Decisión visual</b>{brief.art_direction.decision_visual_fuerte}</span><span><b>Luz</b>{brief.art_direction.iluminacion}</span><span><b>Cámara</b>{brief.art_direction.camara_y_encuadre}</span><span><b>Entorno</b>{brief.art_direction.superficie_y_entorno}</span><span><b>Props</b>{brief.art_direction.props}</span><span><b>Color</b>{brief.art_direction.tratamiento_color}</span></div></details>
-              <div className="brief-generate-row"><div><span>{remainingProposals > 0 ? `${remainingProposals} propuestas pendientes` : `${proposals} ${proposals === 1 ? "propuesta" : "propuestas"}`} · {format}</span><small>{unlimitedCredits ? "Incluido en tu cuenta" : `${quality === "high" ? 250 : 120} créditos por propuesta`}</small></div><button type="button" onClick={handleGenerate} disabled={busy === "generate" || (variantOffset >= proposals && variantOffset > 0)}>{busy === "generate" ? <Loader2 className="spin" /> : <WandSparkles />} {busy === "generate" ? "Generando…" : variantOffset >= proposals && variantOffset > 0 ? "Propuestas listas" : remainingProposals > 0 ? "Generar siguiente propuesta" : "Generar ahora"}</button></div>
-            </div>
-          </details>
-        )}
-        {message && <p className="form-message studio-message">{message}</p>}
-      </form>
-
-      {fullScreen && selectedCreative && selectedUrl && <div className="canvas-lightbox" role="dialog" aria-modal="true"><button type="button" onClick={() => setFullScreen(false)}><X /> Cerrar</button><img src={selectedUrl} alt={`Vista completa de ${brandName}`} /></div>}
+      {fullScreen && selectedCreative && selectedUrl && (
+        <div className="canvas-lightbox" role="dialog" aria-modal="true">
+          <button type="button" onClick={() => setFullScreen(false)}><X /> Cerrar</button>
+          <img src={selectedUrl} alt={`Vista completa de ${brandName}`} />
+        </div>
+      )}
     </div>
   );
 }
@@ -349,12 +632,30 @@ function formatClass(value: string) {
 
 function selectedProductLabel(assets: BrandAsset[], id: string, service: boolean) {
   if (service) return "Sin producto";
-  const asset = assets.find((item) => item.id === id);
-  return asset?.label || (asset ? cleanLabel(asset.file_name) : "Elige producto");
+  const index = assets.findIndex((item) => item.id === id);
+  return index >= 0 ? assetDisplayLabel(assets[index], index) : "Elige producto";
 }
 
-function cleanLabel(fileName: string) {
-  return fileName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+function assetDisplayLabel(asset: BrandAsset, index: number) {
+  return asset.label?.trim() || `Producto ${index + 1}`;
+}
+
+function creativeUrl(item: GeneratedStatic) {
+  return item.public_url || item.signed_url || "";
+}
+
+function creativeTitle(item: GeneratedStatic) {
+  return item.ficha?.texto_principal?.trim() || item.ficha?.arquetipo_label || "Pieza sin título";
+}
+
+function formatCreativeDate(value?: string) {
+  if (!value) return "Fecha no disponible";
+  return new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+}
+
+function downloadName(brandName: string, item: GeneratedStatic) {
+  const brand = brandName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return `${brand || "marca"}_${formatClass(item.format)}_v${item.version}.png`;
 }
 
 function structureDescription(id: string) {

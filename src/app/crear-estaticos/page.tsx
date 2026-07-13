@@ -89,9 +89,9 @@ export default async function CrearEstaticosPage() {
           <div className="panel-heading split static-studio-head">
             <div>
               <span className="eyebrow">Crear estáticos</span>
-              <h1>Estudio de anuncios estáticos</h1>
+              <h1>Tu estudio está listo para crear.</h1>
               <p>
-                Elige producto, formato y objetivo. La plataforma prepara la dirección creativa y conserva tus piezas en la galería.
+                Empieza una pieza nueva con el contexto de tu marca ya preparado. Tus creaciones anteriores permanecen disponibles en la galería.
               </p>
             </div>
             <div className="status-card compact">
