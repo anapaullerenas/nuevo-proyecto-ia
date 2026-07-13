@@ -41,7 +41,7 @@ export default async function AnalisisCreativosPage() {
                   <span key={section}>{section}</span>
                 ))}
               </div>
-              <p className="status-warn">La subida ya queda guardada. El siguiente paso es ejecutar el analisis IA sobre cada archivo.</p>
+              <p className="status-warn">Despues de subir un archivo, presiona Analizar ahora. Imagenes se analizan directo; videos se interpretan con frames clave.</p>
             </div>
           </div>
         </div>

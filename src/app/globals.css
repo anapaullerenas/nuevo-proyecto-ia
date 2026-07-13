@@ -941,6 +941,12 @@ svg {
   background: rgba(255, 255, 255, .7);
 }
 
+.upload-list div .inline-action {
+  width: fit-content;
+  margin-top: 8px;
+  gap: 6px;
+}
+
 .upload-list.compact div {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -982,6 +988,95 @@ svg {
   color: #4f62a7;
   font-size: 12px;
   font-style: normal;
+}
+
+.creative-result {
+  margin-top: 12px;
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(255, 246, 240, .54);
+}
+
+.creative-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.creative-result-head span {
+  width: auto;
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #2f7a4f;
+  background: rgba(47, 122, 79, .12);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.creative-result-head b {
+  color: #632e59;
+  font-family: var(--font-display), sans-serif;
+  font-size: 34px;
+}
+
+.creative-result > p {
+  margin: 10px 0 0;
+  color: rgba(99, 46, 89, .76);
+  line-height: 1.5;
+}
+
+.creative-result-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.creative-result-grid article {
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, .72);
+}
+
+.creative-result-grid article span {
+  color: #4f62a7;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.creative-result-grid article b {
+  display: block;
+  margin: 4px 0;
+  color: #632e59;
+}
+
+.creative-result-grid article p {
+  margin: 0;
+  color: rgba(99, 46, 89, .7);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.creative-result-lists {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.creative-result-lists b {
+  color: #632e59;
+  font-size: 13px;
+}
+
+.creative-result-lists ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: rgba(99, 46, 89, .72);
+  line-height: 1.45;
 }
 
 .analysis-grid {
@@ -1564,7 +1659,8 @@ svg {
   .credit-packages,
   .admin-metrics,
   .admin-grid,
-  .scenario-table {
+  .scenario-table,
+  .creative-result-grid {
     grid-template-columns: 1fr;
   }
 
