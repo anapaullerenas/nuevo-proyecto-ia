@@ -18,6 +18,7 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  Trash2,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -118,7 +119,7 @@ export function StaticStudio({
   unlimitedCredits?: boolean;
 }) {
   const [selectedAssetId, setSelectedAssetId] = useState(initialAssets[0]?.id || "");
-  const [serviceNoProduct, setServiceNoProduct] = useState(false);
+  const [serviceNoProduct, setServiceNoProduct] = useState(initialAssets.length === 0);
   const [format, setFormat] = useState("4:5 Feed");
   const [stage, setStage] = useState("Conversión");
   const [archetypeId, setArchetypeId] = useState("automatico");
@@ -173,8 +174,8 @@ export function StaticStudio({
     window.localStorage.setItem(`static-studio-memory:${brandId}`, JSON.stringify(memory));
   }, [brandId, format, memoryReady, selectedAssetId, serviceNoProduct]);
 
-  const identityReady = initialLogos.length > 0 && initialReferences.length >= 5;
-  const productReady = serviceNoProduct || Boolean(selectedAssetId);
+  const identityReady = initialLogos.length > 0 || initialReferences.length > 0 || initialAssets.length > 0;
+  const productReady = true;
   const selectedUrl = selectedCreative?.public_url || selectedCreative?.signed_url || "";
   const latestCreative = gallery[0] || null;
   const visibleGallery = gallery.slice(0, galleryVisible);
@@ -183,8 +184,6 @@ export function StaticStudio({
   async function handleCreateBrief(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
-    if (!identityReady) return setMessage("Completa el kit visual desde Mis marcas antes de crear.");
-    if (!productReady) return setMessage("Elige un producto para este anuncio.");
     if (intent.trim().length < 16) return setMessage("Cuéntanos un poco más sobre lo que quieres comunicar.");
     setBusy("brief");
     setSelectedCreative(null);
@@ -258,6 +257,21 @@ export function StaticStudio({
     } finally {
       setBusy(null);
     }
+  }
+
+  async function deleteCreative(item: GeneratedStatic) {
+    if (!window.confirm("¿Borrar esta pieza de la galería? Esta acción no se puede deshacer.")) return;
+    setMessage("");
+    const response = await fetch(`/api/static-library/${item.id}`, { method: "DELETE" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setMessage(data.error || "No se pudo borrar la pieza.");
+    setGallery((current) => current.filter((creative) => creative.id !== item.id));
+    if (selectedCreative?.id === item.id) {
+      setSelectedCreative(null);
+      setBrief(null);
+      setCreativeId(null);
+    }
+    setMessage("La pieza se borró de la galería.");
   }
 
   async function handleCorrection() {
@@ -351,10 +365,10 @@ export function StaticStudio({
               {identityReady ? <Check /> : <ImageIcon />}
               <span>
                 <b>Identidad de {brandName}</b>
-                <small>{initialAssets.length} productos · {initialReferences.length} referencias · logo {initialLogos.length ? "listo" : "pendiente"}</small>
+                <small>{initialAssets.length} productos · {initialReferences.length} referencias · {initialLogos.length} logotipos · todo opcional</small>
               </span>
             </div>
-            <Link href={`/marcas/${brandId}/editar`}>{identityReady ? "Administrar" : "Completar"}</Link>
+            <Link href={`/marcas/${brandId}/editar`}>{identityReady ? "Administrar" : "Agregar contexto"}</Link>
           </div>
 
           <form className="studio-steps" onSubmit={handleCreateBrief}>
@@ -631,6 +645,7 @@ export function StaticStudio({
                       <button type="button" onClick={() => editCreative(item)}><Pencil /> Editar</button>
                       <button type="button" onClick={() => editCreative(item, true)}><Copy /> Nueva versión</button>
                       {url && <a href={url} onClick={() => trackDownload(item)} download={downloadName(brandName, item)}><Download /> Descargar</a>}
+                      <button type="button" onClick={() => deleteCreative(item)}><Trash2 /> Borrar</button>
                     </div>
                   </article>
                 );

@@ -3227,6 +3227,18 @@ svg {
   gap: 10px;
 }
 
+.onboarding-submit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.onboarding-submit-actions .primary-action,
+.onboarding-submit-actions .secondary-action {
+  min-height: 48px;
+}
+
 .credit-packages {
   margin: 16px 0;
   display: grid;

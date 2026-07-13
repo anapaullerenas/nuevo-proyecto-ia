@@ -74,29 +74,13 @@ export async function POST(request: NextRequest) {
     productAsset = asset;
   }
 
-  if (!body.serviceNoProduct && !productAsset) {
-    return NextResponse.json({ error: "Elige una foto real del producto. No generaremos un empaque inventado." }, { status: 400 });
-  }
-
-  const [{ data: logoAssets }, { count: referenceCount }] = await Promise.all([
-    supabase
-      .from("brand_assets")
-      .select("id,bucket_id,storage_path,file_name,mime_type,kind,metadata")
-      .eq("brand_id", brand.id)
-      .eq("owner_id", user.id)
-      .eq("kind", "logo")
-      .limit(6),
-    supabase
-      .from("brand_assets")
-      .select("id", { count: "exact", head: true })
-      .eq("brand_id", brand.id)
-      .eq("owner_id", user.id)
-      .eq("kind", "style_reference"),
-  ]);
-
-  if (!logoAssets?.length || (referenceCount || 0) < 5) {
-    return NextResponse.json({ error: "Completa el kit visual con un logo y cinco referencias antes de generar." }, { status: 400 });
-  }
+  const { data: logoAssets } = await supabase
+    .from("brand_assets")
+    .select("id,bucket_id,storage_path,file_name,mime_type,kind,metadata")
+    .eq("brand_id", brand.id)
+    .eq("owner_id", user.id)
+    .eq("kind", "logo")
+    .limit(6);
 
   let styleReferences: ImageAsset[] = [];
   if (Array.isArray(body.referenceAssetIds) && body.referenceAssetIds.length) {
@@ -110,7 +94,7 @@ export async function POST(request: NextRequest) {
     styleReferences = (data || []).slice(0, 3);
   }
 
-  const logoSources = (await Promise.all(logoAssets.map(async (asset) => {
+  const logoSources = (await Promise.all((logoAssets || []).map(async (asset) => {
     const { data: blob } = await supabase.storage.from(asset.bucket_id).download(asset.storage_path);
     if (!blob) return null;
     return {
@@ -118,10 +102,6 @@ export async function POST(request: NextRequest) {
       variant: asset.metadata?.logo_variant || "primary",
     } as LogoSource;
   }))).filter((source): source is LogoSource => Boolean(source));
-
-  if (!logoSources.length) {
-    return NextResponse.json({ error: "No pudimos leer los logotipos oficiales. Vuelve a subirlos antes de generar." }, { status: 400 });
-  }
 
   const curatedArchetype = getCuratedStaticFormat(ficha.arquetipo);
   const { data: storedArchetype } = !curatedArchetype && ficha.arquetipo
@@ -156,7 +136,7 @@ export async function POST(request: NextRequest) {
         ficha: variantFicha,
         archetype: variantArchetype,
         quality,
-        serviceNoProduct: Boolean(body.serviceNoProduct),
+        serviceNoProduct: Boolean(body.serviceNoProduct || !productAsset),
         variantIndex: variationIndex + 1,
         styleReferenceCount: styleReferences.length,
         brandAssetCount: (productAsset ? 1 : 0) + logoSources.length,
@@ -212,7 +192,7 @@ export async function POST(request: NextRequest) {
           parent_id: body.creativeId || null,
           concept: {
             product_asset_id: productAsset?.id || null,
-            service_no_product: Boolean(body.serviceNoProduct),
+            service_no_product: Boolean(body.serviceNoProduct || !productAsset),
             variant: index + 1,
             reference_asset_ids: styleReferences.map((reference) => reference.id),
             format_reference: staticFormatReferencePayload(variantFicha.arquetipo),
@@ -391,7 +371,7 @@ async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSource
   const typeface = typographyStyle === "serif_editorial" ? "Georgia,serif" : typographyStyle === "condensada" ? "Impact,sans-serif" : typographyStyle === "redondeada" ? "Trebuchet MS,sans-serif" : typographyStyle === "manuscrita" ? "Comic Sans MS,cursive" : "Helvetica Neue,Arial,sans-serif";
 
   const overlays: Array<{ input: Buffer; left?: number; top?: number }> = [];
-  if (ficha.logo_usage !== "none") {
+  if (ficha.logo_usage !== "none" && logoSources.length > 0) {
     const sampleWidth = Math.max(1, Math.round(width * .28));
     const sampleHeight = Math.max(1, Math.round(height * .12));
     const { channels } = await sharp(input).extract({ left: width - sampleWidth, top: 0, width: sampleWidth, height: sampleHeight }).stats();

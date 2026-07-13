@@ -31,12 +31,12 @@ export default async function OnboardingPage() {
       </nav>
       <section className="onboarding-shell">
         <div className="onboarding-intro">
-          <span className="eyebrow">Paso 1 de 3</span>
-          <h1>Registra la información madre de tu marca.</h1>
+          <span className="eyebrow">Configura a tu ritmo</span>
+          <h1>Cuéntanos de tu marca o entra directamente.</h1>
           <p>
             Esta información será la base para el chat IA, análisis Meta,
             análisis creativos y generación de estáticos. No hay datos
-            precargados: todo empieza con lo que guardes aquí.
+            precargados: puedes omitir este paso y completarlo después desde Mis marcas.
           </p>
           <div className="onboarding-links">
             <Link href="/" className="secondary-action">Cancelar y volver</Link>

@@ -67,6 +67,41 @@ export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca
     router.push(initialBrand ? "/marcas" : "/dashboard"); router.refresh();
   }
 
+  async function skipOnboarding() {
+    setMessage("");
+    setIsLoading(true);
+    const supabase = createSupabaseBrowserClient();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      setIsLoading(false);
+      setMessage("Tu sesión expiró. Vuelve a entrar.");
+      return;
+    }
+
+    const firstName = String(userData.user.user_metadata?.full_name || "").trim().split(/\s+/)[0];
+    const { error } = await supabase.from("brands").insert({
+      owner_id: userData.user.id,
+      name: firstName ? `Marca de ${firstName}` : "Mi espacio creativo",
+      category: "Por definir",
+      audience: "Por definir",
+      offer: "Por definir",
+      voice: "Cercana y clara",
+      content_owner: "owner",
+      creative_goal: "Crear y analizar contenido",
+      strategic_context: { onboarding_skipped: "true", brand_type: "personal" },
+    });
+
+    if (error) {
+      setIsLoading(false);
+      setMessage(error.message);
+      return;
+    }
+
+    await supabase.from("profiles").update({ onboarding_completed: true }).eq("id", userData.user.id);
+    router.push("/dashboard");
+    router.refresh();
+  }
+
   return (
     <form className="onboarding-form deep-brand-form" onSubmit={handleSubmit}>
       <section className="brand-input-paths">
@@ -84,7 +119,10 @@ export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca
       <details className="strategic-depth" open><summary><div><span className="eyebrow">Brief de estratega creativo</span><b>Contexto psicológico y ángulos</b></div><small>La capa que mejora copies y decisiones visuales</small></summary><div className="strategic-field-grid"><TextField label="Historia y creencia de marca" value={form.brand_story} onChange={(v) => update("brand_story", v)} placeholder="Por qué existe y qué quiere cambiar." /><TextField label="Diferenciadores reales" value={form.differentiators} onChange={(v) => update("differentiators", v)} placeholder="Qué hace distinta a la oferta y por qué creerlo." /><TextField label="Dolores y tensiones" value={form.pains} onChange={(v) => update("pains", v)} placeholder="Problemas, frustraciones y momentos detonantes." /><TextField label="Deseos profundos" value={form.desires} onChange={(v) => update("desires", v)} placeholder="Resultado funcional, emocional e identidad deseada." /><TextField label="Objeciones" value={form.objections} onChange={(v) => update("objections", v)} placeholder="Qué frena la compra y qué evidencia lo resuelve." /><TextField label="Nivel de conciencia" value={form.awareness} onChange={(v) => update("awareness", v)} placeholder="Qué sabe hoy la audiencia del problema y la solución." /><TextField label="Ángulos creativos" value={form.angles} onChange={(v) => update("angles", v)} placeholder="Un ángulo por línea: problema, deseo, mecanismo, prueba…" /><TextField label="Pruebas y razones para creer" value={form.proof} onChange={(v) => update("proof", v)} placeholder="Testimonios, ingredientes, proceso, cifras verificables." /><TextField label="Creencias que hay que mover" value={form.beliefs} onChange={(v) => update("beliefs", v)} placeholder="De qué creencia parte y a cuál debe llegar." /><TextField label="Claims y límites" value={form.forbidden_claims} onChange={(v) => update("forbidden_claims", v)} placeholder="Qué no se puede prometer, decir o mostrar." /><TextField label="Dirección visual" value={form.visual_direction} onChange={(v) => update("visual_direction", v)} placeholder="Fotografía, luz, textura, tipografía y cosas a evitar." /></div></details>
 
       {message && <p className="form-message">{message}</p>}
-      <button className="primary-action" type="submit" disabled={isLoading}>{isLoading && <Loader2 className="spin" />}{submitLabel}<ArrowRight /></button>
+      <div className="onboarding-submit-actions">
+        {!initialBrand && <button className="secondary-action" type="button" disabled={isLoading} onClick={skipOnboarding}>Omitir por ahora</button>}
+        <button className="primary-action" type="submit" disabled={isLoading}>{isLoading && <Loader2 className="spin" />}{submitLabel}<ArrowRight /></button>
+      </div>
     </form>
   );
 }

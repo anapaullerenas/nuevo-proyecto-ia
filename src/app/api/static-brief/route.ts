@@ -60,36 +60,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No encontré la marca activa." }, { status: 404 });
   }
 
-  const [{ data: logoAsset }, { count: referenceCount }] = await Promise.all([
-    supabase
-      .from("brand_assets")
-      .select("id,file_name,label,kind")
-      .eq("id", body.logoAssetId || "00000000-0000-0000-0000-000000000000")
-      .eq("brand_id", brand.id)
-      .eq("owner_id", user.id)
-      .eq("kind", "logo")
-      .maybeSingle(),
-    supabase
-      .from("brand_assets")
-      .select("id", { count: "exact", head: true })
-      .eq("brand_id", brand.id)
-      .eq("owner_id", user.id)
-      .eq("kind", "style_reference"),
-  ]);
-
-  if (!logoAsset || (referenceCount || 0) < 5) {
-    return NextResponse.json({ error: "Completa el kit visual con un logo y cinco referencias antes de crear." }, { status: 400 });
-  }
+  const { data: logoAsset } = await supabase
+    .from("brand_assets")
+    .select("id,file_name,label,kind")
+    .eq("id", body.logoAssetId || "00000000-0000-0000-0000-000000000000")
+    .eq("brand_id", brand.id)
+    .eq("owner_id", user.id)
+    .eq("kind", "logo")
+    .maybeSingle();
 
   let productAsset: Record<string, unknown> | null = null;
-  if (!body.serviceNoProduct) {
-    if (!body.productAssetId) {
-      return NextResponse.json(
-        { error: "Sube o elige al menos una foto de producto antes de crear la ficha." },
-        { status: 400 },
-      );
-    }
-
+  if (!body.serviceNoProduct && body.productAssetId) {
     const { data: asset } = await supabase
       .from("brand_assets")
       .select("id,file_name,mime_type,kind,label")
@@ -101,7 +82,7 @@ export async function POST(request: NextRequest) {
     if (!asset) {
       return NextResponse.json({ error: "No encontré la foto de producto elegida." }, { status: 404 });
     }
-    productAsset = asset;
+    productAsset = asset || null;
   }
 
   const [{ data: recipes }, { data: references }, { data: goldenBriefs }, { data: visualIdentity }] = await Promise.all([
@@ -137,8 +118,8 @@ export async function POST(request: NextRequest) {
       funnelStage: body.funnelStage,
       archetypeId: body.archetypeId || "automatico",
       productAsset,
-      logoAsset,
-      serviceNoProduct: Boolean(body.serviceNoProduct),
+      logoAsset: logoAsset || null,
+      serviceNoProduct: Boolean(body.serviceNoProduct || !productAsset),
       recipes: (recipes || []).map((recipe) => String(recipe.rule)),
       archetypes: CURATED_STATIC_FORMATS,
       references: references || [],
@@ -164,7 +145,7 @@ export async function POST(request: NextRequest) {
         concept: {
           intent,
           product_asset_id: body.productAssetId || null,
-          service_no_product: Boolean(body.serviceNoProduct),
+          service_no_product: Boolean(body.serviceNoProduct || !productAsset),
           reference_asset_ids: (references || []).map((reference) => reference.id),
           external_reference: body.externalReference || "none",
           format_reference: staticFormatReferencePayload(ficha.arquetipo),
@@ -211,7 +192,7 @@ async function createBriefWithOpenAI({
   funnelStage: string;
   archetypeId: string;
   productAsset: Record<string, unknown> | null;
-  logoAsset: Record<string, unknown>;
+  logoAsset: Record<string, unknown> | null;
   serviceNoProduct: boolean;
   recipes: string[];
   archetypes: StaticArchetype[];
