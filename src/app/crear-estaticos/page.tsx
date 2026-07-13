@@ -29,12 +29,12 @@ export default async function CrearEstaticosPage() {
       .limit(10),
     workspace.supabase
       .from("static_creatives")
-      .select("id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,status,created_at")
+      .select("id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,parent_id,status,created_at")
       .eq("brand_id", workspace.activeBrand.id)
       .eq("owner_id", workspace.user.id)
-      .eq("status", "generated")
+      .in("status", ["generated", "edited"])
       .order("created_at", { ascending: false })
-      .limit(12),
+      .limit(30),
     workspace.supabase
       .from("brand_assets")
       .select("id,file_name,storage_path,bucket_id,metadata,created_at")
@@ -86,10 +86,10 @@ export default async function CrearEstaticosPage() {
     <AppFrame active="/crear-estaticos" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page static-studio">
         <div className="studio-panel">
-          <div className="panel-heading split">
+          <div className="panel-heading split static-studio-head">
             <div>
               <span className="eyebrow">Crear estáticos</span>
-              <h1>Crea anuncios estáticos para tu marca.</h1>
+              <h1>Estudio de anuncios estáticos</h1>
               <p>
                 Elige producto, formato y objetivo. La plataforma prepara la dirección creativa y conserva tus piezas en la galería.
               </p>

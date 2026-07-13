@@ -26,12 +26,14 @@ export function ReferenceUploader({
   selectedIds,
   onSelectionChange,
   onItemsChange,
+  selectionEnabled = true,
 }: {
   brandId: string;
   initialReferences: StyleReference[];
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
   onItemsChange?: (ids: string[]) => void;
+  selectionEnabled?: boolean;
 }) {
   const [items, setItems] = useState<ReferenceItem[]>(
     initialReferences.map((reference) => ({
@@ -137,7 +139,7 @@ export function ReferenceUploader({
           <span><b>{isUploading ? "Preparando referencias..." : "Agregar referencias"}</b><small>JPG, PNG o WebP · máximo 10</small></span>
           <input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={handleFiles} disabled={isUploading || items.length >= 10} />
         </label>
-        <p><b>{selectedIds.length}</b> seleccionadas</p>
+        <p><b>{selectionEnabled ? selectedIds.length : items.length}</b> {selectionEnabled ? "seleccionadas" : "guardadas"}</p>
       </div>
 
       {items.length > 0 && (
@@ -146,9 +148,10 @@ export function ReferenceUploader({
             <button
               type="button"
               key={item.id}
-              className={selectedIds.includes(item.id) ? "selected" : ""}
-              onClick={() => toggleReference(item.id)}
+              className={selectionEnabled && selectedIds.includes(item.id) ? "selected" : ""}
+              onClick={() => selectionEnabled && toggleReference(item.id)}
               disabled={item.status === "analizando"}
+              aria-disabled={!selectionEnabled}
             >
               {item.signed_url ? <img src={item.signed_url} alt={item.file_name} /> : <ImageIcon size={22} />}
               <span>{item.status === "analizando" ? <Loader2 className="spin" size={14} /> : <Check size={14} />}</span>
