@@ -16,7 +16,7 @@ export default async function CuentaPage() {
   }
 
   return (
-    <AppFrame active="/cuenta" brand={workspace.activeBrand} credits={workspace.walletBalance}>
+    <AppFrame active="/cuenta" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page account-grid">
         <article className="studio-panel">
           <div className="panel-heading">
@@ -27,8 +27,8 @@ export default async function CuentaPage() {
           <div className="account-cards">
             <div>
               <CreditCard />
-              <b>{workspace.walletBalance} créditos disponibles</b>
-              <p>Los créditos se gastan en chats, análisis, imports y generación de estáticos.</p>
+              <b>{workspace.isUnlimited ? "Créditos ilimitados" : `${workspace.walletBalance} créditos disponibles`}</b>
+              <p>{workspace.isUnlimited ? "Tu cuenta de prueba puede crear y analizar sin límite." : "Los créditos se gastan en chats, análisis, imports y generación de estáticos."}</p>
             </div>
             <div>
               <ShieldCheck />

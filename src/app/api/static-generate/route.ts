@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import sharp from "sharp";
 import { compileDesignPrompt, getImageSize, normalizeStaticBrief, StaticArchetype, StaticBrief } from "@/lib/ai/static-machine";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -13,6 +14,7 @@ type StaticGenerateInput = {
   quality?: "medium" | "high";
   variants?: number;
   productAssetId?: string;
+  logoAssetId?: string;
   serviceNoProduct?: boolean;
   referenceAssetIds?: string[];
 };
@@ -69,6 +71,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Elige una foto real del producto. No generaremos un empaque inventado." }, { status: 400 });
   }
 
+  const [{ data: logoAsset }, { count: referenceCount }] = await Promise.all([
+    supabase
+      .from("brand_assets")
+      .select("id,bucket_id,storage_path,file_name,mime_type,kind")
+      .eq("id", body.logoAssetId || "00000000-0000-0000-0000-000000000000")
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .eq("kind", "logo")
+      .maybeSingle(),
+    supabase
+      .from("brand_assets")
+      .select("id", { count: "exact", head: true })
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .eq("kind", "style_reference"),
+  ]);
+
+  if (!logoAsset || (referenceCount || 0) < 5) {
+    return NextResponse.json({ error: "Completa el kit visual con un logo y cinco referencias antes de generar." }, { status: 400 });
+  }
+
   let styleReferences: ImageAsset[] = [];
   if (Array.isArray(body.referenceAssetIds) && body.referenceAssetIds.length) {
     const { data } = await supabase
@@ -80,6 +103,12 @@ export async function POST(request: NextRequest) {
       .in("id", body.referenceAssetIds.slice(0, 10));
     styleReferences = data || [];
   }
+
+  const { data: logoBlob, error: logoDownloadError } = await supabase.storage.from(logoAsset.bucket_id).download(logoAsset.storage_path);
+  if (logoDownloadError || !logoBlob) {
+    return NextResponse.json({ error: "No pudimos leer el logo oficial. Vuelve a subirlo antes de generar." }, { status: 400 });
+  }
+  const logoBuffer = Buffer.from(await logoBlob.arrayBuffer());
 
   const { data: archetype } = ficha.arquetipo
     ? await supabase
@@ -102,10 +131,10 @@ export async function POST(request: NextRequest) {
         serviceNoProduct: Boolean(body.serviceNoProduct),
         variantIndex: index + 1,
         styleReferenceCount: styleReferences.length,
-        brandAssetCount: productAsset ? 1 : 0,
+        brandAssetCount: (productAsset ? 1 : 0) + 1,
       });
 
-      const image = await generateImage({
+      const generatedImage = await generateImage({
         supabase,
         prompt,
         format: body.format,
@@ -113,6 +142,7 @@ export async function POST(request: NextRequest) {
         productAsset,
         styleReferences,
       });
+      const image = await composeBrandLayers(generatedImage, ficha, logoBuffer);
 
       const storagePath = `${user.id}/${brand.id}/static-${Date.now()}-${crypto.randomUUID()}.png`;
       const buffer = Buffer.from(image, "base64");
@@ -243,7 +273,7 @@ async function generateImageEdit({
   form.append("quality", quality);
   form.append("n", "1");
   form.append("output_format", "png");
-  files.forEach((file) => form.append("image", file.blob, file.name));
+  files.forEach((file) => form.append("image[]", file.blob, file.name));
 
   const response = await fetch("https://api.openai.com/v1/images/edits", {
     method: "POST",
@@ -260,6 +290,81 @@ async function generateImageEdit({
   const b64 = data.data?.[0]?.b64_json;
   if (!b64) throw new Error("La IA no devolvió imagen.");
   return b64 as string;
+}
+
+async function composeBrandLayers(base64: string, ficha: StaticBrief, logoSource: Buffer) {
+  const input = Buffer.from(base64, "base64");
+  const image = sharp(input);
+  const metadata = await image.metadata();
+  const width = metadata.width || 1080;
+  const height = metadata.height || 1350;
+  const margin = Math.round(width * .07);
+  const headlineSize = Math.round(width * .058);
+  const secondarySize = Math.round(width * .029);
+  const disclaimerSize = Math.round(width * .018);
+  const boxHeight = Math.round(height * (ficha.disclaimer ? .22 : .18));
+  const boxY = height - boxHeight - margin;
+  const secondary = escapeSvg(ficha.texto_secundario);
+  const cta = escapeSvg(ficha.cta);
+  const disclaimer = escapeSvg(ficha.disclaimer);
+  const palette = /^#[0-9a-f]{6}$/i.test(ficha.paleta[0] || "") ? ficha.paleta[0] : "#632E59";
+
+  const logoWidth = Math.round(width * .16);
+  const logo = await sharp(logoSource).resize({ width: logoWidth, height: Math.round(height * .07), fit: "inside" }).png().toBuffer();
+  const logoMeta = await sharp(logo).metadata();
+  const logoHeight = logoMeta.height || Math.round(height * .05);
+  const logoLeft = width - margin - logoWidth;
+  const logoTop = margin;
+  const logoCard = Buffer.from(`<svg width="${logoWidth + 28}" height="${logoHeight + 22}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" rx="14" fill="white" fill-opacity=".9"/></svg>`);
+
+  const overlays: Array<{ input: Buffer; left?: number; top?: number }> = [
+    { input: logoCard, left: logoLeft - 14, top: logoTop - 11 },
+    { input: logo, left: logoLeft, top: logoTop },
+  ];
+
+  if (ficha.text_render_mode === "layered") {
+    const headlineLines = svgTextLines(ficha.texto_principal, 30, margin * 1.45, boxY + headlineSize * 1.18, headlineSize * 1.05);
+    const secondaryY = boxY + headlineSize * (headlineLines.count > 1 ? 3.05 : 2.05);
+    const overlay = `
+    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .copy { font-family: 'Helvetica Neue', Arial, sans-serif; fill: #ffffff; }
+        .headline { font-size: ${headlineSize}px; font-weight: 800; letter-spacing: -1px; }
+        .secondary { font-size: ${secondarySize}px; font-weight: 600; }
+        .cta { font-size: ${secondarySize}px; font-weight: 800; fill: ${palette}; }
+        .legal { font-size: ${disclaimerSize}px; font-weight: 500; fill: rgba(255,255,255,.86); }
+      </style>
+      <rect x="${margin}" y="${boxY}" width="${width - margin * 2}" height="${boxHeight}" rx="${Math.round(width * .025)}" fill="${palette}" fill-opacity=".94"/>
+      <text class="copy headline">${headlineLines.svg}</text>
+      <text x="${margin * 1.45}" y="${secondaryY}" class="copy secondary">${secondary}</text>
+      <rect x="${width - margin * 1.45 - Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56))}" y="${boxY + headlineSize * 1.15}" width="${Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56))}" height="${secondarySize * 1.75}" rx="${secondarySize * .88}" fill="#fff6f0"/>
+      <text x="${width - margin * 1.45 - Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56)) / 2}" y="${boxY + headlineSize * 1.15 + secondarySize * 1.15}" text-anchor="middle" class="copy cta">${cta}</text>
+      ${disclaimer ? `<text x="${margin * 1.45}" y="${boxY + boxHeight - disclaimerSize * 1.5}" class="copy legal">${disclaimer}</text>` : ""}
+    </svg>`;
+    overlays.unshift({ input: Buffer.from(overlay) });
+  }
+
+  const output = await image.composite(overlays).png().toBuffer();
+  return output.toString("base64");
+}
+
+function escapeSvg(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[character] || character);
+}
+
+function svgTextLines(value: string, maxCharacters: number, x: number, y: number, lineHeight: number) {
+  const words = escapeSvg(value).split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  for (const word of words) {
+    const current = lines.at(-1) || "";
+    if (!current || `${current} ${word}`.length > maxCharacters) lines.push(word);
+    else lines[lines.length - 1] = `${current} ${word}`;
+  }
+  const visible = lines.slice(0, 2);
+  return {
+    count: visible.length,
+    svg: visible.map((line, index) => `<tspan x="${x}" y="${y + index * lineHeight}">${line}</tspan>`).join(""),
+  };
 }
 
 async function generateImageFromPrompt({

@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type StaticBrief = {
   arquetipo: string;
   arquetipo_label: string;
@@ -6,6 +8,8 @@ export type StaticBrief = {
   texto_principal: string;
   texto_secundario: string;
   cta: string;
+  disclaimer: string;
+  text_render_mode: "baked" | "layered";
   composicion: {
     zona_superior: string;
     zona_media: string;
@@ -22,6 +26,48 @@ export type StaticBrief = {
   review_summary: string;
 };
 
+export const StaticBriefSchema = z.object({
+  arquetipo: z.string(),
+  arquetipo_label: z.string(),
+  concepto: z.string(),
+  hook_visual: z.string(),
+  texto_principal: z.string(),
+  texto_secundario: z.string(),
+  cta: z.string(),
+  disclaimer: z.string(),
+  text_render_mode: z.enum(["baked", "layered"]),
+  composicion: z.object({ zona_superior: z.string(), zona_media: z.string(), zona_inferior: z.string() }),
+  paleta: z.array(z.string()),
+  emocion_objetivo: z.string(),
+  por_que_funciona: z.string(),
+  riesgo_a_evitar: z.string(),
+  notas_disenadora: z.array(z.string()),
+  must_preserve: z.array(z.string()),
+  must_avoid: z.array(z.string()),
+  review_score: z.number().min(0).max(100),
+  review_summary: z.string(),
+});
+
+export const STATIC_BRIEF_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    arquetipo: { type: "string" }, arquetipo_label: { type: "string" }, concepto: { type: "string" }, hook_visual: { type: "string" },
+    texto_principal: { type: "string" }, texto_secundario: { type: "string" }, cta: { type: "string" }, disclaimer: { type: "string" },
+    text_render_mode: { type: "string", enum: ["baked", "layered"] },
+    composicion: {
+      type: "object", additionalProperties: false,
+      properties: { zona_superior: { type: "string" }, zona_media: { type: "string" }, zona_inferior: { type: "string" } },
+      required: ["zona_superior", "zona_media", "zona_inferior"],
+    },
+    paleta: { type: "array", items: { type: "string" } }, emocion_objetivo: { type: "string" }, por_que_funciona: { type: "string" },
+    riesgo_a_evitar: { type: "string" }, notas_disenadora: { type: "array", items: { type: "string" } },
+    must_preserve: { type: "array", items: { type: "string" } }, must_avoid: { type: "array", items: { type: "string" } },
+    review_score: { type: "number" }, review_summary: { type: "string" },
+  },
+  required: ["arquetipo", "arquetipo_label", "concepto", "hook_visual", "texto_principal", "texto_secundario", "cta", "disclaimer", "text_render_mode", "composicion", "paleta", "emocion_objetivo", "por_que_funciona", "riesgo_a_evitar", "notas_disenadora", "must_preserve", "must_avoid", "review_score", "review_summary"],
+};
+
 export type StaticArchetype = {
   id: string;
   name: string;
@@ -32,6 +78,8 @@ export type StaticArchetype = {
 };
 
 export function normalizeStaticBrief(value: Partial<StaticBrief> | null | undefined, fallbackArchetype = "automatico"): StaticBrief {
+  const fineCopyWords = [value?.texto_secundario, value?.cta, value?.disclaimer].filter(Boolean).join(" ").trim().split(/\s+/).filter(Boolean).length;
+  const renderMode = value?.text_render_mode === "layered" || Boolean(value?.disclaimer?.trim()) || fineCopyWords > 8 ? "layered" : "baked";
   return {
     arquetipo: value?.arquetipo || fallbackArchetype,
     arquetipo_label: value?.arquetipo_label || "Automático",
@@ -40,6 +88,8 @@ export function normalizeStaticBrief(value: Partial<StaticBrief> | null | undefi
     texto_principal: clampWords(value?.texto_principal || "Beneficio claro", 6),
     texto_secundario: clampWords(value?.texto_secundario || "Oferta fácil de entender", 8),
     cta: clampWords(value?.cta || "Pide el tuyo", 4),
+    disclaimer: value?.disclaimer?.trim() || "",
+    text_render_mode: renderMode,
     composicion: {
       zona_superior: value?.composicion?.zona_superior || "Texto principal",
       zona_media: value?.composicion?.zona_media || "Producto o resultado protagonista",
@@ -95,6 +145,23 @@ export function compileDesignPrompt({
 - Las franjas superior e inferior solo pueden llevar fondo, textura o ambiente.`
       : "Mantén márgenes amplios para que el anuncio respire y sea legible en celular.";
 
+  const textDirection = ficha.text_render_mode === "layered"
+    ? `MODO CAPA DE TEXTO — OBLIGATORIO:
+- Genera la fotografía/composición BASE SIN NINGUNA PALABRA, letra, número, logo tipográfico ni pseudo texto.
+- Reserva aire visual limpio para que el servidor añada después el copy exacto.
+- Deja una zona negativa clara en la parte superior para headline y una zona inferior para apoyo, CTA y disclaimer.
+- No intentes renderizar: "${ficha.texto_principal}", "${ficha.texto_secundario}", "${ficha.cta}" ni "${ficha.disclaimer}".`
+    : `TEXTO EN LA IMAGEN, EXACTO Y SIN AÑADIR MÁS:
+- Texto principal: "${ficha.texto_principal}"
+- Texto secundario: "${ficha.texto_secundario}"
+- CTA: "${ficha.cta}"
+
+REGLAS ABSOLUTAS DE TEXTO:
+- Renderiza exactamente esos textos, ni una palabra más.
+- Español correcto con acentos.
+- Legible en un teléfono a 400px de ancho.
+- Alto contraste, máximo 20% del área total con texto.`;
+
   return `Diseña un anuncio estático publicitario profesional para Meta/Instagram. NO es una ilustración ni arte conceptual: debe verse como un anuncio terminado listo para pautar.
 
 FORMATO: ${canvas}
@@ -120,16 +187,7 @@ ${ficha.concepto}
 HOOK VISUAL:
 ${ficha.hook_visual}
 
-TEXTO EN LA IMAGEN, EXACTO Y SIN AÑADIR MÁS:
-- Texto principal: "${ficha.texto_principal}"
-- Texto secundario: "${ficha.texto_secundario}"
-- CTA: "${ficha.cta}"
-
-REGLAS ABSOLUTAS DE TEXTO:
-- Renderiza exactamente esos textos, ni una palabra más.
-- Español correcto con acentos.
-- Legible en un teléfono a 400px de ancho.
-- Alto contraste, máximo 20% del área total con texto.
+${textDirection}
 
 MARCA Y ESTILO:
 - Paleta prioritaria: ${ficha.paleta.join(", ")}
@@ -140,28 +198,33 @@ MARCA Y ESTILO:
 DOCTRINA VISUAL OBLIGATORIA:
 - Una sola idea entendible en 2 segundos.
 - Producto o sujeto hero ocupa entre 35% y 60% del lienzo.
-- Al menos 25% del lienzo debe permanecer visualmente limpio.
+- Al menos 30% del lienzo debe permanecer visualmente limpio.
 - Jerarquía: headline, imagen/producto, apoyo y CTA.
 - Máximo 4 zonas de texto. Sólo un módulo secundario: una prueba, una cifra, una oferta, una comparación o hasta 3 apoyos breves.
 - Estética de anuncio DTC premium hecho por dirección de arte: fotográfico, táctil, limpio y con una decisión visual fuerte.
+- Luz premium de campaña, composición limpia, una sola pieza dominante y comprensión en un vistazo a tamaño pulgar.
+- Piel real con textura y poros; nada plástico o aerografiado. Manos correctas y modelos adultas genéricas, nunca figuras públicas.
 
 PUERTA DE RELEVANCIA COMERCIAL:
 - Debe reconocerse para quién es, qué tensión humana resuelve, qué transformación promete, cuál es la razón para creer y qué producto ofrece.
 - El copy habla como la clienta, no como ficha técnica.
 - No inventes cifras, certificaciones, testimonios, ingredientes, resultados ni claims.
+- En skincare/bienestar usa formulaciones como "ayuda a", "se ve más uniforme" y "visiblemente". Prohibido: "elimina", "cura", "borra" y "garantizado".
+- Sin antes/después dramático ni lenguaje que señale inseguridades corporales.
 
 ${styleReferenceCount > 0 ? `REFERENCIAS DE ESTILO (${styleReferenceCount}):
 - Los primeros archivos adjuntos son inspiración de formato, jerarquía, densidad, ritmo, encuadre y tratamiento fotográfico.
 - Nunca copies sus logos, productos, textos, colores de marca ni identidad.` : "No hay referencias de estilo seleccionadas; crea una dirección original coherente con la marca."}
 
 ${brandAssetCount > 0 ? `ACTIVOS REALES DE MARCA (${brandAssetCount}):
-- Los últimos archivos adjuntos son fuente de verdad de producto, packaging o identidad.
-- Deben conservarse con máxima fidelidad visual.` : ""}
+- El producto adjunto, cuando exista, es fuente de verdad de packaging y debe conservarse con máxima fidelidad.
+- El logo oficial se colocará después de generar: reserva una zona limpia en la esquina superior derecha y NO dibujes, inventes ni escribas ningún logo.` : ""}
 
 PROHIBICIONES:
 - No inventes texto adicional, letras decorativas, marcas de agua, logos de terceros ni elementos sin propósito.
 - No deformes manos, rostros, empaques o etiquetas.
 - No uses aspecto de banco de imágenes, fondos oscuros pesados ni degradados sucios.
+- Evita: cheap, low quality, plastic skin, fake model, distorted hands, extra fingers, misspelled text, warped packaging, wrong label, cluttered layout, watermark, logo soup, oversaturated, HDR halo, stock photo look.
 - Sin card soup, mosaicos densos, exceso de iconos, mini callouts, piel plástica, decoraciones de IA ni composición de folleto.
 - Las instrucciones, nombres de secciones, códigos de color, medidas y markdown nunca son texto visible.
 - Evita composición genérica; debe sentirse como una pieza pensada por dirección creativa.

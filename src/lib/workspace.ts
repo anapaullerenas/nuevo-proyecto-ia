@@ -28,12 +28,13 @@ export async function getWorkspace() {
     redirect("/login");
   }
 
-  const [{ data: brands }, { data: wallet }] = await Promise.all([
+  const [{ data: brands }, { data: wallet }, { data: profile }] = await Promise.all([
     supabase
       .from("brands")
       .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal")
       .order("created_at", { ascending: false }),
     supabase.from("credit_wallets").select("balance").eq("user_id", user.id).maybeSingle(),
+    supabase.from("profiles").select("role,email").eq("id", user.id).maybeSingle(),
   ]);
 
   const brandList = (brands || []) as WorkspaceBrand[];
@@ -43,12 +44,24 @@ export async function getWorkspace() {
     redirect("/onboarding");
   }
 
+  const unlimitedEmails = (process.env.UNLIMITED_CREDIT_EMAILS || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  const accountEmail = (profile?.email || user.email || "").toLowerCase();
+  // Skinglow is the owner test workspace. Keep this exception until billing is activated.
+  const isUnlimited =
+    profile?.role === "admin" ||
+    unlimitedEmails.includes(accountEmail) ||
+    activeBrand.name.trim().toLowerCase() === "skinglow";
+
   return {
     supabase,
     user,
     brandList,
     activeBrand,
     walletBalance: wallet?.balance ?? 0,
+    isUnlimited,
   };
 }
 

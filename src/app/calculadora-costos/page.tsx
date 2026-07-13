@@ -8,7 +8,7 @@ export default async function CalculadoraCostosPage() {
   if (!workspace) return <SetupState />;
 
   return (
-    <AppFrame active="/calculadora-costos" brand={workspace.activeBrand} credits={workspace.walletBalance}>
+    <AppFrame active="/calculadora-costos" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page calculator-page">
         <div className="panel-heading split calculator-hero">
           <div>

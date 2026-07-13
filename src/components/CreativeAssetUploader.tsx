@@ -437,6 +437,7 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
   const buyer = psychology?.buyer_psychology;
   const math = psychology?.math_breakdown;
   const patterns = analysis.dashboard?.patterns;
+  const decision = score >= 85 ? "Escalar" : score >= 70 ? "Mantener y probar" : score >= 50 ? "Iterar" : "Pausar";
 
   return (
     <section className="creative-result">
@@ -454,6 +455,19 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
           <strong className={`verdict-badge ${verdictMeta.className}`}>{verdict}</strong>
         </div>
       </div>
+
+      <section className="creative-action-brief">
+        <div>
+          <span className="creative-decision-pill">Decisión · {decision}</span>
+          <h4>Qué significa este resultado para tu estrategia creativa</h4>
+          <p>{analysis.summary || analysis.core_diagnosis?.what_really_sells || "La plataforma convirtió el análisis en una decisión clara para la siguiente ronda."}</p>
+        </div>
+        <div className="creative-action-columns">
+          <article><span>Lo que funciona</span><b>{analysis.core_diagnosis?.what_really_sells || analysis.keep?.[0] || "La idea central del anuncio"}</b></article>
+          <article><span>Qué mantener</span><b>{analysis.keep?.[0] || "El elemento que concentra la atención"}</b></article>
+          <article><span>Qué probar ahora</span><b>{analysis.test?.[0] || analysis.produce_next?.[0] || "Una variación controlada del hook"}</b></article>
+        </div>
+      </section>
 
       <div className="creative-signal-grid">
         <SignalCard title="Detiene el scroll" signal={analysis.signals?.scroll_stop} />

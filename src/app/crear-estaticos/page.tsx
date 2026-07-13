@@ -6,7 +6,7 @@ export default async function CrearEstaticosPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
 
-  const [{ data: rawAssets }, { data: archetypes }, { data: rawGallery }, { data: rawReferences }] = await Promise.all([
+  const [{ data: rawAssets }, { data: rawLogos }, { data: archetypes }, { data: rawGallery }, { data: rawReferences }] = await Promise.all([
     workspace.supabase
       .from("brand_assets")
       .select("id,file_name,storage_path,bucket_id,kind,label,created_at")
@@ -15,10 +15,18 @@ export default async function CrearEstaticosPage() {
       .eq("kind", "product_photo")
       .order("created_at", { ascending: false }),
     workspace.supabase
+      .from("brand_assets")
+      .select("id,file_name,storage_path,bucket_id,kind,label,created_at")
+      .eq("brand_id", workspace.activeBrand.id)
+      .eq("owner_id", workspace.user.id)
+      .eq("kind", "logo")
+      .order("created_at", { ascending: false }),
+    workspace.supabase
       .from("static_archetypes")
       .select("id,name,label_visible,stage,prompt_fragment")
       .eq("active", true)
-      .order("sort_order", { ascending: true }),
+      .order("sort_order", { ascending: true })
+      .limit(10),
     workspace.supabase
       .from("static_creatives")
       .select("id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,status,created_at")
@@ -58,6 +66,13 @@ export default async function CrearEstaticosPage() {
     }),
   );
 
+  const logos = await Promise.all(
+    (rawLogos || []).map(async (asset) => {
+      const { data: signed } = await workspace.supabase.storage.from(asset.bucket_id).createSignedUrl(asset.storage_path, 60 * 60 * 24 * 7);
+      return { ...asset, signed_url: signed?.signedUrl || null };
+    }),
+  );
+
   const references = await Promise.all(
     (rawReferences || []).map(async (reference) => {
       const { data: signed } = await workspace.supabase.storage
@@ -68,7 +83,7 @@ export default async function CrearEstaticosPage() {
   );
 
   return (
-    <AppFrame active="/crear-estaticos" brand={workspace.activeBrand} credits={workspace.walletBalance}>
+    <AppFrame active="/crear-estaticos" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page static-studio">
         <div className="studio-panel">
           <div className="panel-heading split">
@@ -89,9 +104,11 @@ export default async function CrearEstaticosPage() {
             brandId={workspace.activeBrand.id}
             brandName={workspace.activeBrand.name}
             initialAssets={assets}
+            initialLogos={logos}
             archetypes={archetypes || []}
             initialGallery={gallery}
             initialReferences={references}
+            unlimitedCredits={workspace.isUnlimited}
           />
         </div>
       </section>

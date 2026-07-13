@@ -7,7 +7,7 @@ export default async function ChatPage() {
   if (!workspace) return <SetupState />;
 
   return (
-    <AppFrame active="/chat" brand={workspace.activeBrand} credits={workspace.walletBalance}>
+    <AppFrame active="/chat" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page chat-layout">
         <aside className="context-rail">
             <span className="eyebrow">Memoria activa</span>

@@ -40,7 +40,7 @@ export default async function AnalisisCreativosPage() {
   });
 
   return (
-    <AppFrame active="/analisis-creativos" brand={workspace.activeBrand} credits={workspace.walletBalance}>
+    <AppFrame active="/analisis-creativos" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page creative-analysis">
         <div className="studio-panel">
           <div className="panel-heading">

@@ -14,10 +14,10 @@ export default async function DashboardPage() {
 
   if (!workspace) return <SetupState />;
 
-  const { activeBrand, walletBalance } = workspace;
+  const { activeBrand, walletBalance, isUnlimited } = workspace;
 
   return (
-    <AppFrame active="/dashboard" brand={activeBrand} credits={walletBalance}>
+    <AppFrame active="/dashboard" brand={activeBrand} credits={walletBalance} unlimited={isUnlimited}>
       <section className="real-dashboard">
         <aside className="brand-context">
           <span className="eyebrow">Marca activa</span>

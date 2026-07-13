@@ -18,7 +18,7 @@ export default async function EditarMarcaPage({
   if (!brand) notFound();
 
   return (
-    <AppFrame active="/marcas" brand={workspace.activeBrand} credits={workspace.walletBalance}>
+    <AppFrame active="/marcas" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page">
         <div className="studio-panel">
           <div className="panel-heading split">

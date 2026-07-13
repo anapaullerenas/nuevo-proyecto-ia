@@ -33,6 +33,8 @@ type StaticBrief = {
   texto_principal: string;
   texto_secundario: string;
   cta: string;
+  disclaimer: string;
+  text_render_mode: "baked" | "layered";
   composicion: {
     zona_superior: string;
     zona_media: string;
@@ -73,22 +75,36 @@ const examples = [
   "Ej: Necesito un anuncio para quienes ya me conocen pero todavía no compran.",
 ];
 
+function cleanAssetLabel(fileName: string) {
+  return fileName
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export function StaticStudio({
   brandId,
   brandName,
   initialAssets,
+  initialLogos,
   archetypes,
   initialGallery,
   initialReferences,
+  unlimitedCredits = false,
 }: {
   brandId: string;
   brandName: string;
   initialAssets: BrandAsset[];
+  initialLogos: BrandAsset[];
   archetypes: StaticArchetype[];
   initialGallery: GeneratedStatic[];
   initialReferences: StyleReference[];
+  unlimitedCredits?: boolean;
 }) {
   const [assets, setAssets] = useState(initialAssets);
+  const [logos, setLogos] = useState(initialLogos);
   const [selectedAssetId, setSelectedAssetId] = useState(initialAssets[0]?.id || "");
   const [serviceNoProduct, setServiceNoProduct] = useState(false);
   const [format, setFormat] = useState("4:5 Feed");
@@ -105,6 +121,7 @@ export function StaticStudio({
   const [exampleIndex, setExampleIndex] = useState(0);
   const [referenceMode, setReferenceMode] = useState<"original" | "inspired">("original");
   const [selectedReferenceIds, setSelectedReferenceIds] = useState<string[]>([]);
+  const [availableReferenceIds, setAvailableReferenceIds] = useState(initialReferences.map((item) => item.id));
   const [confirmingGeneration, setConfirmingGeneration] = useState(false);
 
   useEffect(() => {
@@ -113,10 +130,11 @@ export function StaticStudio({
   }, []);
 
   const imageCost = quality === "high" ? 300 : 150;
-  const canCreateBrief = serviceNoProduct || Boolean(selectedAssetId);
+  const identityReady = logos.length > 0 && availableReferenceIds.length >= 5;
+  const canCreateBrief = identityReady && (serviceNoProduct || Boolean(selectedAssetId));
   const totalGenerationCost = variants * imageCost;
 
-  async function handleAssetUpload(event: ChangeEvent<HTMLInputElement>) {
+  async function handleAssetUpload(event: ChangeEvent<HTMLInputElement>, kind: "product_photo" | "logo" = "product_photo") {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -130,7 +148,7 @@ export function StaticStudio({
       } = await supabase.auth.getUser();
 
       if (!user) throw new Error("Vuelve a iniciar sesión para subir archivos.");
-      if (!file.type.startsWith("image/")) throw new Error("Sube una imagen del producto en JPG, PNG o WebP.");
+      if (!file.type.startsWith("image/")) throw new Error("Sube una imagen en JPG, PNG o WebP.");
 
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
       const storagePath = `${user.id}/${brandId}/brand-asset-${Date.now()}-${crypto.randomUUID()}-${safeName}`;
@@ -151,7 +169,8 @@ export function StaticStudio({
           file_name: file.name,
           file_size: file.size,
           mime_type: file.type,
-          kind: "product_photo",
+          kind,
+          label: cleanAssetLabel(file.name),
         })
         .select("id,file_name,storage_path,bucket_id,kind,label")
         .single();
@@ -160,10 +179,15 @@ export function StaticStudio({
 
       const { data: signed } = await supabase.storage.from("creative-assets").createSignedUrl(storagePath, 60 * 60 * 24 * 7);
       const newAsset = { ...saved, signed_url: signed?.signedUrl } as BrandAsset;
-      setAssets((current) => [newAsset, ...current]);
-      setSelectedAssetId(newAsset.id);
-      setServiceNoProduct(false);
-      setMessage("Foto de producto guardada. Ya puede usarse para generar estáticos.");
+      if (kind === "logo") {
+        setLogos((current) => [newAsset, ...current]);
+        setMessage("Logo guardado como parte de la identidad de la marca.");
+      } else {
+        setAssets((current) => [newAsset, ...current]);
+        setSelectedAssetId(newAsset.id);
+        setServiceNoProduct(false);
+        setMessage("Foto de producto guardada. Ya puede usarse para generar estáticos.");
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo subir la foto de producto.");
     } finally {
@@ -177,7 +201,7 @@ export function StaticStudio({
     setMessage("");
 
     if (!canCreateBrief) {
-      setMessage("Sube una foto de producto o marca que vendes servicios para crear la ficha.");
+      setMessage(!identityReady ? "Completa el kit visual: un logo y al menos cinco referencias." : "Sube una foto de producto o marca que vendes servicios para crear la ficha.");
       return;
     }
 
@@ -204,7 +228,8 @@ export function StaticStudio({
           archetypeId,
           productAssetId: serviceNoProduct ? undefined : selectedAssetId,
           serviceNoProduct,
-          referenceAssetIds: referenceMode === "inspired" ? selectedReferenceIds : [],
+          logoAssetId: logos[0]?.id,
+          referenceAssetIds: referenceMode === "inspired" ? selectedReferenceIds : availableReferenceIds.slice(0, 5),
         }),
       });
       const data = await response.json();
@@ -244,7 +269,8 @@ export function StaticStudio({
           variants,
           productAssetId: serviceNoProduct ? undefined : selectedAssetId,
           serviceNoProduct,
-          referenceAssetIds: referenceMode === "inspired" ? selectedReferenceIds : [],
+          logoAssetId: logos[0]?.id,
+          referenceAssetIds: referenceMode === "inspired" ? selectedReferenceIds : availableReferenceIds.slice(0, 5),
         }),
       });
       const data = await response.json();
@@ -260,7 +286,15 @@ export function StaticStudio({
   }
 
   function updateBrief<K extends keyof StaticBrief>(key: K, value: StaticBrief[K]) {
-    setBrief((current) => (current ? { ...current, [key]: value } : current));
+    setBrief((current) => {
+      if (!current) return current;
+      const next = { ...current, [key]: value };
+      if (key === "texto_secundario" || key === "cta" || key === "disclaimer") {
+        const fineWords = [next.texto_secundario, next.cta, next.disclaimer].join(" ").trim().split(/\s+/).filter(Boolean).length;
+        next.text_render_mode = next.disclaimer.trim() || fineWords > 8 ? "layered" : "baked";
+      }
+      return next;
+    });
   }
 
   function updateZone(key: keyof StaticBrief["composicion"], value: string) {
@@ -281,8 +315,8 @@ export function StaticStudio({
           <div className="section-title">
             <span>01</span>
             <div>
-              <b>Producto de tu marca</b>
-              <p>Se guarda una vez y queda disponible para futuras piezas.</p>
+              <b>Kit visual de tu marca</b>
+              <p>El logo, producto y referencias se guardan para todas tus futuras piezas.</p>
             </div>
           </div>
 
@@ -298,7 +332,7 @@ export function StaticStudio({
                 }}
               >
                 {asset.signed_url ? <img src={asset.signed_url} alt={asset.file_name} /> : <ImagePlus size={18} />}
-                <span>{asset.file_name}</span>
+                <span>{asset.label || cleanAssetLabel(asset.file_name)}</span>
                 {selectedAssetId === asset.id && !serviceNoProduct && <Check size={14} />}
               </button>
             ))}
@@ -306,8 +340,22 @@ export function StaticStudio({
             <label className="asset-upload">
               {busy === "asset" ? <Loader2 className="spin" size={18} /> : <Upload size={18} />}
               <span>Agregar producto</span>
-              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAssetUpload} />
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => handleAssetUpload(event, "product_photo")} />
             </label>
+          </div>
+
+          <div className="brand-kit-row">
+            <div><b>Logo principal</b><small>{logos.length ? "Listo" : "Obligatorio"}</small></div>
+            <div className="asset-strip compact-assets">
+              {logos.slice(0, 3).map((logo) => (
+                <div className="brand-logo-asset" key={logo.id}>{logo.signed_url ? <img src={logo.signed_url} alt={logo.label || "Logo"} /> : <ImagePlus size={18} />}<span>{logo.label || cleanAssetLabel(logo.file_name)}</span></div>
+              ))}
+              <label className="asset-upload">
+                {busy === "asset" ? <Loader2 className="spin" size={18} /> : <Upload size={18} />}
+                <span>{logos.length ? "Cambiar logo" : "Subir logo"}</span>
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => handleAssetUpload(event, "logo")} />
+              </label>
+            </div>
           </div>
 
           <label className="service-toggle">
@@ -398,25 +446,25 @@ export function StaticStudio({
                   </button>
                 ))}
               </div>
-              <small>{totalGenerationCost} créditos de generación</small>
+              <small>{unlimitedCredits ? "Incluido en tu cuenta" : `${totalGenerationCost} créditos de generación`}</small>
             </fieldset>
             <label>
               Calidad
               <select value={quality} onChange={(event) => setQuality(event.target.value === "high" ? "high" : "medium")}>
-                <option value="medium">Estándar · 150 cr</option>
-                <option value="high">Alta · 300 cr</option>
+                <option value="medium">Estándar{unlimitedCredits ? " · incluida" : " · 150 cr"}</option>
+                <option value="high">Alta{unlimitedCredits ? " · incluida" : " · 300 cr"}</option>
               </select>
             </label>
           </div>
 
           <button className="primary-action" type="submit" disabled={busy === "brief" || busy === "generate"}>
             {busy === "brief" ? <Loader2 className="spin" size={16} /> : <Pencil size={16} />}
-            {busy === "brief" ? "Creando ficha..." : "Crear ficha del anuncio · 20 cr"}
+            {busy === "brief" ? "Creando ficha..." : unlimitedCredits ? "Crear ficha del anuncio · incluido" : "Crear ficha del anuncio · 20 cr"}
           </button>
         </section>
 
-        <details className="optional-references">
-          <summary><span>Dirección visual</span><small>Crea algo original o adapta la estructura de referencias</small></summary>
+        <details className="optional-references" open={!identityReady}>
+          <summary><span>Referencias de identidad · {availableReferenceIds.length}/5</span><small>{availableReferenceIds.length >= 5 ? "Kit visual listo" : "Sube al menos cinco imágenes obligatorias"}</small></summary>
           <div className="reference-mode">
             <button type="button" className={referenceMode === "original" ? "selected" : ""} onClick={() => setReferenceMode("original")}>
               <b>Dirección original</b><span>La IA trabaja con tu marca y producto.</span>
@@ -430,6 +478,7 @@ export function StaticStudio({
             initialReferences={initialReferences}
             selectedIds={selectedReferenceIds}
             onSelectionChange={setSelectedReferenceIds}
+            onItemsChange={(ids) => setAvailableReferenceIds(ids)}
           />
         </details>
 
@@ -470,6 +519,15 @@ export function StaticStudio({
               </label>
             </div>
 
+            <label>
+              Disclaimer o texto legal
+              <input value={brief.disclaimer || ""} onChange={(event) => updateBrief("disclaimer", event.target.value)} placeholder="Déjalo vacío si no aplica" />
+            </label>
+            <div className={`text-render-note ${brief.text_render_mode}`}>
+              <Check size={15} />
+              <span><b>{brief.text_render_mode === "layered" ? "Texto compuesto con precisión" : "Headline corto dentro de la imagen"}</b>{brief.text_render_mode === "layered" ? " Los acentos, CTA y disclaimer se añaden como una capa exacta después de generar." : " Esta ficha es suficientemente breve para una composición directa."}</span>
+            </div>
+
             <details className="art-direction-details">
               <summary>Ver dirección de arte</summary>
               <label>
@@ -490,14 +548,14 @@ export function StaticStudio({
 
             {confirmingGeneration ? (
               <div className="generation-confirmation" role="dialog" aria-label="Confirmar generación">
-                <div><b>Revisa antes de generar</b><span>{format} · {variants} {variants === 1 ? "pieza" : "piezas"} · costo estimado {totalGenerationCost} cr</span></div>
+                <div><b>Revisa antes de generar</b><span>{format} · {variants} {variants === 1 ? "pieza" : "piezas"} · {unlimitedCredits ? "incluido en tu cuenta" : `costo estimado ${totalGenerationCost} cr`}</span></div>
                 <button type="button" onClick={() => setConfirmingGeneration(false)}>Cancelar</button>
                 <button type="button" className="confirm" onClick={handleGenerate}>Confirmar</button>
               </div>
             ) : (
               <button className="primary-action" type="button" disabled={busy === "generate"} onClick={() => setConfirmingGeneration(true)}>
                 {busy === "generate" ? <Loader2 className="spin" size={16} /> : <WandSparkles size={16} />}
-                {busy === "generate" ? "Generando imagen..." : `Generar imagen · ${totalGenerationCost} cr`}
+                {busy === "generate" ? "Generando imagen..." : unlimitedCredits ? "Generar imagen · incluido" : `Generar imagen · ${totalGenerationCost} cr`}
               </button>
             )}
           </section>

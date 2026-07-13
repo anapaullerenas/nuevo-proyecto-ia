@@ -25,11 +25,13 @@ export function ReferenceUploader({
   initialReferences,
   selectedIds,
   onSelectionChange,
+  onItemsChange,
 }: {
   brandId: string;
   initialReferences: StyleReference[];
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
+  onItemsChange?: (ids: string[]) => void;
 }) {
   const [items, setItems] = useState<ReferenceItem[]>(
     initialReferences.map((reference) => ({
@@ -96,7 +98,11 @@ export function ReferenceUploader({
         status: "analizando",
         message: "Leyendo estructura y estilo",
       };
-      setItems((current) => [item, ...current]);
+      setItems((current) => {
+        const next = [item, ...current].slice(0, 10);
+        onItemsChange?.(next.map((reference) => reference.id));
+        return next;
+      });
       nextSelectedIds = [...nextSelectedIds, saved.id].slice(-10);
       onSelectionChange(nextSelectedIds);
 

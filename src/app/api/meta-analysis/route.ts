@@ -119,39 +119,123 @@ async function analyzeMetaRows(rows: MetaRow[], brand: Record<string, unknown>) 
     return Object.fromEntries(entries);
   });
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini",
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `Eres media buyer senior de Meta Ads para marcas DTC y servicios. Analiza datos reales sin inventar métricas. Debes devolver JSON con esta forma exacta:
-{
-  "period_summary":"lectura ejecutiva de 2-3 frases",
-  "totals":{"spend":"valor con moneda si se detecta","results":"valor","roas":"valor","cpa":"valor"},
-  "winners":[{"name":"anuncio","decision":"Escalar|Mantener|Iterar|Pausar","reason":"razón con métricas","metrics":"resumen corto"}],
-  "fatigue":[{"name":"anuncio","signal":"señal observada","action":"acción concreta"}],
-  "actions":["máximo 5 acciones priorizadas"],
-  "next_briefs":[{"title":"nombre de concepto","angle":"ángulo creativo","evidence":"dato que lo respalda"}],
-  "data_quality":["faltantes o limitaciones"]
-}
-Reglas: compara eficiencia y volumen; no escales por ROAS con muestra mínima; una frecuencia alta sólo es fatiga si coincide con deterioro; distingue pausar de iterar; cita números del archivo en cada decisión. Devuelve máximo 8 anuncios en winners y 5 en fatigue.`,
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      period: {
+        type: "object",
+        additionalProperties: false,
+        properties: { start: { type: "string" }, end: { type: "string" }, label: { type: "string" } },
+        required: ["start", "end", "label"],
+      },
+      period_summary: { type: "string" },
+      creative_strategy_summary: { type: "string" },
+      winning_pattern: { type: "string" },
+      next_move: { type: "string" },
+      totals: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          spend: { type: "string" }, results: { type: "string" }, sales: { type: "string" }, roas: { type: "string" }, cpa: { type: "string" },
         },
-        {
-          role: "user",
-          content: `Marca: ${JSON.stringify(brand)}\nFilas analizadas: ${rows.length}\nDatos: ${JSON.stringify(compactRows)}`,
+        required: ["spend", "results", "sales", "roas", "cpa"],
+      },
+      creative_ranking: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            name: { type: "string" }, creative_id: { type: "string" }, roas: { type: "string" }, sales: { type: "string" }, spend: { type: "string" },
+            verdict: { type: "string", enum: ["winner", "good", "acceptable", "poor"] },
+            decision: { type: "string", enum: ["Escalar", "Mantener", "Mejorar", "Iterar", "Pausar"] },
+            reason: { type: "string" },
+          },
+          required: ["name", "creative_id", "roas", "sales", "spend", "verdict", "decision", "reason"],
         },
-      ],
-    }),
-  });
+      },
+      winners: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: { name: { type: "string" }, decision: { type: "string" }, reason: { type: "string" }, metrics: { type: "string" } },
+          required: ["name", "decision", "reason", "metrics"],
+        },
+      },
+      fatigue: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: { name: { type: "string" }, signal: { type: "string" }, action: { type: "string" } },
+          required: ["name", "signal", "action"],
+        },
+      },
+      actions: { type: "array", items: { type: "string" } },
+      next_briefs: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: { title: { type: "string" }, angle: { type: "string" }, evidence: { type: "string" } },
+          required: ["title", "angle", "evidence"],
+        },
+      },
+      data_quality: { type: "array", items: { type: "string" } },
+    },
+    required: ["period", "period_summary", "creative_strategy_summary", "winning_pattern", "next_move", "totals", "creative_ranking", "winners", "fatigue", "actions", "next_briefs", "data_quality"],
+  };
 
-  if (!response.ok) throw new Error((await response.text()).slice(0, 240));
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("La IA no devolvió un análisis válido.");
-  return JSON.parse(content);
+  const systemPrompt = `Eres directora de estrategia creativa con dominio de Meta Ads. Tu prioridad es explicar qué CREATIVOS funcionan y qué hacer con ellos, no escribir un reporte técnico para media buyers.
+
+REGLAS:
+- Usa únicamente datos presentes en el archivo. No inventes ROAS, ventas, gasto ni fechas.
+- Ordena creative_ranking del mejor al peor combinando rentabilidad, volumen y muestra.
+- winner: retorno y volumen suficientes para escalar; good: rentable y estable; acceptable: señales mixtas o muestra insuficiente; poor: gasta sin recuperar o convierte claramente peor.
+- No escales por ROAS con muestra mínima. Una frecuencia alta sólo es fatiga si coincide con deterioro.
+- Cada razón debe citar números reales del archivo, pero explicarse en lenguaje simple.
+- creative_strategy_summary, winning_pattern y next_move deben ser claros para una dueña de marca, no técnicos.
+- Si una métrica no existe, devuelve "No disponible". Si no detectas fecha, usa cadena vacía en start/end y "Periodo del export" en label.
+- Máximo 12 creativos en el ranking, 8 winners, 5 señales de fatiga, 5 acciones y 4 briefs.
+- No uses lenguaje de inseguridad corporal ni promesas médicas al sugerir próximos creativos.`;
+
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: `Marca: ${JSON.stringify(brand)}\nFilas disponibles: ${rows.length}\nDatos: ${JSON.stringify(compactRows)}` },
+  ];
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini",
+        temperature: 0.2,
+        max_tokens: 3500,
+        response_format: { type: "json_schema", json_schema: { name: "meta_creative_analysis", strict: true, schema } },
+        messages: attempt === 0 ? messages : [...messages, { role: "user", content: "Genera de nuevo el análisis completo respetando estrictamente el esquema. La respuesta anterior no pudo procesarse." }],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("meta-analysis OpenAI error", response.status, (await response.text()).slice(0, 500));
+      if (attempt === 0) continue;
+      throw new Error("No pude terminar el análisis en este momento. El export quedó guardado; intenta de nuevo en unos minutos.");
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      console.error("meta-analysis empty structured output", data.choices?.[0]?.message);
+      if (attempt === 0) continue;
+      throw new Error("No pude completar la lectura del archivo. Intenta analizarlo nuevamente.");
+    }
+
+    try {
+      return JSON.parse(content);
+    } catch (error) {
+      console.error("meta-analysis JSON parse error", error, content.slice(0, 500));
+    }
+  }
+
+  throw new Error("No pude completar el análisis. El archivo sigue guardado y puedes intentarlo nuevamente.");
 }

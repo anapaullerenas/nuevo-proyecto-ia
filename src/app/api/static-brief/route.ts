@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { STATIC_BRIEF_DIRECTOR_PROMPT, STATIC_BRIEF_REVIEWER_PROMPT } from "@/lib/ai/prompts";
-import { normalizeStaticBrief, StaticArchetype, StaticBrief } from "@/lib/ai/static-machine";
+import { normalizeStaticBrief, STATIC_BRIEF_JSON_SCHEMA, StaticArchetype, StaticBrief, StaticBriefSchema } from "@/lib/ai/static-machine";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const maxDuration = 120;
@@ -12,6 +12,7 @@ type StaticBriefInput = {
   funnelStage: string;
   archetypeId?: string;
   productAssetId?: string;
+  logoAssetId?: string;
   serviceNoProduct?: boolean;
   referenceAssetIds?: string[];
 };
@@ -46,6 +47,27 @@ export async function POST(request: NextRequest) {
 
   if (!brand) {
     return NextResponse.json({ error: "No encontré la marca activa." }, { status: 404 });
+  }
+
+  const [{ data: logoAsset }, { count: referenceCount }] = await Promise.all([
+    supabase
+      .from("brand_assets")
+      .select("id,file_name,label,kind")
+      .eq("id", body.logoAssetId || "00000000-0000-0000-0000-000000000000")
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .eq("kind", "logo")
+      .maybeSingle(),
+    supabase
+      .from("brand_assets")
+      .select("id", { count: "exact", head: true })
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .eq("kind", "style_reference"),
+  ]);
+
+  if (!logoAsset || (referenceCount || 0) < 5) {
+    return NextResponse.json({ error: "Completa el kit visual con un logo y cinco referencias antes de crear." }, { status: 400 });
   }
 
   let productAsset: Record<string, unknown> | null = null;
@@ -101,6 +123,7 @@ export async function POST(request: NextRequest) {
       funnelStage: body.funnelStage,
       archetypeId: body.archetypeId || "automatico",
       productAsset,
+      logoAsset,
       serviceNoProduct: Boolean(body.serviceNoProduct),
       recipes: (recipes || []).map((recipe) => String(recipe.rule)),
       archetypes: (archetypes || []) as StaticArchetype[],
@@ -146,6 +169,7 @@ async function createBriefWithOpenAI({
   funnelStage,
   archetypeId,
   productAsset,
+  logoAsset,
   serviceNoProduct,
   recipes,
   archetypes,
@@ -157,6 +181,7 @@ async function createBriefWithOpenAI({
   funnelStage: string;
   archetypeId: string;
   productAsset: Record<string, unknown> | null;
+  logoAsset: Record<string, unknown>;
   serviceNoProduct: boolean;
   recipes: string[];
   archetypes: StaticArchetype[];
@@ -172,6 +197,7 @@ async function createBriefWithOpenAI({
     etapa_embudo: funnelStage,
     arquetipo_solicitado: archetypeId,
     activo_producto: productAsset,
+    logo_oficial: logoAsset,
     servicio_sin_producto: serviceNoProduct,
     recetas_ganadoras: recipes,
     arquetipos_disponibles: archetypes,
@@ -182,63 +208,101 @@ async function createBriefWithOpenAI({
     })),
   };
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini",
-      temperature: 0.45,
-      max_tokens: 1200,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: STATIC_BRIEF_DIRECTOR_PROMPT },
-        {
-          role: "user",
-          content: JSON.stringify(context),
-        },
-      ],
-    }),
+  const draft = await requestStructuredBrief({
+    apiKey,
+    stage: "director",
+    system: STATIC_BRIEF_DIRECTOR_PROMPT,
+    user: JSON.stringify(context),
+    maxTokens: 2500,
+    temperature: 0.4,
+    fallbackArchetype: archetypeId,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText.slice(0, 220));
-  }
+  const brandSummary = [
+    `Marca: ${brand.name || "Sin nombre"}`,
+    `Categoría: ${brand.category || "No definida"}`,
+    `Audiencia: ${brand.audience || "No definida"}`,
+    `Oferta: ${brand.offer || "No definida"}`,
+    `Voz: ${brand.voice || "No definida"}`,
+  ].join("\n");
 
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error("La IA no devolvió una ficha editable.");
-
-  const draft = normalizeStaticBrief(JSON.parse(text) as Partial<StaticBrief>, archetypeId);
-  const review = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini",
-      temperature: 0.2,
-      max_tokens: 1500,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: STATIC_BRIEF_REVIEWER_PROMPT },
-        { role: "user", content: JSON.stringify({ contexto: context, ficha_borrador: draft }) },
-      ],
-    }),
+  const reviewed = await requestStructuredBrief({
+    apiKey,
+    stage: "reviewer",
+    system: STATIC_BRIEF_REVIEWER_PROMPT,
+    user: JSON.stringify({ resumen_marca: brandSummary, ficha_borrador: draft }),
+    maxTokens: 2000,
+    temperature: 0.2,
+    fallbackArchetype: archetypeId,
   });
 
-  if (!review.ok) {
-    const errorText = await review.text();
-    throw new Error(`La revisión creativa falló: ${errorText.slice(0, 180)}`);
+  if (reviewed.review_score < 85) {
+    return requestStructuredBrief({
+      apiKey,
+      stage: "reviewer-correction",
+      system: STATIC_BRIEF_REVIEWER_PROMPT,
+      user: JSON.stringify({ resumen_marca: brandSummary, ficha_borrador: reviewed, instruccion: "Corrige la ficha hasta alcanzar al menos 85/100 sin inventar claims." }),
+      maxTokens: 2000,
+      temperature: 0.15,
+      fallbackArchetype: archetypeId,
+    });
   }
 
-  const reviewData = await review.json();
-  const reviewedText = reviewData.choices?.[0]?.message?.content;
-  if (!reviewedText) throw new Error("La dirección creativa no devolvió una ficha aprobada.");
+  return reviewed;
+}
 
-  return normalizeStaticBrief(JSON.parse(reviewedText) as Partial<StaticBrief>, archetypeId);
+async function requestStructuredBrief({
+  apiKey,
+  stage,
+  system,
+  user,
+  maxTokens,
+  temperature,
+  fallbackArchetype,
+}: {
+  apiKey: string;
+  stage: string;
+  system: string;
+  user: string;
+  maxTokens: number;
+  temperature: number;
+  fallbackArchetype: string;
+}) {
+  let previousText = "";
+  let previousError = "";
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini",
+        temperature,
+        max_tokens: maxTokens,
+        response_format: { type: "json_schema", json_schema: { name: `static_brief_${stage.replace(/[^a-z0-9_]/gi, "_")}`, strict: true, schema: STATIC_BRIEF_JSON_SCHEMA } },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: attempt === 0 ? user : `${user}\n\nREINTENTO DE REPARACIÓN: ${previousError}. Devuelve la ficha completa. Texto anterior: ${previousText.slice(0, 6000)}` },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      previousError = `respuesta ${response.status}`;
+      console.error(`static-brief ${stage} OpenAI error`, response.status, (await response.text()).slice(0, 500));
+      continue;
+    }
+
+    const data = await response.json();
+    previousText = data.choices?.[0]?.message?.content || "";
+    try {
+      const parsed = JSON.parse(previousText) as Partial<StaticBrief>;
+      return StaticBriefSchema.parse(normalizeStaticBrief(parsed, fallbackArchetype));
+    } catch (error) {
+      previousError = error instanceof Error ? error.message : "JSON inválido";
+      console.error(`static-brief ${stage} validation error`, previousError, previousText.slice(0, 500));
+    }
+  }
+
+  throw new Error("No pude armar la ficha en este momento. Intenta de nuevo; no se descontaron créditos.");
 }

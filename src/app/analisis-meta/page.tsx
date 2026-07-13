@@ -7,8 +7,24 @@ export default async function AnalisisMetaPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
 
+  const { data: savedImports } = await workspace.supabase
+    .from("meta_imports")
+    .select("id,file_name,summary,created_at")
+    .eq("brand_id", workspace.activeBrand.id)
+    .eq("owner_id", workspace.user.id)
+    .eq("status", "completed")
+    .order("created_at", { ascending: false })
+    .limit(24);
+
+  const history = (savedImports || []).map((item) => ({
+    id: item.id,
+    fileName: item.file_name || "Export de Meta",
+    createdAt: item.created_at,
+    analysis: item.summary || {},
+  }));
+
   return (
-    <AppFrame active="/analisis-meta" brand={workspace.activeBrand} credits={workspace.walletBalance}>
+    <AppFrame active="/analisis-meta" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page">
         <div className="studio-panel">
           <div className="panel-heading split">
@@ -53,7 +69,7 @@ export default async function AnalisisMetaPage() {
             </div>
           </div>
 
-          <MetaImportUploader brandId={workspace.activeBrand.id} />
+          <MetaImportUploader brandId={workspace.activeBrand.id} initialHistory={history} />
 
           <div className="meta-calculator-link">
             <div>

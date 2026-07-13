@@ -18,11 +18,13 @@ export function AppFrame({
   active,
   brand,
   credits,
+  unlimited = false,
   children,
 }: {
   active: string;
   brand: WorkspaceBrand;
   credits: number;
+  unlimited?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -38,7 +40,7 @@ export function AppFrame({
         </nav>
         <Link href="/cuenta" className="credit-pill">
           <WalletCards size={16} />
-          <span>{credits} créditos</span>
+          <span>{unlimited ? "Créditos ilimitados" : `${credits} créditos`}</span>
         </Link>
       </header>
       {children}

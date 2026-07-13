@@ -213,8 +213,11 @@ REGLAS DE COPY:
 - texto_principal: máximo 6 palabras.
 - texto_secundario: máximo 8 palabras.
 - cta: máximo 4 palabras.
+- Si texto_secundario + cta + disclaimer superan 8 palabras, o existe disclaimer, text_render_mode debe ser "layered". En otro caso puede ser "baked".
 - Español natural con acentos.
 - Nada de placeholders, lorem ipsum, promesas falsas o texto genérico.
+- Compliance Meta para skincare/bienestar: usa "ayuda a", "se ve más uniforme" o "visiblemente"; evita "elimina", "cura", "borra" y "garantizado".
+- Nunca señales inseguridad corporal ni atributos personales. Reencuadra desde empoderamiento y resultado deseado.
 
 RESPONDE ÚNICAMENTE JSON VÁLIDO:
 {
@@ -225,6 +228,8 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO:
   "texto_principal": string,
   "texto_secundario": string,
   "cta": string,
+  "disclaimer": string,
+  "text_render_mode": "baked" | "layered",
   "composicion": {
     "zona_superior": string,
     "zona_media": string,
@@ -254,6 +259,8 @@ Evalúa de 0 a 100:
 
 Una ficha menor a 85 NO pasa. Corrígela directamente hasta que sea producible.
 No inventes claims, cifras, testimonios ni propiedades. El texto visible debe seguir los límites del esquema.
+Corrige cualquier lenguaje de inseguridad corporal y claims absolutos antes de aprobar.
+Si hay disclaimer o más de 8 palabras entre texto secundario, CTA y disclaimer, usa text_render_mode "layered".
 Las referencias visuales aportan estructura y estilo, nunca identidad ajena. Los activos de producto son fuente de verdad.
 
 Devuelve únicamente el mismo JSON completo de la ficha, añadiendo review_score y review_summary.
