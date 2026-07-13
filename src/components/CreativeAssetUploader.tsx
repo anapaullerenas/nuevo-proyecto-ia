@@ -14,6 +14,7 @@ import {
 } from "@/lib/creative-upload-limits";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getSupabaseEnv } from "@/lib/supabase/config";
+import styles from "./CreativeAssetUploader.module.css";
 
 type UploadItem = {
   id: string;
@@ -180,7 +181,8 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
   const [selectedHistory, setSelectedHistory] = useState<CreativeHistoryItem | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
-  const [libraryMessage, setLibraryMessage] = useState("");
+  const [savingNameId, setSavingNameId] = useState<string | null>(null);
+  const [libraryNotice, setLibraryNotice] = useState<{ text: string; tone: "success" | "error" } | null>(null);
   const currentResult = items.find((item) => item.analysis);
   const activeItem = currentResult || (selectedHistory ? {
     id: selectedHistory.id,
@@ -199,24 +201,61 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
 
   async function saveCreativeName(entry: CreativeHistoryItem) {
     const name = draftName.trim();
-    if (name.length < 2) return;
-    const response = await fetch(`/api/creative-library/${entry.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
-    const data = await response.json();
-    if (!response.ok) return setLibraryMessage(data.error || "No se pudo cambiar el nombre.");
-    setHistory((current) => current.map((item) => item.id === entry.id ? { ...item, name: data.name } : item));
-    setSelectedHistory((current) => current?.id === entry.id ? { ...current, name: data.name } : current);
-    setRenamingId(null);
-    setLibraryMessage("Nombre actualizado.");
+    if (name.length < 2) {
+      setLibraryNotice({ text: "Escribe un nombre de al menos dos caracteres.", tone: "error" });
+      return;
+    }
+
+    setSavingNameId(entry.id);
+    setLibraryNotice(null);
+    try {
+      const response = await fetch(`/api/creative-library/${entry.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setLibraryNotice({ text: data.error || "No se pudo cambiar el nombre.", tone: "error" });
+        return;
+      }
+      setHistory((current) => current.map((item) => item.id === entry.id ? { ...item, name: data.name } : item));
+      setSelectedHistory((current) => current?.id === entry.id ? { ...current, name: data.name } : current);
+      setRenamingId(null);
+      setLibraryNotice({ text: `“${data.name}” quedó guardado.`, tone: "success" });
+    } catch {
+      setLibraryNotice({ text: "No pudimos guardar el nombre. Intenta nuevamente.", tone: "error" });
+    } finally {
+      setSavingNameId(null);
+    }
   }
 
   async function deleteCreative(entry: CreativeHistoryItem) {
     if (!window.confirm(`¿Borrar “${cleanFileName(entry.name)}” y su análisis? Esta acción no se puede deshacer.`)) return;
-    const response = await fetch(`/api/creative-library/${entry.id}`, { method: "DELETE" });
-    const data = await response.json();
-    if (!response.ok) return setLibraryMessage(data.error || "No se pudo borrar el creativo.");
-    setHistory((current) => current.filter((item) => item.id !== entry.id));
-    if (selectedHistory?.id === entry.id) setSelectedHistory(null);
-    setLibraryMessage("Creativo eliminado de la biblioteca.");
+    try {
+      const response = await fetch(`/api/creative-library/${entry.id}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) {
+        setLibraryNotice({ text: data.error || "No se pudo borrar el creativo.", tone: "error" });
+        return;
+      }
+      setHistory((current) => current.filter((item) => item.id !== entry.id));
+      if (selectedHistory?.id === entry.id) setSelectedHistory(null);
+      setLibraryNotice({ text: "Creativo eliminado de la biblioteca.", tone: "success" });
+    } catch {
+      setLibraryNotice({ text: "No pudimos borrar el creativo. Intenta nuevamente.", tone: "error" });
+    }
+  }
+
+  function startRenaming(entry: CreativeHistoryItem) {
+    setRenamingId(entry.id);
+    setDraftName(cleanFileName(entry.name));
+    setLibraryNotice(null);
+  }
+
+  function cancelRenaming() {
+    setRenamingId(null);
+    setDraftName("");
   }
 
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
@@ -516,19 +555,86 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
           </div>
           <small>{history.length} guardados</small>
         </header>
+        {libraryNotice && (
+          <p
+            className={`${styles.libraryNotice} ${libraryNotice.tone === "error" ? styles.libraryNoticeError : ""}`}
+            role="status"
+            aria-live="polite"
+          >
+            {libraryNotice.tone === "success" ? <Check size={16} /> : <X size={16} />}
+            {libraryNotice.text}
+          </p>
+        )}
         {history.length === 0 ? (
           <div className="library-empty"><Eye size={22} /><b>Aún no hay análisis</b><p>El primer resultado aparecerá aquí automáticamente.</p></div>
         ) : (
           <div className="creative-library-grid">
             {history.map((entry) => (
-              <article className="creative-library-item" key={entry.id}>
-                {renamingId === entry.id ? <div className="creative-rename-row"><input autoFocus value={draftName} onChange={(event) => setDraftName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") saveCreativeName(entry); if (event.key === "Escape") setRenamingId(null); }} /><button type="button" onClick={() => saveCreativeName(entry)}><Check /></button><button type="button" onClick={() => setRenamingId(null)}><X /></button></div> : <button className="creative-library-open" type="button" onClick={() => setSelectedHistory(entry)}><span className="library-score">{entry.result.score}</span><div><b>{cleanFileName(entry.name)}</b><small>{entry.assetType === "video" ? "Video" : "Estático"} · {verdictFromScore(entry.result.score)}</small></div><time>{new Date(entry.createdAt).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}</time></button>}
-                <div className="creative-library-actions"><button type="button" aria-label="Editar nombre" title="Editar nombre" onClick={() => { setRenamingId(entry.id); setDraftName(cleanFileName(entry.name)); }}><Pencil /></button><button type="button" aria-label="Borrar creativo" title="Borrar creativo" onClick={() => deleteCreative(entry)}><Trash2 /></button></div>
+              <article className={`${styles.libraryCard} ${renamingId === entry.id ? styles.libraryCardEditing : ""}`} key={entry.id}>
+                {renamingId === entry.id ? (
+                  <form
+                    className={styles.renamePanel}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveCreativeName(entry);
+                    }}
+                  >
+                    <div className={styles.renameHeading}>
+                      <span className="library-score">{entry.result.score}</span>
+                      <div>
+                        <b>Renombrar creativo</b>
+                        <small>El análisis y sus resultados no cambian.</small>
+                      </div>
+                    </div>
+                    <label htmlFor={`creative-name-${entry.id}`}>Nombre del archivo</label>
+                    <input
+                      id={`creative-name-${entry.id}`}
+                      autoFocus
+                      maxLength={90}
+                      value={draftName}
+                      onChange={(event) => setDraftName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") cancelRenaming();
+                      }}
+                      aria-describedby={`creative-name-help-${entry.id}`}
+                    />
+                    <small id={`creative-name-help-${entry.id}`} className={styles.renameHelp}>
+                      {draftName.trim().length}/90 caracteres
+                    </small>
+                    <div className={styles.renameActions}>
+                      <button type="button" className={styles.cancelButton} onClick={cancelRenaming} disabled={savingNameId === entry.id}>
+                        <X size={15} /> Cancelar
+                      </button>
+                      <button type="submit" className={styles.saveButton} disabled={savingNameId === entry.id || draftName.trim().length < 2}>
+                        {savingNameId === entry.id ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+                        {savingNameId === entry.id ? "Guardando…" : "Guardar nombre"}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <button className={`${styles.openCard} creative-library-open`} type="button" onClick={() => setSelectedHistory(entry)}>
+                      <span className="library-score">{entry.result.score}</span>
+                      <div>
+                        <b>{cleanFileName(entry.name)}</b>
+                        <small>{entry.assetType === "video" ? "Video" : "Estático"} · {verdictFromScore(entry.result.score)}</small>
+                      </div>
+                      <time>{new Date(entry.createdAt).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}</time>
+                    </button>
+                    <div className={styles.cardActions} role="group" aria-label={`Acciones para ${cleanFileName(entry.name)}`}>
+                      <button type="button" className={styles.cardAction} onClick={() => startRenaming(entry)}>
+                        <Pencil size={14} /> Renombrar
+                      </button>
+                      <button type="button" className={`${styles.cardAction} ${styles.deleteAction}`} onClick={() => void deleteCreative(entry)}>
+                        <Trash2 size={14} /> Borrar
+                      </button>
+                    </div>
+                  </>
+                )}
               </article>
             ))}
           </div>
         )}
-        {libraryMessage && <p className="library-message">{libraryMessage}</p>}
       </section>
     </div>
   );

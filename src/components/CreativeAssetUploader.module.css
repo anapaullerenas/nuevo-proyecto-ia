@@ -1,0 +1,248 @@
+.libraryCard {
+  min-width: 0;
+  border: 1px solid rgba(99, 46, 89, 0.13);
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 10px 30px rgba(99, 46, 89, 0.035);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.libraryCard:hover,
+.libraryCard:focus-within {
+  border-color: rgba(99, 46, 89, 0.28);
+  box-shadow: 0 14px 34px rgba(99, 46, 89, 0.08);
+  transform: translateY(-1px);
+}
+
+.libraryCardEditing {
+  border-color: rgba(79, 98, 167, 0.42);
+  box-shadow: 0 16px 38px rgba(79, 98, 167, 0.12);
+  transform: none;
+}
+
+.libraryCard .openCard {
+  width: 100%;
+  min-height: 92px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.libraryCard .openCard:focus-visible,
+.libraryCard button:focus-visible,
+.renamePanel input:focus-visible {
+  outline: 3px solid rgba(79, 98, 167, 0.28);
+  outline-offset: -3px;
+}
+
+.cardActions {
+  min-height: 42px;
+  border-top: 1px solid rgba(99, 46, 89, 0.09);
+  padding: 6px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  background: rgba(250, 247, 250, 0.72);
+}
+
+.libraryCard .cardAction {
+  width: auto;
+  min-width: 0;
+  min-height: 30px;
+  border: 0;
+  border-radius: 9px;
+  padding: 6px 9px;
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #632e59;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.libraryCard .cardAction:hover {
+  border-color: transparent;
+  color: #4f62a7;
+  background: rgba(79, 98, 167, 0.1);
+}
+
+.libraryCard .deleteAction {
+  color: rgba(99, 46, 89, 0.66);
+}
+
+.libraryCard .deleteAction:hover {
+  color: #9a2323;
+  background: rgba(154, 35, 35, 0.08);
+}
+
+.renamePanel {
+  min-height: 178px;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(246, 247, 252, 0.92));
+}
+
+.renameHeading {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+}
+
+.renameHeading > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.renameHeading b {
+  color: #632e59;
+}
+
+.renameHeading small,
+.renameHelp {
+  color: rgba(99, 46, 89, 0.58);
+  font-size: 11px;
+}
+
+.renamePanel label {
+  grid-column: 1 / -1;
+  color: #632e59;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.renamePanel input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid rgba(79, 98, 167, 0.3);
+  border-radius: 11px;
+  padding: 0 12px;
+  color: #632e59;
+  background: #fff;
+  font: inherit;
+  font-weight: 750;
+  box-shadow: inset 0 1px 0 rgba(99, 46, 89, 0.025);
+}
+
+.renameHelp {
+  align-self: center;
+  text-align: right;
+}
+
+.renameActions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.libraryCard .cancelButton,
+.libraryCard .saveButton {
+  width: auto;
+  min-width: 0;
+  min-height: 36px;
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.libraryCard .cancelButton {
+  border: 1px solid rgba(99, 46, 89, 0.14);
+  color: #632e59;
+  background: #fff;
+}
+
+.libraryCard .saveButton {
+  border: 1px solid #632e59;
+  color: #fff;
+  background: #632e59;
+  box-shadow: 0 8px 18px rgba(99, 46, 89, 0.16);
+}
+
+.libraryCard .saveButton:hover:not(:disabled) {
+  border-color: #4d2346;
+  background: #4d2346;
+}
+
+.libraryCard .saveButton:disabled,
+.libraryCard .cancelButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.libraryNotice {
+  width: fit-content;
+  margin: 12px 0 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #2f6e4b;
+  background: rgba(47, 122, 79, 0.1);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.libraryNoticeError {
+  color: #9a2323;
+  background: rgba(154, 35, 35, 0.08);
+}
+
+@media (max-width: 720px) {
+  .libraryCard .openCard {
+    min-height: 82px;
+  }
+
+  .cardActions {
+    justify-content: stretch;
+  }
+
+  .libraryCard .cardAction {
+    flex: 1;
+  }
+
+  .renamePanel {
+    grid-template-columns: 1fr;
+  }
+
+  .renameHelp,
+  .renameActions {
+    grid-column: 1;
+  }
+
+  .renameHelp {
+    text-align: left;
+  }
+
+  .renameActions > button {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .libraryCard {
+    transition: none;
+  }
+}
