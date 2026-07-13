@@ -119,6 +119,7 @@ type CreativeDissection = {
 export function CreativeAssetUploader({ brandId }: { brandId: string }) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const activeItem = items.find((item) => item.analysis);
 
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
@@ -261,6 +262,41 @@ export function CreativeAssetUploader({ brandId }: { brandId: string }) {
     }
   }
 
+  if (activeItem?.analysis) {
+    const score = activeItem.analysis.score;
+    const verdict = verdictFromScore(score);
+    return (
+      <div className="creative-result-layout">
+        <header className="analysis-compact-header">
+          <div>
+            <span className="eyebrow">Análisis creativo</span>
+            <b title={activeItem.name}>{cleanFileName(activeItem.name)}</b>
+            <small>{activeItem.assetType === "video" ? "Video" : "Imagen"} · {verdict} · {score}/100</small>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => setItems([])}>
+            Analizar otro creativo
+          </button>
+        </header>
+
+        <div className="creative-result-with-rail">
+          <CreativeAnalysisCard result={activeItem.analysis} />
+          <aside className="analysis-next-rail">
+            <article>
+              <b>¿Y ahora qué?</b>
+              <button type="button">Convertir en estático · 150 cr</button>
+              <button type="button">Analizar otra versión · 120 cr</button>
+              <button type="button">Guardar receta</button>
+            </article>
+            <article>
+              <b>Memoria de marca</b>
+              <p>Las recetas útiles de este análisis quedan disponibles para el chat y la máquina de estáticos.</p>
+            </article>
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="upload-zone tall">
       <ImageUp size={34} />
@@ -300,7 +336,8 @@ export function CreativeAssetUploader({ brandId }: { brandId: string }) {
 function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
   const analysis = normalizeClientAnalysis(result.analysis, result);
   const score = analysis.score ?? result.score;
-  const verdict = analysis.verdict || result.verdict;
+  const verdict = verdictFromScore(score);
+  const verdictMeta = verdictStyle(score);
   const hook = analysis.dashboard?.hook;
   const structure = analysis.structural_analysis;
   const psychology = analysis.psychological_analysis;
@@ -311,14 +348,17 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
   return (
     <section className="creative-result">
       <div className="creative-result-head">
-        <div className="creative-score-ring" style={{ "--score": `${score}%` } as CSSProperties}>
+        <div
+          className="creative-score-ring"
+          style={{ "--score": `${score}%`, "--score-color": verdictMeta.color } as CSSProperties}
+        >
           <b>{score}</b>
           <span>/100</span>
         </div>
         <div>
           <span className="eyebrow">Lectura profunda</span>
           <h3>{analysis.winning_reason || "Análisis creativo completo."}</h3>
-          <strong>{verdict}</strong>
+          <strong className={`verdict-badge ${verdictMeta.className}`}>{verdict}</strong>
         </div>
       </div>
 
@@ -449,6 +489,7 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
 }
 
 function normalizeClientAnalysis(analysis: CreativeDissection, result: CreativeAnalysisResult): CreativeDissection {
+  const score = analysis.score ?? result.score;
   const legacyVariants =
     analysis.script_variants ||
     analysis.variants?.map((variant, index) => ({
@@ -460,8 +501,8 @@ function normalizeClientAnalysis(analysis: CreativeDissection, result: CreativeA
 
   return {
     ...analysis,
-    score: analysis.score ?? result.score,
-    verdict: analysis.verdict || result.verdict,
+    score,
+    verdict: verdictFromScore(score),
     winning_reason: analysis.winning_reason || analysis.summary || "Análisis creativo listo.",
     signals:
       analysis.signals ||
@@ -476,6 +517,31 @@ function normalizeClientAnalysis(analysis: CreativeDissection, result: CreativeA
     test: analysis.test?.length ? analysis.test : [...(analysis.change || []), ...(analysis.produce_next || [])],
     script_variants: legacyVariants || [],
   };
+}
+
+function verdictFromScore(score: number) {
+  if (score >= 90) return "Escalable";
+  if (score >= 75) return "Ganador";
+  if (score >= 60) return "Potencial";
+  if (score >= 40) return "Rescatable";
+  return "Débil";
+}
+
+function verdictStyle(score: number) {
+  if (score >= 90) return { className: "escalable", color: "#2f7a4f" };
+  if (score >= 75) return { className: "ganador", color: "#2f7a4f" };
+  if (score >= 60) return { className: "potencial", color: "#4f62a7" };
+  if (score >= 40) return { className: "rescatable", color: "#a46b17" };
+  return { className: "debil", color: "#9a2323" };
+}
+
+function cleanFileName(name: string) {
+  return name
+    .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 72);
 }
 
 function SignalCard({ title, signal }: { title: string; signal?: Signal }) {

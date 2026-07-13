@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Inicia sesion para enviar audio." }, { status: 401 });
+    return NextResponse.json({ error: "Inicia sesión para enviar audio." }, { status: 401 });
   }
 
   const apiKey = process.env.OPENAI_API_KEY;

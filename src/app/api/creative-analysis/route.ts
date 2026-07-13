@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Inicia sesion para analizar creativos." }, { status: 401 });
+    return NextResponse.json({ error: "Inicia sesión para analizar creativos." }, { status: 401 });
   }
 
   const body = (await request.json()) as CreativeAnalysisInput;
@@ -257,7 +257,7 @@ function normalizeAnalysisShape(json: Record<string, unknown>) {
         ? json.winning_reason
         : typeof json.summary === "string"
           ? json.summary
-          : "El creativo fue analizado por estructura, psicologia, claridad, oferta y potencial de produccion.",
+          : "El creativo fue analizado por estructura, psicología, claridad, oferta y potencial de producción.",
     signals: isRecord(json.signals)
       ? json.signals
       : {
@@ -328,12 +328,10 @@ function toStringArray(value: unknown) {
 }
 
 function normalizeVerdict(value: unknown, score: unknown) {
-  const allowed = ["Debil", "Rescatable", "Potencial", "Ganador", "Escalable"];
-  if (typeof value === "string" && allowed.includes(value)) return value;
   const numericScore = Number(score);
   if (numericScore >= 90) return "Escalable";
   if (numericScore >= 75) return "Ganador";
   if (numericScore >= 60) return "Potencial";
   if (numericScore >= 40) return "Rescatable";
-  return "Debil";
+  return "Débil";
 }

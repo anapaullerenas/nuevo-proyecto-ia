@@ -44,6 +44,7 @@ export async function getWorkspace() {
   }
 
   return {
+    supabase,
     user,
     brandList,
     activeBrand,

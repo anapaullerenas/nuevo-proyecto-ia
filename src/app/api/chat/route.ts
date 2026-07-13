@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Inicia sesion para usar el chat." }, { status: 401 });
+    return NextResponse.json({ error: "Inicia sesión para usar el chat." }, { status: 401 });
   }
 
   const body = (await request.json()) as ChatInput;

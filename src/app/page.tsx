@@ -30,7 +30,7 @@ export default function Home() {
           </span>
           <h1>{PRODUCT_NAME}: tu sistema para decidir, crear y medir anuncios sin perder el hilo.</h1>
           <p>
-            Registra tu marca una vez. Desde ahi la IA usa esa memoria para
+            Registra tu marca una vez. Desde ahí la IA usa esa memoria para
             analizar creativos, leer tus exports de Meta, conversar contigo y
             convertir aprendizajes en nuevos estáticos.
           </p>
@@ -57,7 +57,7 @@ export default function Home() {
           </div>
           <div>
             <span>03</span>
-            <b>Operacion IA</b>
+            <b>Operación IA</b>
             <p>Chat, Meta, creativos, estáticos y decisiones guardadas.</p>
           </div>
         </aside>
@@ -67,7 +67,7 @@ export default function Home() {
         <article>
           <MessageCircle />
           <b>Chat IA</b>
-          <p>Tu mano derecha para decidir que producir y por que.</p>
+          <p>Tu mano derecha para decidir qué producir y por qué.</p>
         </article>
         <article>
           <ChartNoAxesCombined />
@@ -77,7 +77,7 @@ export default function Home() {
         <article>
           <Brain />
           <b>Análisis creativo</b>
-          <p>Score, psicologia, estructura, variantes y prompts.</p>
+          <p>Score, psicología, estructura, variantes y prompts.</p>
         </article>
         <article>
           <ImagePlus />

@@ -52,7 +52,7 @@ export default async function DashboardPage() {
             <article>
               <MessageCircle />
               <b>Chat IA</b>
-              <p>Preguntar que producir con el contexto de marca guardado.</p>
+              <p>Preguntar qué producir con el contexto de marca guardado.</p>
               <Link href="/chat" className="module-action">Iniciar conversación</Link>
             </article>
             <article>
@@ -66,7 +66,7 @@ export default async function DashboardPage() {
             <article>
               <Brain />
               <b>Análisis creativos</b>
-              <p>Subir video o imagen para obtener score, psicologia y variantes.</p>
+              <p>Subir video o imagen para obtener score, psicología y variantes.</p>
               <Link href="/analisis-creativos" className="module-action">Nuevo analisis</Link>
             </article>
             <article>

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AuthPanel } from "@/components/AuthPanel";
 import { BrandMark } from "@/components/BrandIdentity";
 
