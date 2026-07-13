@@ -3735,6 +3735,25 @@ svg {
 }
 
 @media (max-width: 640px) {
+  .app-topbar {
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+  }
+
+  .app-topbar > * {
+    min-width: 0;
+  }
+
+  .app-topbar nav {
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
   .work-page,
   .chat-layout {
     width: min(100% - 18px, 1440px);
