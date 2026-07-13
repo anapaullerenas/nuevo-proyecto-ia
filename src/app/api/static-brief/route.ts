@@ -4,6 +4,7 @@ import { normalizeStaticBrief, STATIC_BRIEF_JSON_SCHEMA, StaticArchetype, Static
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
+import { CURATED_STATIC_FORMATS, getCuratedStaticFormat, staticFormatReferencePayload } from "@/lib/static-format-catalog";
 
 export const maxDuration = 120;
 
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     productAsset = asset;
   }
 
-  const [{ data: recipes }, { data: archetypes }, { data: references }, { data: goldenBriefs }, { data: visualIdentity }] = await Promise.all([
+  const [{ data: recipes }, { data: references }, { data: goldenBriefs }, { data: visualIdentity }] = await Promise.all([
     supabase
       .from("brand_recipes")
       .select("rule")
@@ -111,11 +112,6 @@ export async function POST(request: NextRequest) {
       .eq("owner_id", user.id)
       .order("created_at", { ascending: false })
       .limit(8),
-    supabase
-      .from("static_archetypes")
-      .select("id,name,label_visible,stage,prompt_fragment,structure")
-      .eq("active", true)
-      .order("sort_order", { ascending: true }),
     supabase
       .from("brand_assets")
       .select("id,file_name,label,metadata")
@@ -144,7 +140,7 @@ export async function POST(request: NextRequest) {
       logoAsset,
       serviceNoProduct: Boolean(body.serviceNoProduct),
       recipes: (recipes || []).map((recipe) => String(recipe.rule)),
-      archetypes: (archetypes || []) as StaticArchetype[],
+      archetypes: CURATED_STATIC_FORMATS,
       references: references || [],
       externalReference: body.externalReference || "none",
       goldenBriefs: goldenBriefs || [],
@@ -171,6 +167,7 @@ export async function POST(request: NextRequest) {
           service_no_product: Boolean(body.serviceNoProduct),
           reference_asset_ids: (references || []).map((reference) => reference.id),
           external_reference: body.externalReference || "none",
+          format_reference: staticFormatReferencePayload(ficha.arquetipo),
         },
         status: "brief",
       })
@@ -277,7 +274,7 @@ async function createBriefWithOpenAI({
   });
 
   if (reviewed.review_score < 85) {
-    return requestStructuredBrief({
+    const corrected = await requestStructuredBrief({
       apiKey,
       stage: "reviewer-correction",
       system: STATIC_BRIEF_REVIEWER_PROMPT,
@@ -286,9 +283,21 @@ async function createBriefWithOpenAI({
       temperature: 0.15,
       fallbackArchetype: archetypeId,
     });
+    return lockRequestedArchetype(corrected, archetypeId);
   }
 
-  return reviewed;
+  return lockRequestedArchetype(reviewed, archetypeId);
+}
+
+function lockRequestedArchetype(brief: StaticBrief, requestedArchetype: string) {
+  const requested = getCuratedStaticFormat(requestedArchetype);
+  if (!requested) return brief;
+
+  return {
+    ...brief,
+    arquetipo: requested.id,
+    arquetipo_label: requested.label_visible,
+  };
 }
 
 async function requestStructuredBrief({

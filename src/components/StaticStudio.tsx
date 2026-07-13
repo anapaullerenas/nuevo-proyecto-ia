@@ -39,6 +39,10 @@ type StaticArchetype = {
   label_visible: string;
   stage: string;
   prompt_fragment: string;
+  thumbnail_path?: string;
+  short_description?: string;
+  use_when?: string;
+  visual_keys?: string[];
 };
 
 type StaticBrief = {
@@ -131,6 +135,7 @@ export function StaticStudio({
   const [openStep, setOpenStep] = useState<OpenStep>("intent");
   const [correction, setCorrection] = useState("");
   const [fullScreen, setFullScreen] = useState(false);
+  const [referencePreview, setReferencePreview] = useState<StaticArchetype | null>(null);
   const [remainingProposals, setRemainingProposals] = useState(0);
   const [variantOffset, setVariantOffset] = useState(0);
   const [galleryVisible, setGalleryVisible] = useState(12);
@@ -173,6 +178,7 @@ export function StaticStudio({
   const selectedUrl = selectedCreative?.public_url || selectedCreative?.signed_url || "";
   const latestCreative = gallery[0] || null;
   const visibleGallery = gallery.slice(0, galleryVisible);
+  const selectedArchetype = archetypes.find((item) => item.id === archetypeId) || null;
 
   async function handleCreateBrief(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -411,20 +417,47 @@ export function StaticStudio({
                   <div><span className="eyebrow">Estructura del anuncio</span><b>Elige visualmente cómo se contará la idea.</b></div>
                   <small>Son referencias de composición. La pieza final usará tu identidad.</small>
                 </div>
-                <div className="archetype-carousel">
+                <div className="archetype-format-strip" aria-label="Formatos de anuncio disponibles">
                   <button type="button" className={archetypeId === "automatico" ? "selected automatic" : "automatic"} onClick={() => setArchetypeId("automatico")}>
-                    <div className="archetype-auto-visual"><Sparkles /></div>
+                    <span className="archetype-mini-visual automatic"><Sparkles /></span>
                     <b>Automático</b>
-                    <span>La directora elige la estructura más adecuada.</span>
                   </button>
                   {archetypes.map((item) => (
                     <button type="button" data-archetype={item.id} key={item.id} className={archetypeId === item.id ? "selected" : ""} onClick={() => setArchetypeId(item.id)}>
-                      <ArchetypeMockup id={item.id} />
+                      <span className="archetype-mini-visual">{item.thumbnail_path && <img src={item.thumbnail_path} alt="" aria-hidden="true" />}</span>
                       <b>{item.label_visible}</b>
-                      <span>{structureDescription(item.id)}</span>
                     </button>
                   ))}
                 </div>
+
+                {selectedArchetype?.thumbnail_path ? (
+                  <div className="archetype-reference-panel">
+                    <button type="button" className="archetype-reference-visual" onClick={() => setReferencePreview(selectedArchetype)} aria-label={`Ampliar referencia de ${selectedArchetype.label_visible}`}>
+                      <img src={selectedArchetype.thumbnail_path} alt={`Referencia visual: ${selectedArchetype.label_visible}`} />
+                      <span><Expand size={15} /> Ver referencia completa</span>
+                    </button>
+                    <div className="archetype-reference-copy">
+                      <span className="eyebrow">Referencia seleccionada</span>
+                      <h3>{selectedArchetype.label_visible}</h3>
+                      <p>{selectedArchetype.short_description}</p>
+                      <div className="archetype-visual-keys">
+                        {selectedArchetype.visual_keys?.map((key) => <span key={key}>{key}</span>)}
+                      </div>
+                      <small><b>Úsalo cuando</b>{selectedArchetype.use_when}</small>
+                      <div className="archetype-recipe-note"><WandSparkles size={16} /><span>La plataforma tomará esta arquitectura visual para construir el prompt, usando tu producto, tus textos y tu identidad.</span></div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="archetype-reference-panel automatic">
+                    <div className="archetype-automatic-stage"><Sparkles /><span><b>Dirección automática</b>La estratega elegirá una de las 10 estructuras según tu objetivo, etapa y mensaje.</span></div>
+                    <div className="archetype-reference-copy">
+                      <span className="eyebrow">Recomendado para empezar</span>
+                      <h3>La mejor estructura para tu idea</h3>
+                      <p>No necesitas adivinar el formato. La plataforma compara tu brief con las diez recetas visuales y elige la más adecuada.</p>
+                      <div className="archetype-recipe-note"><WandSparkles size={16} /><span>La decisión también queda guardada en el JSON y guía la composición de la imagen.</span></div>
+                    </div>
+                  </div>
+                )}
               </div>
             </details>
 
@@ -614,16 +647,29 @@ export function StaticStudio({
           <img src={selectedUrl} alt={`Vista completa de ${brandName}`} />
         </div>
       )}
+
+      {referencePreview?.thumbnail_path && (
+        <div className="reference-lightbox" role="dialog" aria-modal="true" aria-label={`Referencia completa de ${referencePreview.label_visible}`} onClick={() => setReferencePreview(null)}>
+          <button type="button" className="reference-lightbox-close" onClick={() => setReferencePreview(null)}><X size={18} /> Cerrar</button>
+          <div className="reference-lightbox-image" onClick={(event) => event.stopPropagation()}>
+            <img src={referencePreview.thumbnail_path} alt={`Referencia completa: ${referencePreview.label_visible}`} />
+          </div>
+          <aside onClick={(event) => event.stopPropagation()}>
+            <span className="eyebrow">Arquitectura visual</span>
+            <h2>{referencePreview.label_visible}</h2>
+            <p>{referencePreview.short_description}</p>
+            <div className="archetype-visual-keys">{referencePreview.visual_keys?.map((key) => <span key={key}>{key}</span>)}</div>
+            <small><b>Ideal para</b>{referencePreview.use_when}</small>
+            <div className="reference-identity-note"><Sparkles size={17} /><span>Se imita la lógica de composición, nunca la marca, el producto, los colores ni el texto de esta referencia.</span></div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }
 
 function StepNumber({ number, done }: { number: string; done?: boolean }) {
   return <span className={done ? "step-number done" : "step-number"}>{done ? <Check size={14} /> : number}</span>;
-}
-
-function ArchetypeMockup({ id }: { id: string }) {
-  return <span className="archetype-reference-image"><img src={`/archetypes/${id}.jpg`} alt="" aria-hidden="true" /></span>;
 }
 
 function formatClass(value: string) {
@@ -656,11 +702,4 @@ function formatCreativeDate(value?: string) {
 function downloadName(brandName: string, item: GeneratedStatic) {
   const brand = brandName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   return `${brand || "marca"}_${formatClass(item.format)}_v${item.version}.png`;
-}
-
-function structureDescription(id: string) {
-  const descriptions: Record<string, string> = {
-    beneficios_apilados: "Producto héroe con tres beneficios que se leen en segundos.", antes_despues_sutil: "Dos estados honestos con la misma luz y encuadre.", busqueda_solucion: "Una búsqueda real del avatar y el producto como respuesta.", resultados_busqueda: "Grid nativo que convierte la marca en la respuesta dominante.", regalo_kit: "Regalo tangible, condición clara y manos reales.", descuento_desbloqueado: "El descuento se siente como un logro personal.", producto_heroe_editorial: "Producto gigante, textura real y datos concretos.", collage_lifestyle: "La vida aspiracional del avatar en formato moodboard.", declaracion_contraria: "Una frase con actitud que rompe una creencia.", post_its: "Oferta urgente en una escena doméstica y personal.", ticket_novedad: "El ahorro convertido en un ticket físico.", checklist_toggles: "Comparación rápida sin nombrar competidores.", chat_imessage: "Recomendación natural en una conversación de amigas.", anotaciones_manuscritas: "Foto UGC con dos anotaciones señalando el valor.", diagrama_callouts: "Producto explicado con autoridad editorial.", prueba_social_flotante: "Comentarios reales alrededor del producto héroe.", comparacion_ancla: "Dos gastos comparables que reencuadran el precio.",
-  };
-  return descriptions[id] || "Estructura visual pensada para este objetivo.";
 }

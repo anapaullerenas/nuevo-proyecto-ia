@@ -1,12 +1,13 @@
 import { AppFrame, SetupState } from "@/components/AppFrame";
 import { StaticStudio } from "@/components/StaticStudio";
+import { CURATED_STATIC_FORMATS } from "@/lib/static-format-catalog";
 import { getWorkspace } from "@/lib/workspace";
 
 export default async function CrearEstaticosPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
 
-  const [{ data: rawAssets }, { data: rawLogos }, { data: archetypes }, { data: rawGallery }, { data: rawReferences }] = await Promise.all([
+  const [{ data: rawAssets }, { data: rawLogos }, { data: rawGallery }, { data: rawReferences }] = await Promise.all([
     workspace.supabase
       .from("brand_assets")
       .select("id,file_name,storage_path,bucket_id,kind,label,created_at")
@@ -21,12 +22,6 @@ export default async function CrearEstaticosPage() {
       .eq("owner_id", workspace.user.id)
       .eq("kind", "logo")
       .order("created_at", { ascending: false }),
-    workspace.supabase
-      .from("static_archetypes")
-      .select("id,name,label_visible,stage,prompt_fragment")
-      .eq("active", true)
-      .order("sort_order", { ascending: true })
-      .limit(10),
     workspace.supabase
       .from("static_creatives")
       .select("id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,parent_id,status,created_at")
@@ -105,7 +100,7 @@ export default async function CrearEstaticosPage() {
             brandName={workspace.activeBrand.name}
             initialAssets={assets}
             initialLogos={logos}
-            archetypes={archetypes || []}
+            archetypes={CURATED_STATIC_FORMATS}
             initialGallery={gallery}
             initialReferences={references}
             unlimitedCredits={workspace.isUnlimited}

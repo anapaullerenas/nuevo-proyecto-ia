@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 import { appendInputFidelityWhenSupported, ImageApiError, imageApiErrorFromResponse, imageGenerationFailure } from "@/lib/ai/image-api-errors";
+import { CURATED_STATIC_FORMATS, getCuratedStaticFormat, staticFormatReferencePayload } from "@/lib/static-format-catalog";
 
 export const maxDuration = 300;
 
@@ -122,17 +123,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No pudimos leer los logotipos oficiales. Vuelve a subirlos antes de generar." }, { status: 400 });
   }
 
-  const { data: archetype } = ficha.arquetipo
+  const curatedArchetype = getCuratedStaticFormat(ficha.arquetipo);
+  const { data: storedArchetype } = !curatedArchetype && ficha.arquetipo
     ? await supabase
         .from("static_archetypes")
         .select("id,name,label_visible,stage,prompt_fragment,structure")
         .eq("id", ficha.arquetipo)
         .maybeSingle()
     : { data: null };
-  const { data: activeArchetypes } = variants > 1
-    ? await supabase.from("static_archetypes").select("id,name,label_visible,stage,prompt_fragment,structure").eq("active", true).order("sort_order")
-    : { data: [] };
-  const candidateArchetypes = [archetype, ...(activeArchetypes || []).filter((item) => item.id !== archetype?.id && normalizeStage(item.stage) === normalizeStage(body.funnelStage)), ...(activeArchetypes || []).filter((item) => item.id !== archetype?.id)]
+  const archetype = (curatedArchetype || storedArchetype) as StaticArchetype | null;
+  const activeArchetypes = variants > 1 ? CURATED_STATIC_FORMATS : [];
+  const candidateArchetypes = [archetype, ...activeArchetypes.filter((item) => item.id !== archetype?.id && normalizeStage(item.stage) === normalizeStage(body.funnelStage)), ...activeArchetypes.filter((item) => item.id !== archetype?.id)]
     .filter((item, index, list) => Boolean(item) && list.findIndex((candidate) => candidate?.id === item?.id) === index) as StaticArchetype[];
 
   const creditAmount = variants * (quality === "high" ? CREDIT_COSTS.static_generate_high : CREDIT_COSTS.static_generate_medium);
@@ -214,9 +215,10 @@ export async function POST(request: NextRequest) {
             service_no_product: Boolean(body.serviceNoProduct),
             variant: index + 1,
             reference_asset_ids: styleReferences.map((reference) => reference.id),
+            format_reference: staticFormatReferencePayload(variantFicha.arquetipo),
           },
           qa_report: qa,
-          metadata: { qa },
+          metadata: { qa, format_reference: staticFormatReferencePayload(variantFicha.arquetipo) },
           status: "generated",
         })
         .select("id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,status,created_at")

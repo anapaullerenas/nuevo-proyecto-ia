@@ -143,6 +143,26 @@ const variationMoves = [
   "Lidera con prueba social humana, concreta y creíble.",
 ];
 
+function formatArchetypeRecipe(archetype?: StaticArchetype | null) {
+  if (!archetype?.structure) return "- Sigue la composición por zonas de la ficha y mantén una sola idea dominante.";
+  const structure = archetype.structure;
+  const blueprint = (structure.reference_blueprint || {}) as Record<string, unknown>;
+  const zones = (structure.estructura || structure.zones || {}) as Record<string, unknown>;
+  const rules = Array.isArray(structure.rules) ? structure.rules : [];
+  const hierarchy = Array.isArray(blueprint.hierarchy) ? blueprint.hierarchy.join(" → ") : "headline → imagen/producto → apoyo";
+  const lines = [
+    `- Arquitectura: ${String(blueprint.layout || "Composición clara basada en el arquetipo elegido.")}`,
+    `- Jerarquía exacta: ${hierarchy}.`,
+    `- Tratamiento del producto: ${String(blueprint.product_treatment || "Producto fiel, reconocible y con escala protagonista.")}`,
+    `- Patrón de copy: ${String(blueprint.copy_pattern || "Copy breve y escaneable.")}`,
+    `- Densidad: ${String(blueprint.density || "Baja, con aire visual.")}`,
+    `- Comportamiento del CTA: ${String(blueprint.cta_behavior || "Sólo cuando ayude a completar la acción.")}`,
+    ...Object.entries(zones).map(([zone, value]) => `- ${zone.replaceAll("_", " ")}: ${String(value)}`),
+    ...rules.map((rule) => `- ${String(rule)}`),
+  ];
+  return lines.join("\n");
+}
+
 export function compileDesignPrompt({
   brandName,
   brandVoice,
@@ -201,6 +221,9 @@ MARCA: ${brandName}
 VOZ DE MARCA: ${brandVoice || "femenina, clara, premium y directa"}
 ARQUETIPO: ${ficha.arquetipo_label || archetype?.label_visible || "Automático"}
 MECÁNICA DEL ARQUETIPO: ${archetype?.prompt_fragment || "Jerarquía clara, producto/resultado protagonista y CTA visible."}
+RECETA VISUAL DE LA REFERENCIA ELEGIDA:
+${formatArchetypeRecipe(archetype)}
+- La referencia define arquitectura, ritmo y jerarquía. Está terminantemente prohibido copiar su marca, producto, texto, colores, claims o identidad.
 VARIANTE: ${variantIndex || 1}
 MOVIMIENTO CREATIVO OBLIGATORIO: ${variationMoves[((variantIndex || 1) - 1) % variationMoves.length]}
 ${(variantIndex || 1) > 1 ? "Esta variante debe distinguirse de las demás por escena, mecanismo visual, sujeto o arquitectura. Cambiar sólo color, crop, sombra o tipografía NO cuenta como variante." : ""}
