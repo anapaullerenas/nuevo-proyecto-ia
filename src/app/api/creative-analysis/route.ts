@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
 
 async function transcribeVideo(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
-  asset: { storage_path: string; file_name: string | null; mime_type: string | null },
+  asset: { storage_path: string | null; file_name: string | null; mime_type: string | null },
   extractedAudio?: File,
   extractedAudioDurationSeconds?: number,
 ): Promise<VideoTranscript> {
@@ -186,6 +186,7 @@ async function transcribeVideo(
     sourceName = extractedAudio.name || "audio-completo.wav";
     sourceType = extractedAudio.type || "audio/wav";
   } else {
+    if (!asset.storage_path) throw new Error("El video grande debe analizarse desde el archivo original seleccionado.");
     const { data, error } = await supabase.storage.from("creative-assets").download(asset.storage_path);
     if (error || !data) throw new Error(error?.message || "No pude descargar el video para escucharlo.");
     source = data;
@@ -321,7 +322,7 @@ async function parseCreativeAnalysisRequest(request: NextRequest): Promise<Parse
 
 async function getImageInputs(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
-  asset: { asset_type: string; storage_path: string; mime_type: string | null },
+  asset: { asset_type: string; storage_path: string | null; mime_type: string | null },
   frames: Array<string | { image: string; timestamp: number }>,
 ): Promise<OpenAIContentInput[]> {
   if (frames.length) {
@@ -336,6 +337,7 @@ async function getImageInputs(
   }
 
   if (asset.asset_type !== "image") return [];
+  if (!asset.storage_path) return [];
 
   const { data, error } = await supabase.storage.from("creative-assets").download(asset.storage_path);
   if (error || !data) throw new Error(error?.message || "No pude descargar la imagen.");

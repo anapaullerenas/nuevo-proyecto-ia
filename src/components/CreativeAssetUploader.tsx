@@ -2,8 +2,18 @@
 
 import { ChangeEvent, CSSProperties, ReactNode, useState } from "react";
 import Image from "next/image";
+import * as tus from "tus-js-client";
 import { ArrowLeft, Brain, Check, Clipboard, Eye, FileText, FlaskConical, ImageUp, Library, Loader2, Lock, Pencil, Plus, Rocket, Sparkles, Trash2, X } from "lucide-react";
+import {
+  CREATIVE_STORAGE_QUOTA_BYTES,
+  CREATIVE_STORAGE_QUOTA_LABEL,
+  MAX_CREATIVE_FILE_SIZE_BYTES,
+  MAX_CREATIVE_FILE_SIZE_LABEL,
+  MAX_PERSISTED_CREATIVE_SIZE_BYTES,
+  MAX_PERSISTED_CREATIVE_SIZE_LABEL,
+} from "@/lib/creative-upload-limits";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getSupabaseEnv } from "@/lib/supabase/config";
 
 type UploadItem = {
   id: string;
@@ -19,8 +29,7 @@ type UploadItem = {
 };
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
-const MAX_VIDEO_SIZE = 100 * 1024 * 1024;
+const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"];
 
 type CreativeAnalysisResult = {
   score: number;
@@ -225,17 +234,21 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
       setIsUploading(false);
       return;
     }
-    const [{ data: creativeUsage }, { data: brandUsage }] = await Promise.all([supabase.from("creative_assets").select("file_size").eq("owner_id", user.id), supabase.from("brand_assets").select("file_size").eq("owner_id", user.id)]);
-    const usedBytes = [...(creativeUsage || []), ...(brandUsage || [])].reduce((sum, item) => sum + Number(item.file_size || 0), 0);
-    if (usedBytes + files.reduce((sum, file) => sum + file.size, 0) > 2 * 1024 * 1024 * 1024) {
-      setItems([{ id: crypto.randomUUID(), name: "Almacenamiento", status: "error", message: "Alcanzaste 2 GB de archivos. Borra creativos que ya no necesitas antes de subir más." }]); setIsUploading(false); return;
+    const [{ data: creativeUsage }, { data: brandUsage }] = await Promise.all([supabase.from("creative_assets").select("file_size,storage_path").eq("owner_id", user.id), supabase.from("brand_assets").select("file_size").eq("owner_id", user.id)]);
+    const usedBytes = [
+      ...(creativeUsage || []).filter((item) => item.storage_path),
+      ...(brandUsage || []),
+    ].reduce((sum, item) => sum + Number(item.file_size || 0), 0);
+    if (usedBytes + files.reduce((sum, file) => sum + file.size, 0) > CREATIVE_STORAGE_QUOTA_BYTES) {
+      setItems([{ id: crypto.randomUUID(), name: "Almacenamiento", status: "error", message: `Alcanzaste ${CREATIVE_STORAGE_QUOTA_LABEL} de archivos. Borra creativos que ya no necesitas antes de subir más.` }]); setIsUploading(false); return;
     }
 
     for (const file of files) {
       const localId = crypto.randomUUID();
       setItems((current) => [...current, { id: localId, name: file.name, file, previewUrl: URL.createObjectURL(file), status: "subiendo" }]);
 
-      const assetType = IMAGE_TYPES.includes(file.type) ? "image" : VIDEO_TYPES.includes(file.type) ? "video" : null;
+      const fileType = resolveCreativeFileType(file);
+      const assetType = fileType?.assetType || null;
 
       if (!assetType) {
         setItems((current) =>
@@ -246,14 +259,29 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
         continue;
       }
 
-      if (assetType === "video" && file.size > MAX_VIDEO_SIZE) {
+      if (file.size > MAX_CREATIVE_FILE_SIZE_BYTES) {
         setItems((current) =>
           current.map((item) =>
             item.id === localId
               ? {
                   ...item,
                   status: "error",
-                  message: "Este video supera 100 MB. Comprime el archivo o exporta una versión más ligera antes de subirlo.",
+                  message: `Este archivo supera ${MAX_CREATIVE_FILE_SIZE_LABEL}. Comprime el video o exporta una versión más ligera antes de subirlo.`,
+                }
+              : item,
+          ),
+        );
+        continue;
+      }
+
+      if (assetType === "image" && file.size > MAX_PERSISTED_CREATIVE_SIZE_BYTES) {
+        setItems((current) =>
+          current.map((item) =>
+            item.id === localId
+              ? {
+                  ...item,
+                  status: "error",
+                  message: `Esta imagen supera ${MAX_PERSISTED_CREATIVE_SIZE_LABEL}. Exporta una versión JPG o WebP más ligera antes de subirla.`,
                 }
               : item,
           ),
@@ -262,17 +290,35 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
       }
 
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-      const storagePath = `${user.id}/${brandId}/creative-${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-      const { error: uploadError } = await supabase.storage.from("creative-assets").upload(storagePath, file, {
-        contentType: file.type,
-        upsert: false,
-      });
+      const shouldPersistOriginal = file.size <= MAX_PERSISTED_CREATIVE_SIZE_BYTES;
+      const storagePath = shouldPersistOriginal
+        ? `${user.id}/${brandId}/creative-${Date.now()}-${crypto.randomUUID()}-${safeName}`
+        : null;
 
-      if (uploadError) {
-        setItems((current) =>
-          current.map((item) => (item.id === localId ? { ...item, status: "error", message: uploadError.message } : item)),
-        );
-        continue;
+      if (storagePath) {
+        try {
+          await uploadCreativeAsset({
+            file,
+            contentType: fileType?.contentType || file.type,
+            storagePath,
+            onProgress: (percentage) => setItems((current) => current.map((item) =>
+              item.id === localId ? { ...item, message: `Subiendo… ${percentage}%` } : item,
+            )),
+          });
+        } catch (uploadError) {
+          setItems((current) =>
+            current.map((item) => (item.id === localId ? {
+              ...item,
+              status: "error",
+              message: friendlyUploadError(uploadError),
+            } : item)),
+          );
+          continue;
+        }
+      } else {
+        setItems((current) => current.map((item) => item.id === localId
+          ? { ...item, message: "Video grande listo. Se analizará localmente sin guardar el original pesado." }
+          : item));
       }
 
       const { data: insertedAsset, error: insertError } = await supabase
@@ -284,7 +330,7 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
           storage_path: storagePath,
           file_name: file.name,
           file_size: file.size,
-          mime_type: file.type,
+          mime_type: fileType?.contentType || file.type,
         })
         .select("id")
         .single();
@@ -298,7 +344,11 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
                 assetType,
                 status: insertError ? "error" : "listo",
                 analysisStatus: "idle",
-                message: insertError ? insertError.message : "Archivo guardado. Ya puedes analizarlo.",
+                message: insertError
+                  ? insertError.message
+                  : storagePath
+                    ? "Archivo guardado. Ya puedes analizarlo."
+                    : "Video listo. Ya puedes analizarlo; el original no ocupará espacio en tu cuenta.",
               }
             : item,
         ),
@@ -434,8 +484,8 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
         <label className="creative-file-picker">
           {isUploading ? <Loader2 className="spin" size={24} /> : <ImageUp size={24} />}
           <b>{isUploading ? "Subiendo archivo..." : "Elegir imagen o video"}</b>
-          <span>JPG, PNG, WebP, MP4, MOV o WebM · máximo 200 MB</span>
-          <input type="file" accept="image/*,video/mp4,video/quicktime,video/webm" onChange={handleFiles} />
+          <span>Videos hasta {MAX_CREATIVE_FILE_SIZE_LABEL} · imágenes hasta {MAX_PERSISTED_CREATIVE_SIZE_LABEL}</span>
+          <input type="file" accept="image/*,.mp4,.mov,.webm,.m4v,video/mp4,video/quicktime,video/webm,video/x-m4v" onChange={handleFiles} />
         </label>
 
         {items.length > 0 && (
@@ -1133,6 +1183,89 @@ function writeAscii(view: DataView, offset: number, value: string) {
   for (let index = 0; index < value.length; index += 1) {
     view.setUint8(offset + index, value.charCodeAt(index));
   }
+}
+
+function resolveCreativeFileType(file: File) {
+  if (IMAGE_TYPES.includes(file.type)) return { assetType: "image" as const, contentType: file.type };
+  if (VIDEO_TYPES.includes(file.type)) return { assetType: "video" as const, contentType: file.type };
+
+  const extension = file.name.toLowerCase().split(".").pop();
+  const fallbackTypes: Record<string, { assetType: "image" | "video"; contentType: string }> = {
+    jpg: { assetType: "image", contentType: "image/jpeg" },
+    jpeg: { assetType: "image", contentType: "image/jpeg" },
+    png: { assetType: "image", contentType: "image/png" },
+    webp: { assetType: "image", contentType: "image/webp" },
+    gif: { assetType: "image", contentType: "image/gif" },
+    mp4: { assetType: "video", contentType: "video/mp4" },
+    mov: { assetType: "video", contentType: "video/quicktime" },
+    webm: { assetType: "video", contentType: "video/webm" },
+    m4v: { assetType: "video", contentType: "video/x-m4v" },
+  };
+
+  return extension ? fallbackTypes[extension] || null : null;
+}
+
+async function uploadCreativeAsset({
+  file,
+  contentType,
+  storagePath,
+  onProgress,
+}: {
+  file: File;
+  contentType: string;
+  storagePath: string;
+  onProgress: (percentage: number) => void;
+}) {
+  const supabase = createSupabaseBrowserClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const supabaseUrl = getSupabaseEnv().url;
+
+  if (!session?.access_token || !supabaseUrl) throw new Error("Vuelve a iniciar sesión antes de subir el archivo.");
+
+  const hostname = new URL(supabaseUrl).hostname;
+  const endpoint = hostname.endsWith(".supabase.co")
+    ? `https://${hostname.split(".")[0]}.storage.supabase.co/storage/v1/upload/resumable`
+    : `${new URL(supabaseUrl).origin}/storage/v1/upload/resumable`;
+
+  await new Promise<void>((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint,
+      retryDelays: [0, 3_000, 5_000, 10_000, 20_000],
+      headers: {
+        authorization: `Bearer ${session.access_token}`,
+        "x-upsert": "false",
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      metadata: {
+        bucketName: "creative-assets",
+        objectName: storagePath,
+        contentType,
+        cacheControl: "3600",
+      },
+      chunkSize: 6 * 1024 * 1024,
+      onError: reject,
+      onProgress: (bytesUploaded, bytesTotal) => {
+        onProgress(Math.min(100, Math.round((bytesUploaded / Math.max(bytesTotal, 1)) * 100)));
+      },
+      onSuccess: () => resolve(),
+    });
+
+    upload.findPreviousUploads()
+      .then((previousUploads) => {
+        if (previousUploads.length) upload.resumeFromPreviousUpload(previousUploads[0]);
+        upload.start();
+      })
+      .catch(reject);
+  });
+}
+
+function friendlyUploadError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/maximum allowed size|payload too large|too large|413/i.test(message)) {
+    return `El almacenamiento rechazó este archivo por tamaño. Los videos que superan ${MAX_PERSISTED_CREATIVE_SIZE_LABEL} se procesan localmente sin guardar el original.`;
+  }
+  return message || "No se pudo subir el archivo.";
 }
 
 function captureFrame(video: HTMLVideoElement, time: number) {
