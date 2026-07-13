@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, CSSProperties, ReactNode, useState } from "react";
+import Image from "next/image";
 import { ArrowLeft, Brain, Check, Clipboard, Eye, FileText, FlaskConical, ImageUp, Library, Loader2, Lock, Plus, Rocket, Sparkles } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
@@ -9,6 +10,7 @@ type UploadItem = {
   assetId?: string;
   name: string;
   file?: File;
+  previewUrl?: string;
   assetType?: "image" | "video";
   status: "subiendo" | "listo" | "error";
   analysisStatus?: "idle" | "analizando" | "listo" | "error";
@@ -31,6 +33,7 @@ type CreativeHistoryItem = {
   name: string;
   assetType: "image" | "video";
   createdAt: string;
+  previewUrl?: string;
   result: CreativeAnalysisResult;
 };
 
@@ -41,6 +44,13 @@ type CreativeDissection = {
   verdict?: string;
   summary?: string;
   winning_reason?: string;
+  core_diagnosis?: {
+    what_really_sells?: string;
+    central_tension?: string;
+    belief_shift?: string;
+    biggest_leak?: string;
+    evidence_note?: string;
+  };
   why_it_works?: string[];
   diagnosis?: Record<string, Signal>;
   signals?: {
@@ -107,19 +117,41 @@ type CreativeDissection = {
   };
   persuasion_triggers?: Array<{ name?: string; timestamp?: string; score?: number; explanation?: string }>;
   emotional_arc?: Array<{ timestamp?: string; emotion?: string; function?: string }>;
+  evidence_timeline?: Array<{
+    timestamp?: string;
+    spoken_or_visible?: string;
+    visual_action?: string;
+    viewer_thought?: string;
+    psychological_mechanism?: string;
+    conversion_role?: string;
+    decision?: string;
+  }>;
   winning_recipe?: string[];
   keep?: string[];
   test?: string[];
   change?: string[];
   produce_next?: string[];
   original_script?: string;
-  script_variants?: Array<{ name?: string; scenario?: string; script?: string; team_brief?: string[] }>;
+  script_variants?: Array<{
+    name?: string;
+    hypothesis?: string;
+    audience_angle?: string;
+    scenario?: string;
+    must_preserve?: string[];
+    script?: string;
+    beat_sheet?: Array<{ timestamp?: string; shot?: string; spoken_line?: string; on_screen_text?: string }>;
+    team_brief?: string[];
+    why_it_may_win?: string;
+    single_test_variable?: string;
+  }>;
   variants?: Array<{ name?: string; angle?: string; hook?: string; execution?: string }>;
   replication_plan?: {
     voice_tone?: string;
     editing_notes?: string[];
     shot_list?: string[];
     static_ad_angle?: string;
+    production_brief?: string;
+    do_not_change?: string[];
   };
   generation_prompts?: Array<{ name?: string; mode?: string; prompt?: string }>;
 };
@@ -133,6 +165,7 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
     id: selectedHistory.id,
     name: selectedHistory.name,
     assetType: selectedHistory.assetType,
+    previewUrl: selectedHistory.previewUrl,
     status: "listo" as const,
     analysis: selectedHistory.result,
   } : undefined);
@@ -161,7 +194,7 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
 
     for (const file of files) {
       const localId = crypto.randomUUID();
-      setItems((current) => [...current, { id: localId, name: file.name, file, status: "subiendo" }]);
+      setItems((current) => [...current, { id: localId, name: file.name, file, previewUrl: URL.createObjectURL(file), status: "subiendo" }]);
 
       const assetType = IMAGE_TYPES.includes(file.type) ? "image" : VIDEO_TYPES.includes(file.type) ? "video" : null;
 
@@ -300,6 +333,8 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
           </button>
         </header>
 
+        {activeItem.previewUrl && <CreativePreview type={activeItem.assetType} url={activeItem.previewUrl} name={activeItem.name} />}
+
         <CreativeAnalysisCard result={activeItem.analysis} />
 
         <footer className="analysis-action-bar">
@@ -382,6 +417,15 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
   );
 }
 
+function CreativePreview({ type, url, name }: { type?: "image" | "video"; url: string; name: string }) {
+  return (
+    <section className="creative-source-preview">
+      <div><span className="eyebrow">Creativo analizado</span><b>{cleanFileName(name)}</b></div>
+      {type === "video" ? <video src={url} controls preload="metadata" /> : <Image src={url} alt={`Creativo ${cleanFileName(name)}`} width={1200} height={1200} unoptimized />}
+    </section>
+  );
+}
+
 function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
   const analysis = normalizeClientAnalysis(result.analysis, result);
   const score = analysis.score ?? result.score;
@@ -424,7 +468,26 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
         <a href="#plan"><Rocket size={15} /> Plan</a>
       </nav>
 
-      <div className="creative-deep-grid analysis-section-anchor" id="resumen">
+      <section className="analysis-section analysis-section-anchor" id="resumen">
+        <header className="analysis-section-heading">
+          <span>01</span><div><h3>Qué está haciendo vender al creativo</h3><p>Diagnóstico basado en frases, escenas y señales visibles.</p></div>
+        </header>
+
+        <ReportPanel icon={<Eye size={18} />} title="La lectura central" wide>
+          <div className="core-diagnosis-grid">
+            <Insight label="Lo que realmente vende" value={analysis.core_diagnosis?.what_really_sells} />
+            <Insight label="Tensión central" value={analysis.core_diagnosis?.central_tension} />
+            <Insight label="Cambio de creencia" value={analysis.core_diagnosis?.belief_shift} />
+            <Insight label="Mayor fuga" value={analysis.core_diagnosis?.biggest_leak} />
+          </div>
+          {analysis.core_diagnosis?.evidence_note && <p className="evidence-note">{analysis.core_diagnosis.evidence_note}</p>}
+        </ReportPanel>
+
+        <ReportPanel icon={<FlaskConical size={18} />} title="El anuncio, momento a momento" wide>
+          <EvidenceTimeline items={analysis.evidence_timeline || []} />
+        </ReportPanel>
+
+        <div className="creative-deep-grid summary-grid">
         <ReportPanel icon={<Sparkles size={18} />} title="La receta ganadora">
           <NumberedList items={analysis.winning_recipe || []} />
         </ReportPanel>
@@ -435,7 +498,14 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
           <b className="panel-mini-title">Que probar despues</b>
           <ArrowList items={analysis.test || []} />
         </ReportPanel>
+        </div>
+      </section>
 
+      <section className="analysis-section analysis-section-anchor" id="psicologia">
+        <header className="analysis-section-heading">
+          <span>02</span><div><h3>Por qué persuade</h3><p>La tensión, las creencias y las decisiones que mueve en la compradora.</p></div>
+        </header>
+        <div className="creative-deep-grid psychology-grid">
         <ReportPanel icon={<Brain size={18} />} title="Hook y mecanismo">
           <div className="hook-summary">
             <strong>{hook?.effectiveness_score ?? psychology?.scroll_stop?.strength_score ?? "-"}/10</strong>
@@ -446,7 +516,7 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
           <FrameList frames={hook?.frame_descriptions || []} />
         </ReportPanel>
 
-        <ReportPanel icon={<Brain size={18} />} title="Psicologia del comprador" anchorId="psicologia">
+        <ReportPanel icon={<Brain size={18} />} title="Psicologia del comprador">
           <Insight label="Deseo profundo" value={buyer?.deep_desire} />
           <Insight label="Dolor agitado" value={buyer?.agitated_pain} />
           <Insight label="Cambio de identidad" value={buyer?.identity_shift} />
@@ -484,10 +554,21 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
           <Timeline items={analysis.emotional_arc || []} />
           <ChipRow items={[...(patterns?.power_words || []), ...(patterns?.ugc_markers || [])]} />
         </ReportPanel>
-      </div>
+        </div>
+      </section>
 
-      <ReportPanel icon={<FileText size={18} />} title="Guion original y variantes" wide anchorId="guiones">
-        {analysis.original_script && <p className="script-box">{analysis.original_script}</p>}
+      <section className="analysis-section analysis-section-anchor" id="guiones">
+        <header className="analysis-section-heading">
+          <span>03</span><div><h3>Guiones listos para usar</h3><p>El original recuperado y tres hipótesis completas para iterar.</p></div>
+        </header>
+        <ReportPanel icon={<FileText size={18} />} title="Guion original" wide>
+          {analysis.original_script ? (
+            <div className="original-script-block">
+              <p className="script-box">{analysis.original_script}</p>
+              <button type="button" onClick={() => copyText(analysis.original_script || "")}><Clipboard size={14} /> Copiar guion</button>
+            </div>
+          ) : <p className="muted-text">No hubo audio o texto suficiente para recuperar el guion.</p>}
+        </ReportPanel>
         <div className="variant-grid">
           {(analysis.script_variants || []).map((variant, index) => (
             <article key={`${variant.name}-${index}`} className="variant-card">
@@ -498,20 +579,33 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
                   Copiar
                 </button>
               </div>
+              {variant.hypothesis && <Insight label="Hipótesis" value={variant.hypothesis} />}
+              {variant.audience_angle && <Insight label="Ángulo" value={variant.audience_angle} />}
               {variant.scenario && <b>{variant.scenario}</b>}
-              <p>{variant.script}</p>
+              <p className="variant-script">{variant.script}</p>
+              <BeatSheet items={variant.beat_sheet || []} />
+              <CheckList items={variant.must_preserve || []} />
               <CheckList items={variant.team_brief || []} />
+              {variant.why_it_may_win && <Insight label="Por qué puede ganar" value={variant.why_it_may_win} />}
+              {variant.single_test_variable && <Insight label="Variable única" value={variant.single_test_variable} />}
             </article>
           ))}
         </div>
-      </ReportPanel>
+      </section>
 
-      <div className="creative-deep-grid analysis-section-anchor" id="plan">
+      <section className="analysis-section analysis-section-anchor" id="plan">
+        <header className="analysis-section-heading">
+          <span>04</span><div><h3>Plan para producir la siguiente ronda</h3><p>Un brief operativo, no una lista de ideas sueltas.</p></div>
+        </header>
+        <div className="creative-deep-grid plan-grid">
         <ReportPanel icon={<Rocket size={18} />} title="Plan de replicacion">
+          <Insight label="Brief de producción" value={analysis.replication_plan?.production_brief} />
           <Insight label="Tono" value={analysis.replication_plan?.voice_tone} />
           <CheckList items={analysis.replication_plan?.editing_notes || []} />
           <b className="panel-mini-title">Shot list</b>
           <NumberedList items={analysis.replication_plan?.shot_list || []} />
+          <b className="panel-mini-title">No cambiar</b>
+          <CheckList items={analysis.replication_plan?.do_not_change || []} />
           <Insight label="Angulo para estatico" value={analysis.replication_plan?.static_ad_angle} />
         </ReportPanel>
 
@@ -532,7 +626,8 @@ function CreativeAnalysisCard({ result }: { result: CreativeAnalysisResult }) {
             ))}
           </div>
         </ReportPanel>
-      </div>
+        </div>
+      </section>
     </section>
   );
 }
@@ -738,6 +833,45 @@ function ProgressList({ items }: { items: Array<{ name?: string; timestamp?: str
         </article>
       ))}
     </div>
+  );
+}
+
+function EvidenceTimeline({ items }: { items: NonNullable<CreativeDissection["evidence_timeline"]> }) {
+  if (!items.length) return <p className="muted-text">Este análisis anterior no incluye la lectura por momentos.</p>;
+  return (
+    <div className="evidence-timeline">
+      {items.map((item, index) => (
+        <article key={`${item.timestamp}-${index}`}>
+          <time>{item.timestamp || `Momento ${index + 1}`}</time>
+          <div>
+            <blockquote>{item.spoken_or_visible || "Sin frase comprobable"}</blockquote>
+            {item.visual_action && <p><b>Qué ocurre</b>{item.visual_action}</p>}
+            {item.viewer_thought && <p><b>Qué piensa la espectadora</b>{item.viewer_thought}</p>}
+            {item.psychological_mechanism && <p><b>Por qué funciona</b>{item.psychological_mechanism}</p>}
+            {item.conversion_role && <p><b>Función en la venta</b>{item.conversion_role}</p>}
+          </div>
+          <span className={`evidence-decision ${(item.decision || "").toLowerCase()}`}>{item.decision || "Revisar"}</span>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function BeatSheet({ items }: { items: NonNullable<NonNullable<CreativeDissection["script_variants"]>[number]["beat_sheet"]> }) {
+  if (!items.length) return null;
+  return (
+    <details className="beat-sheet">
+      <summary>Ver tomas y textos</summary>
+      <div>
+        {items.map((item, index) => (
+          <article key={`${item.timestamp}-${index}`}>
+            <time>{item.timestamp || `${index + 1}`}</time>
+            <p><b>{item.shot}</b>{item.spoken_line}</p>
+            {item.on_screen_text && <span>Texto: {item.on_screen_text}</span>}
+          </article>
+        ))}
+      </div>
+    </details>
   );
 }
 

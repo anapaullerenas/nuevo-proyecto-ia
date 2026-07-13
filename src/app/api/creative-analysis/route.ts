@@ -7,6 +7,14 @@ type CreativeAnalysisInput = {
   frames?: string[];
 };
 
+type VideoTranscript = {
+  text: string;
+  segments: Array<{ start: number; end: number; text: string }>;
+  warning?: string;
+};
+
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
 
@@ -67,10 +75,12 @@ export async function POST(request: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(12);
 
+    const transcript = asset.asset_type === "video" ? await transcribeVideo(supabase, asset) : null;
     const result = await analyzeWithOpenAI({
       brand,
       asset,
       imageInputs,
+      transcript,
       previousRecipes: (recipes || []).map((recipe) => recipe.rule).filter(Boolean),
     });
 
@@ -109,6 +119,60 @@ export async function POST(request: NextRequest) {
   }
 }
 
+async function transcribeVideo(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  asset: { storage_path: string; file_name: string | null; mime_type: string | null },
+): Promise<VideoTranscript> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("La transcripción del video aún no está activa.");
+
+  const { data, error } = await supabase.storage.from("creative-assets").download(asset.storage_path);
+  if (error || !data) throw new Error(error?.message || "No pude descargar el video para escucharlo.");
+
+  if (data.size > 24 * 1024 * 1024) {
+    return {
+      text: "",
+      segments: [],
+      warning: "El archivo supera 24 MB; el análisis visual continúa, pero el guion no puede transcribirse con precisión.",
+    };
+  }
+
+  const form = new FormData();
+  form.append(
+    "file",
+    new File([data], asset.file_name || "creativo.mp4", { type: asset.mime_type || data.type || "video/mp4" }),
+  );
+  form.append("model", "whisper-1");
+  form.append("language", "es");
+  form.append("response_format", "verbose_json");
+  form.append("timestamp_granularities[]", "segment");
+
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`No pude escuchar el video: ${message.slice(0, 180)}`);
+  }
+
+  const json = (await response.json()) as {
+    text?: string;
+    segments?: Array<{ start?: number; end?: number; text?: string }>;
+  };
+
+  return {
+    text: json.text?.trim() || "",
+    segments: (json.segments || []).map((segment) => ({
+      start: Number(segment.start) || 0,
+      end: Number(segment.end) || 0,
+      text: segment.text?.trim() || "",
+    })).filter((segment) => segment.text),
+  };
+}
+
 async function getImageInputs(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
   asset: { asset_type: string; storage_path: string; mime_type: string | null },
@@ -140,11 +204,13 @@ async function analyzeWithOpenAI({
   brand,
   asset,
   imageInputs,
+  transcript,
   previousRecipes,
 }: {
   brand: Record<string, string | null>;
   asset: { asset_type: string; file_name: string | null };
   imageInputs: Array<{ type: string; image_url: string }>;
+  transcript: VideoTranscript | null;
   previousRecipes: string[];
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -168,6 +234,14 @@ CREATIVO
 Tipo: ${asset.asset_type}
 Archivo: ${asset.file_name || "Sin nombre"}
 Frames recibidos: ${imageInputs.length}
+
+TRANSCRIPCION REAL DEL AUDIO
+${transcript?.warning || (transcript?.text ? transcript.text : "No aplica o no hay audio comprobable.")}
+
+SEGMENTOS CON TIEMPOS
+${transcript?.segments.length
+  ? transcript.segments.map((segment) => `[${formatSeconds(segment.start)}-${formatSeconds(segment.end)}] ${segment.text}`).join("\n")
+  : "No hay segmentos con tiempos. No inventes diálogo."}
 `;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -179,7 +253,7 @@ Frames recibidos: ${imageInputs.length}
     body: JSON.stringify({
       model: process.env.OPENAI_VISION_MODEL || "gpt-4.1",
       temperature: 0.32,
-      max_output_tokens: 6000,
+      max_output_tokens: 12000,
       input: [
         {
           role: "system",
@@ -190,7 +264,7 @@ Frames recibidos: ${imageInputs.length}
           content: [
             {
               type: "input_text",
-              text: `${brandContext}\nAnaliza este creativo con el esquema JSON obligatorio. Si es video, trata los frames como momentos secuenciales del anuncio.`,
+              text: `${brandContext}\nAnaliza este creativo con el esquema JSON obligatorio. Los frames están en orden cronológico. Usa la transcripción como fuente de verdad para el guion y señala con claridad cualquier inferencia visual.`,
             },
             ...imageInputs,
           ],
@@ -258,6 +332,7 @@ function normalizeAnalysisShape(json: Record<string, unknown>) {
         : typeof json.summary === "string"
           ? json.summary
           : "El creativo fue analizado por estructura, psicología, claridad, oferta y potencial de producción.",
+    core_diagnosis: isRecord(json.core_diagnosis) ? json.core_diagnosis : {},
     signals: isRecord(json.signals)
       ? json.signals
       : {
@@ -270,6 +345,7 @@ function normalizeAnalysisShape(json: Record<string, unknown>) {
     psychological_analysis: isRecord(json.psychological_analysis) ? json.psychological_analysis : {},
     persuasion_triggers: toArray(json.persuasion_triggers),
     emotional_arc: toArray(json.emotional_arc),
+    evidence_timeline: toArray(json.evidence_timeline),
     winning_recipe: toStringArray(json.winning_recipe),
     keep: toStringArray(json.keep),
     test: toStringArray(json.test || json.change || json.produce_next),
@@ -278,6 +354,12 @@ function normalizeAnalysisShape(json: Record<string, unknown>) {
     replication_plan: isRecord(json.replication_plan) ? json.replication_plan : {},
     generation_prompts: toArray(json.generation_prompts),
   };
+}
+
+function formatSeconds(value: number) {
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.floor(value % 60);
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 function extractResponseText(data: { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> }) {
