@@ -23,14 +23,18 @@ type ChargeInput = { userId: string; amount: number; reason: CreditModule; brand
 export async function chargeCredits(input: ChargeInput) {
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    console.error("SUPABASE_SERVICE_ROLE_KEY is missing; credit charging is temporarily bypassed to keep the creative workspace available.");
-    return { charged: false, amount: 0 };
+    console.error("SUPABASE_SERVICE_ROLE_KEY is missing; credit charging is unavailable.");
+    throw new CreditError("configuration", "No pudimos validar tus créditos. Intenta nuevamente en unos minutos.");
   }
   if (await isUnlimited(admin, input.userId)) return { charged: false, amount: 0 };
   if (input.route) await enforceRequestLimit(admin, input.userId, input.route);
   const monthlyLimit = Number(process.env.MONTHLY_SPEND_LIMIT_USD || 300);
   const start = new Date(); start.setUTCDate(1); start.setUTCHours(0, 0, 0, 0);
-  const { data: monthRows } = await admin.from("credit_ledger").select("metadata").gte("created_at", start.toISOString());
+  const { data: monthRows, error: monthError } = await admin.from("credit_ledger").select("metadata").gte("created_at", start.toISOString());
+  if (monthError) {
+    console.error("monthly credit cost check failed", monthError);
+    throw new CreditError("configuration", "No pudimos validar el límite de uso. Intenta nuevamente en unos minutos.");
+  }
   const monthCost = (monthRows || []).reduce((sum, row) => sum + Number((row.metadata as { cost_usd?: number } | null)?.cost_usd || 0), 0);
   if (monthCost >= monthlyLimit) throw new CreditError("monthly_limit", "La plataforma está en mantenimiento preventivo. Tus créditos no se descontaron.");
   const metadata = { module: input.reason, model: input.model, provider: input.provider, input_tokens: input.inputTokens || 0, output_tokens: input.outputTokens || 0, images: input.images || 0, cost_usd: input.costUsd || 0, brand_id: input.brandId || null };
@@ -75,7 +79,15 @@ async function enforceRequestLimit(admin: NonNullable<ReturnType<typeof createSu
   const rules: Record<string, { max: number; ms: number }> = { chat: { max: 10, ms: 60_000 }, image: { max: 10, ms: 86_400_000 }, analysis: { max: 15, ms: 604_800_000 } };
   const rule = rules[route];
   if (!rule) return;
-  const { count } = await admin.from("request_events").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("route", route).gte("created_at", new Date(now - rule.ms).toISOString());
+  const { count, error: countError } = await admin.from("request_events").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("route", route).gte("created_at", new Date(now - rule.ms).toISOString());
+  if (countError) {
+    console.error("request limit check failed", countError);
+    throw new CreditError("configuration", "No pudimos validar el límite de uso. Intenta nuevamente en unos minutos.");
+  }
   if ((count || 0) >= rule.max) throw new CreditError("rate_limit", "Llegaste al límite temporal de esta acción. Intenta nuevamente más tarde.");
-  await admin.from("request_events").insert({ user_id: userId, route });
+  const { error: insertError } = await admin.from("request_events").insert({ user_id: userId, route });
+  if (insertError) {
+    console.error("request event insert failed", insertError);
+    throw new CreditError("configuration", "No pudimos registrar esta acción. Intenta nuevamente en unos minutos.");
+  }
 }

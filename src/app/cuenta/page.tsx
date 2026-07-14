@@ -8,9 +8,10 @@ import { RechargePackages } from "@/components/RechargePackages";
 export default async function CuentaPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
-  const [{ data: ledger }, { data: pendingRecharge }] = await Promise.all([
+  const [{ data: ledger }, { data: pendingRecharge }, { data: latestApprovedRecharge }] = await Promise.all([
     workspace.supabase.from("credit_ledger").select("id,amount,reason,created_at,balance_after,allowance_remaining_after").eq("user_id", workspace.user.id).order("created_at", { ascending: false }).limit(30),
     workspace.supabase.from("recharge_requests").select("folio,status,created_at").eq("user_id", workspace.user.id).eq("status", "pendiente").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    workspace.supabase.from("recharge_requests").select("folio,credits,resolved_at").eq("user_id", workspace.user.id).eq("status", "aprobada").order("resolved_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const wallet = workspace.wallet;
   const allowance = Number(wallet?.monthly_allowance || 5000);
@@ -51,6 +52,7 @@ export default async function CuentaPage() {
             </div>
           </div>
           {!workspace.isUnlimited && <section className="allowance-card"><div><span>Cuota mensual</span><b>{allowanceRemaining.toLocaleString("es-MX")} de {allowance.toLocaleString("es-MX")} disponibles</b></div><div className="allowance-track"><span style={{ width: `${Math.min(100, (allowanceUsed / allowance) * 100)}%` }} /></div><small>Saldo comprado sin vencimiento: {Number(wallet?.balance || 0).toLocaleString("es-MX")} créditos</small></section>}
+          {latestApprovedRecharge?.resolved_at && <p className="recharge-approved">Tu recarga de <b>{Number(latestApprovedRecharge.credits).toLocaleString("es-MX")} créditos</b> ya está disponible · {latestApprovedRecharge.folio}</p>}
           <RechargePackages pendingFolio={pendingRecharge?.folio} />
           <div className="usage-table">
             <b>Referencia de consumo</b>
