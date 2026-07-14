@@ -10,9 +10,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const { name } = (await request.json()) as { name?: string };
   const cleanName = name?.trim().slice(0, 90);
   if (!cleanName || cleanName.length < 2) return NextResponse.json({ error: "Escribe un nombre válido." }, { status: 400 });
-  const { data: analysis } = await supabase.from("creative_analyses").select("asset_id").eq("id", id).eq("owner_id", user.id).maybeSingle();
-  if (!analysis?.asset_id) return NextResponse.json({ error: "No encontré ese creativo." }, { status: 404 });
-  const { error } = await supabase.from("creative_assets").update({ file_name: cleanName }).eq("id", analysis.asset_id).eq("owner_id", user.id);
+  const { data: analysis } = await supabase.from("creative_analyses").select("asset_id,analysis").eq("id", id).eq("owner_id", user.id).maybeSingle();
+  if (!analysis) return NextResponse.json({ error: "No encontré ese análisis." }, { status: 404 });
+  const stored = typeof analysis.analysis === "object" && analysis.analysis !== null && !Array.isArray(analysis.analysis) ? analysis.analysis : {};
+  const { error } = analysis.asset_id
+    ? await supabase.from("creative_assets").update({ file_name: cleanName }).eq("id", analysis.asset_id).eq("owner_id", user.id)
+    : await supabase.from("creative_analyses").update({ analysis: { ...stored, title: cleanName } }).eq("id", id).eq("owner_id", user.id);
   if (error) return NextResponse.json({ error: "No se pudo cambiar el nombre." }, { status: 500 });
   return NextResponse.json({ name: cleanName });
 }
