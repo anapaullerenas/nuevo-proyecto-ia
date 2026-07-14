@@ -1,12 +1,15 @@
 "use client";
 import { useState } from "react";
 import { Loader2, MessageCircle } from "lucide-react";
+import { RECHARGE_PACKAGES } from "@/lib/recharge-packages";
 
-const packages = [
-  { id: "impulso", name: "Impulso", price: "$10", credits: "2,000 créditos", note: "Para impulsar pruebas puntuales" },
-  { id: "crecimiento", name: "Crecimiento", price: "$25", credits: "6,000 créditos", note: "Para crear y analizar cada semana" },
-  { id: "estudio", name: "Estudio", price: "$50", credits: "14,000 créditos", note: "Para producción creativa continua" },
-];
+const packages = Object.entries(RECHARGE_PACKAGES).map(([id, pack]) => ({
+  id,
+  name: pack.name,
+  price: `$${pack.amount}`,
+  credits: `${pack.credits.toLocaleString("es-MX")} créditos`,
+  note: pack.note,
+}));
 
 export function RechargePackages({ pendingFolio }: { pendingFolio?: string | null }) {
   const [busy, setBusy] = useState<string | null>(null); const [message, setMessage] = useState("");

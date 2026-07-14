@@ -4,6 +4,7 @@ import { AppFrame, SetupState } from "@/components/AppFrame";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspace } from "@/lib/workspace";
 import { RechargePackages } from "@/components/RechargePackages";
+import { CREDIT_CATALOG, CREDIT_LABELS, creditPriceUsd, INITIAL_INCLUDED_CREDITS, INITIAL_INCLUDED_USD } from "@/lib/credit-catalog";
 
 export default async function CuentaPage() {
   const workspace = await getWorkspace();
@@ -14,7 +15,7 @@ export default async function CuentaPage() {
     workspace.supabase.from("recharge_requests").select("folio,credits,resolved_at").eq("user_id", workspace.user.id).eq("status", "aprobada").order("resolved_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const wallet = workspace.wallet;
-  const allowance = Number(wallet?.monthly_allowance || 5000);
+  const allowance = Number(wallet?.monthly_allowance || INITIAL_INCLUDED_CREDITS);
   const allowanceUsed = Number(wallet?.allowance_used || 0);
   const allowanceRemaining = Math.max(0, allowance - allowanceUsed);
 
@@ -51,13 +52,22 @@ export default async function CuentaPage() {
               <p>Las recargas compradas no expiran y se confirman manualmente por WhatsApp.</p>
             </div>
           </div>
-          {!workspace.isUnlimited && <section className="allowance-card"><div><span>Cuota mensual</span><b>{allowanceRemaining.toLocaleString("es-MX")} de {allowance.toLocaleString("es-MX")} disponibles</b></div><div className="allowance-track"><span style={{ width: `${Math.min(100, (allowanceUsed / allowance) * 100)}%` }} /></div><small>Saldo comprado sin vencimiento: {Number(wallet?.balance || 0).toLocaleString("es-MX")} créditos</small></section>}
+          {!workspace.isUnlimited && <section className="allowance-card"><div><span>Créditos incluidos</span><b>{allowanceRemaining.toLocaleString("es-MX")} de {allowance.toLocaleString("es-MX")} disponibles</b></div><div className="allowance-track"><span style={{ width: `${Math.min(100, (allowanceUsed / allowance) * 100)}%` }} /></div><small>Tu cuenta inicia con {INITIAL_INCLUDED_CREDITS} créditos (${INITIAL_INCLUDED_USD.toFixed(2)} de uso). Cuando se terminan, puedes seguir con saldo comprado por recarga.</small><small>Saldo comprado sin vencimiento: {Number(wallet?.balance || 0).toLocaleString("es-MX")} créditos</small></section>}
           {latestApprovedRecharge?.resolved_at && <p className="recharge-approved">Tu recarga de <b>{Number(latestApprovedRecharge.credits).toLocaleString("es-MX")} créditos</b> ya está disponible · {latestApprovedRecharge.folio}</p>}
           <RechargePackages pendingFolio={pendingRecharge?.folio} />
-          <div className="usage-table">
-            <b>Referencia de consumo</b>
-            <p>Chat: 3 créditos · Análisis de guion: 40 · Estático: 60 · Video: 120 · Meta: 120 · Imagen: 120 estándar / 250 alta.</p>
-          </div>
+          <section className="usage-table account-cost-table">
+            <header><b>Costos por acción</b><small>1 crédito = $0.01 de saldo</small></header>
+            <div>
+              {CREDIT_CATALOG.map((item) => (
+                <article key={item.module}>
+                  <span>{item.label}</span>
+                  <small>{item.description}</small>
+                  <b>{item.credits} cr</b>
+                  <em>${creditPriceUsd(item.credits).toFixed(2)}</em>
+                </article>
+              ))}
+            </div>
+          </section>
           <section className="ledger-history"><header><b>Historial de consumo</b><small>Últimos 30 movimientos</small></header>{ledger?.length ? <div>{ledger.map((entry) => <article key={entry.id}><time>{new Date(entry.created_at).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}</time><span>{labelReason(entry.reason)}</span><b className={entry.amount > 0 ? "positive" : ""}>{entry.amount > 0 ? "+" : ""}{entry.amount}</b><small>{Number(entry.allowance_remaining_after || 0) + Number(entry.balance_after || 0)} restantes</small></article>)}</div> : <p>Aún no hay movimientos de créditos.</p>}</section>
           <form action={signOut}>
             <button className="soft-button">
@@ -70,4 +80,4 @@ export default async function CuentaPage() {
   );
 }
 
-function labelReason(reason: string) { const labels: Record<string,string> = { chat_message:"Chat IA",voice_note:"Nota de voz",creative_analysis_image:"Análisis estático",creative_analysis_video:"Análisis de video",creative_analysis_script:"Análisis de guion",meta_analysis:"Análisis Meta",static_brief:"Dirección creativa",static_generate_medium:"Imagen estándar",static_generate_high:"Imagen alta",static_edit:"Corrección de imagen",reference_analysis:"Referencia visual",recharge:"Recarga",refund:"Reembolso",admin_grant:"Créditos de cortesía" }; return labels[reason] || reason; }
+function labelReason(reason: string) { const labels: Record<string,string> = { ...CREDIT_LABELS, recharge:"Recarga",refund:"Reembolso",admin_grant:"Créditos de cortesía" }; return labels[reason] || reason; }

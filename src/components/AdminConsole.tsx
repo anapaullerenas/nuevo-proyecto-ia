@@ -18,6 +18,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
+import { CREDIT_LABELS, INITIAL_INCLUDED_CREDITS, INITIAL_INCLUDED_USD } from "@/lib/credit-catalog";
 
 type UserRow = {
   id: string;
@@ -102,7 +103,7 @@ export type AdminDashboardData = {
   };
   users: UserRow[];
   recharges: Recharge[];
-  pricing: Array<{ module: string; credits: number; average: number; price: number; margin: number }>;
+  pricing: Array<{ module: string; label: string; description: string; credits: number; estimated: number; average: number; price: number; margin: number }>;
   alerts: {
     anomalies: string[];
     lowBalance: number;
@@ -113,18 +114,7 @@ export type AdminDashboardData = {
   };
 };
 
-const labels: Record<string, string> = {
-  chat_message: "Chat",
-  voice_note: "Transcripción",
-  creative_analysis_image: "Análisis de imagen",
-  creative_analysis_video: "Análisis de video",
-  meta_analysis: "Análisis Meta",
-  static_brief: "Ficha creativa",
-  static_generate_medium: "Imagen medium",
-  static_generate_high: "Imagen high",
-  static_edit: "Edición",
-  reference_analysis: "Referencia",
-};
+const labels: Record<string, string> = CREDIT_LABELS;
 
 export function AdminConsole({ data }: { data: AdminDashboardData }) {
   const [query, setQuery] = useState("");
@@ -226,6 +216,7 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
       <div className="provider-split">
         <span>OpenAI <b>${data.metrics.openaiCost.toFixed(2)}</b></span>
         <span>Anthropic <b>${data.metrics.anthropicCost.toFixed(2)}</b></span>
+        <span>Inicio usuaria <b>{INITIAL_INCLUDED_CREDITS} cr · ${INITIAL_INCLUDED_USD.toFixed(2)}</b></span>
       </div>
 
       <section className="admin-counter-grid">
@@ -288,8 +279,8 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
       </section>
 
       <section className="admin-pricing">
-        <header><span className="eyebrow">Costos y precios</span><h2>Margen vivo por acción</h2></header>
-        <div className="admin-table-wrap"><table><thead><tr><th>Acción</th><th>Créditos</th><th>Precio equivalente</th><th>Costo API promedio</th><th>Margen</th></tr></thead><tbody>{data.pricing.map((price) => <tr key={price.module}><td>{labels[price.module] || price.module}</td><td>{price.credits}</td><td>${price.price.toFixed(2)}</td><td>${price.average.toFixed(4)}</td><td>{price.margin ? `${price.margin.toFixed(1)}x` : "Sin datos"}</td></tr>)}</tbody></table></div>
+        <header><div><span className="eyebrow">Costos y precios</span><h2>Tabla maestra por acción</h2></div><small>Precio para usuaria vs. costo real estimado y costo promedio observado este mes.</small></header>
+        <div className="admin-table-wrap"><table><thead><tr><th>Acción</th><th>Qué cobra</th><th>Créditos</th><th>Precio usuaria</th><th>Costo estimado</th><th>Costo real prom.</th><th>Margen</th></tr></thead><tbody>{data.pricing.map((price) => <tr key={price.module}><td><b>{price.label || labels[price.module] || price.module}</b><small>{price.module}</small></td><td>{price.description}</td><td>{price.credits}</td><td>${price.price.toFixed(2)}</td><td>${price.estimated.toFixed(4)}</td><td>{price.average ? `$${price.average.toFixed(4)}` : "Sin uso aún"}</td><td>{price.margin ? `${price.margin.toFixed(1)}x` : "Sin datos"}</td></tr>)}</tbody></table></div>
       </section>
 
       <section className="admin-alerts"><AlertTriangle /><div><b>Alertas operativas</b>{alerts.length ? <ul>{alerts.map((alert) => <li key={alert}>{alert}</li>)}</ul> : <p>Sin alertas activas.</p>}</div></section>

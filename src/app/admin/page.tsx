@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AdminConsole, type AdminDashboardData } from "@/components/AdminConsole";
 import { BrandMark } from "@/components/BrandIdentity";
-import { CREDIT_COSTS } from "@/lib/credits";
+import { CREDIT_CATALOG, creditPriceUsd, INITIAL_INCLUDED_CREDITS } from "@/lib/credit-catalog";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -116,7 +116,7 @@ export default async function AdminPage() {
       .reduce((sum, item) => sum + Number(item.file_size || 0), 0);
     const apiCost = userLedger.reduce((sum, item) => sum + Number(item.metadata?.cost_usd || 0), 0);
     const revenue = userRecharges.reduce((sum, item) => sum + Number(item.amount_usd || 0), 0);
-    const allowanceRemaining = Math.max(0, Number(wallet?.monthly_allowance || 5000) - Number(wallet?.allowance_used || 0));
+    const allowanceRemaining = Math.max(0, Number(wallet?.monthly_allowance || INITIAL_INCLUDED_CREDITS) - Number(wallet?.allowance_used || 0));
 
     return {
       id: profile.id,
@@ -196,10 +196,14 @@ export default async function AdminPage() {
         name: profiles.find((profile) => profile.id === item.user_id)?.full_name || "Sin nombre",
         old: now.getTime() - new Date(item.created_at).getTime() > 86_400_000,
       })),
-    pricing: Object.entries(CREDIT_COSTS).map(([module, credits]) => {
+    pricing: CREDIT_CATALOG.map((item) => {
+      const { module, credits } = item;
       const rows = monthLedger.filter((item) => item.amount < 0 && item.metadata?.module === module);
       const average = rows.length ? costOf(rows) / rows.length : 0;
-      return { module, credits, average, price: credits * 0.01, margin: average > 0 ? (credits * 0.01) / average : 0 };
+      const estimated = item.estimatedCostUsd;
+      const effectiveCost = average || estimated;
+      const price = creditPriceUsd(credits);
+      return { module, label: item.label, description: item.description, credits, estimated, average, price, margin: effectiveCost > 0 ? price / effectiveCost : 0 };
     }),
     alerts: {
       anomalies: anomalies.map((item) => `${item.name} (${item.amount.toLocaleString("es-MX")} cr)`),

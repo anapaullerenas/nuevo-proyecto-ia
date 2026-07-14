@@ -1,21 +1,9 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hasUnlimitedAccessEmail } from "@/lib/auth/access-exceptions";
+import { CREDIT_COSTS, type CreditModule } from "@/lib/credit-catalog";
 
-export const CREDIT_COSTS = {
-  chat_message: 3,
-  voice_note: 2,
-  creative_analysis_image: 60,
-  creative_analysis_video: 120,
-  creative_analysis_script: 40,
-  meta_analysis: 120,
-  static_brief: 15,
-  static_generate_medium: 120,
-  static_generate_high: 250,
-  static_edit: 80,
-  reference_analysis: 20,
-} as const;
-
-export type CreditModule = keyof typeof CREDIT_COSTS;
+export { CREDIT_COSTS };
+export type { CreditModule };
 export class CreditError extends Error { constructor(public code: "insufficient_credits" | "daily_limit" | "rate_limit" | "monthly_limit" | "configuration", message: string) { super(message); } }
 
 type ChargeInput = { userId: string; amount: number; reason: CreditModule; brandId?: string | null; provider: "openai" | "anthropic"; model: string; inputTokens?: number; outputTokens?: number; images?: number; costUsd?: number; route?: string };
