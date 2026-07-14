@@ -13,6 +13,12 @@ type BrandForm = {
   brand_story: string; differentiators: string; pains: string; desires: string; objections: string; awareness: string; angles: string; proof: string; beliefs: string; forbidden_claims: string; visual_direction: string;
 };
 
+type BrandImportPayload = Record<string, unknown> & {
+  brand?: Record<string, unknown>;
+  strategic_context?: Record<string, unknown>;
+  contexto_estrategico?: Record<string, unknown>;
+};
+
 const strategicKeys = ["brand_story", "differentiators", "pains", "desires", "objections", "awareness", "angles", "proof", "beliefs", "forbidden_claims", "visual_direction"] as const;
 
 const EXTRACTION_PROMPT = `Actúa como estratega creativo senior especializado en anuncios de performance. Tu tarea es llenar el onboarding de mi marca con la máxima profundidad posible SIN inventar nada.
@@ -76,12 +82,51 @@ function fieldText(value: unknown) {
   return null;
 }
 
+function parsePastedJson(input: string): BrandImportPayload | null {
+  try {
+    const cleaned = input.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "");
+    const jsonStart = cleaned.indexOf("{");
+    const jsonEnd = cleaned.lastIndexOf("}");
+    const parsed = JSON.parse(jsonStart >= 0 && jsonEnd >= jsonStart ? cleaned.slice(jsonStart, jsonEnd + 1) : cleaned);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as BrandImportPayload;
+  } catch {
+    return null;
+  }
+}
+
+function brandImportPatch(payload: BrandImportPayload) {
+  const brand = payload.brand && typeof payload.brand === "object" ? payload.brand : payload;
+  const strategic = payload.strategic_context || payload.contexto_estrategico || {};
+  const patch: Partial<BrandForm> = {};
+
+  (["name", "website", "category", "audience", "offer", "voice", "creative_goal"] as const).forEach((key) => {
+    const value = fieldText(brand[key]);
+    if (value !== null) patch[key] = value;
+  });
+
+  const contentCreator = brand.content_creator ?? brand.content_owner;
+  const contentOwner = normalizeContentOwner(contentCreator);
+  if (contentOwner) patch.content_owner = contentOwner;
+
+  strategicKeys.forEach((key) => {
+    const value = fieldText(strategic[key]);
+    if (value !== null) patch[key] = value;
+  });
+
+  return {
+    patch,
+    contentCreatorNeedsReview: typeof contentCreator === "string" && Boolean(contentCreator.trim()) && !contentOwner,
+  };
+}
+
 export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca madre" }: { initialBrand?: WorkspaceBrand; submitLabel?: string }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [mode, setMode] = useState<"manual" | "ai">("manual");
   const [importText, setImportText] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
   const [copied, setCopied] = useState(false);
   const context = initialBrand?.strategic_context || {};
   const [form, setForm] = useState<BrandForm>({
@@ -97,35 +142,44 @@ export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca
     window.setTimeout(() => setCopied(false), 1800);
   }
 
-  function importFromAi() {
+  async function importFromAi() {
+    if (!importText.trim()) {
+      setMessage("Pega la conversación, tus respuestas o el JSON para continuar.");
+      return;
+    }
+
+    setMessage("");
+    setIsImporting(true);
+
     try {
-      const cleaned = importText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "");
-      const jsonStart = cleaned.indexOf("{");
-      const jsonEnd = cleaned.lastIndexOf("}");
-      const parsed = JSON.parse(jsonStart >= 0 && jsonEnd >= jsonStart ? cleaned.slice(jsonStart, jsonEnd + 1) : cleaned);
-      const brand = parsed.brand || parsed;
-      const strategic = parsed.strategic_context || parsed.contexto_estrategico || {};
-      const contentCreator = brand.content_creator ?? brand.content_owner;
-      const contentOwner = normalizeContentOwner(contentCreator);
-      setForm((current) => {
-        const next = { ...current };
-        (["name", "website", "category", "audience", "offer", "voice", "creative_goal"] as const).forEach((key) => {
-          const value = fieldText(brand[key]);
-          if (value !== null) next[key] = value;
+      let payload = parsePastedJson(importText);
+
+      if (!payload || (!payload.brand && !payload.strategic_context && !payload.contexto_estrategico)) {
+        const response = await fetch("/api/brand-import", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ source: importText }),
         });
-        if (contentOwner) next.content_owner = contentOwner;
-        strategicKeys.forEach((key) => {
-          const value = fieldText(strategic[key]);
-          if (value !== null) next[key] = value;
-        });
-        return next;
-      });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "No pudimos extraer la información de tu marca.");
+        payload = data as BrandImportPayload;
+      }
+
+      const imported = brandImportPatch(payload);
+      if (Object.keys(imported.patch).length === 0) {
+        throw new Error("No encontré información de marca para rellenar. Pega también tus respuestas, no sólo las preguntas.");
+      }
+
+      setForm((current) => ({ ...current, ...imported.patch }));
       setMode("manual");
-      setMessage(typeof contentCreator === "string" && contentCreator.trim() && !contentOwner
+      setMessage(imported.contentCreatorNeedsReview
         ? "Contexto importado. Revisa manualmente quién crea el contenido y guarda la marca."
-        : "Contexto importado. Revísalo y guarda la marca.");
-    } catch {
-      setMessage("No pude leer ese JSON. Pídele a la IA que respete exactamente el formato del prompt.");
+        : "Brief autorrellenado. Ya sólo revisa y guarda tu marca.");
+      window.setTimeout(() => document.querySelector(".brand-brief-fields")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No pudimos extraer la información. Intenta nuevamente.");
+    } finally {
+      setIsImporting(false);
     }
   }
 
@@ -182,7 +236,7 @@ export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca
     <form className="onboarding-form deep-brand-form" onSubmit={handleSubmit}>
       <section className="brand-input-paths">
         <header><div><span className="eyebrow">Dos formas de construir el brief</span><h2>Alimenta la inteligencia de tu marca</h2><p>Completa el brief aquí o trae todo lo que ya sabe ChatGPT, Claude u otra IA.</p></div><div className="brand-path-tabs"><button type="button" className={mode === "manual" ? "selected" : ""} onClick={() => setMode("manual")}>Rellenar manualmente</button><button type="button" className={mode === "ai" ? "selected" : ""} onClick={() => setMode("ai")}><Sparkles /> Traer desde una IA</button></div></header>
-        {mode === "ai" && <div className="ai-brand-import"><article><span>1</span><div><b>Copia el prompt de extracción</b><p>Pégalo en la conversación donde más has hablado de tu marca. La IA primero detectará vacíos y después devolverá un JSON.</p></div><button type="button" onClick={copyPrompt}>{copied ? <Check /> : <Clipboard />}{copied ? "Copiado" : "Copiar prompt completo"}</button></article><article><span>2</span><div><b>Pega aquí el JSON final</b><p>La plataforma convertirá esa conversación en audiencia, ángulos, objeciones, pruebas y dirección visual.</p></div></article><textarea value={importText} onChange={(event) => setImportText(event.target.value)} placeholder={'Pega aquí el JSON que te devolvió la IA…'} /><button className="secondary-action" type="button" onClick={importFromAi}><FileJson /> Autorrellenar brief</button></div>}
+        {mode === "ai" && <div className="ai-brand-import"><article><span>1</span><div><b>Copia el prompt de extracción</b><p>Pégalo en la conversación donde más has hablado de tu marca. La IA primero detectará vacíos y después devolverá un JSON.</p></div><button type="button" onClick={copyPrompt}>{copied ? <Check /> : <Clipboard />}{copied ? "Copiado" : "Copiar prompt completo"}</button></article><article><span>2</span><div><b>Pega la conversación, tus respuestas o el JSON final</b><p>La plataforma extraerá automáticamente audiencia, ángulos, objeciones, pruebas y dirección visual.</p></div></article><textarea value={importText} onChange={(event) => setImportText(event.target.value)} disabled={isImporting} placeholder={'Pega aquí la conversación o el JSON que te devolvió la IA…'} /><button className="secondary-action" type="button" onClick={importFromAi} disabled={isImporting || !importText.trim()}>{isImporting ? <Loader2 className="spin" /> : <FileJson />}{isImporting ? "Extrayendo y rellenando…" : "Autorrellenar brief"}</button>{message && <p className="form-message" role="status" aria-live="polite">{message}</p>}</div>}
       </section>
 
       <section className="brand-brief-fields">
@@ -194,7 +248,7 @@ export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca
 
       <details className="strategic-depth" open><summary><div><span className="eyebrow">Brief de estratega creativo</span><b>Contexto psicológico y ángulos</b></div><small>La capa que mejora copies y decisiones visuales</small></summary><div className="strategic-field-grid"><TextField label="Historia y creencia de marca" value={form.brand_story} onChange={(v) => update("brand_story", v)} placeholder="Por qué existe y qué quiere cambiar." /><TextField label="Diferenciadores reales" value={form.differentiators} onChange={(v) => update("differentiators", v)} placeholder="Qué hace distinta a la oferta y por qué creerlo." /><TextField label="Dolores y tensiones" value={form.pains} onChange={(v) => update("pains", v)} placeholder="Problemas, frustraciones y momentos detonantes." /><TextField label="Deseos profundos" value={form.desires} onChange={(v) => update("desires", v)} placeholder="Resultado funcional, emocional e identidad deseada." /><TextField label="Objeciones" value={form.objections} onChange={(v) => update("objections", v)} placeholder="Qué frena la compra y qué evidencia lo resuelve." /><TextField label="Nivel de conciencia" value={form.awareness} onChange={(v) => update("awareness", v)} placeholder="Qué sabe hoy la audiencia del problema y la solución." /><TextField label="Ángulos creativos" value={form.angles} onChange={(v) => update("angles", v)} placeholder="Un ángulo por línea: problema, deseo, mecanismo, prueba…" /><TextField label="Pruebas y razones para creer" value={form.proof} onChange={(v) => update("proof", v)} placeholder="Testimonios, proceso, demostraciones, cifras o credenciales verificables." /><TextField label="Creencias que hay que mover" value={form.beliefs} onChange={(v) => update("beliefs", v)} placeholder="De qué creencia parte y a cuál debe llegar." /><TextField label="Claims y límites" value={form.forbidden_claims} onChange={(v) => update("forbidden_claims", v)} placeholder="Qué no se puede prometer, decir o mostrar." /><TextField label="Dirección visual" value={form.visual_direction} onChange={(v) => update("visual_direction", v)} placeholder="Fotografía, luz, textura, tipografía y cosas a evitar." /></div></details>
 
-      {message && <p className="form-message">{message}</p>}
+      {message && mode !== "ai" && <p className="form-message" role="status" aria-live="polite">{message}</p>}
       <div className="onboarding-submit-actions">
         {!initialBrand && <button className="secondary-action" type="button" disabled={isLoading} onClick={skipOnboarding}>Omitir por ahora</button>}
         <button className="primary-action" type="submit" disabled={isLoading}>{isLoading && <Loader2 className="spin" />}{submitLabel}<ArrowRight /></button>
