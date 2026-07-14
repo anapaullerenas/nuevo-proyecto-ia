@@ -6,6 +6,7 @@ export const CREDIT_COSTS = {
   voice_note: 2,
   creative_analysis_image: 60,
   creative_analysis_video: 120,
+  creative_analysis_script: 40,
   meta_analysis: 120,
   static_brief: 15,
   static_generate_medium: 120,

@@ -54,7 +54,7 @@ export default async function CuentaPage() {
           <RechargePackages pendingFolio={pendingRecharge?.folio} />
           <div className="usage-table">
             <b>Referencia de consumo</b>
-            <p>Chat: 3 créditos · Análisis estático: 60 · Video: 120 · Meta: 120 · Imagen: 120 estándar / 250 alta.</p>
+            <p>Chat: 3 créditos · Análisis de guion: 40 · Estático: 60 · Video: 120 · Meta: 120 · Imagen: 120 estándar / 250 alta.</p>
           </div>
           <section className="ledger-history"><header><b>Historial de consumo</b><small>Últimos 30 movimientos</small></header>{ledger?.length ? <div>{ledger.map((entry) => <article key={entry.id}><time>{new Date(entry.created_at).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}</time><span>{labelReason(entry.reason)}</span><b className={entry.amount > 0 ? "positive" : ""}>{entry.amount > 0 ? "+" : ""}{entry.amount}</b><small>{Number(entry.allowance_remaining_after || 0) + Number(entry.balance_after || 0)} restantes</small></article>)}</div> : <p>Aún no hay movimientos de créditos.</p>}</section>
           <form action={signOut}>
@@ -68,4 +68,4 @@ export default async function CuentaPage() {
   );
 }
 
-function labelReason(reason: string) { const labels: Record<string,string> = { chat_message:"Chat IA",voice_note:"Nota de voz",creative_analysis_image:"Análisis estático",creative_analysis_video:"Análisis de video",meta_analysis:"Análisis Meta",static_brief:"Dirección creativa",static_generate_medium:"Imagen estándar",static_generate_high:"Imagen alta",static_edit:"Corrección de imagen",reference_analysis:"Referencia visual",recharge:"Recarga",refund:"Reembolso",admin_grant:"Créditos de cortesía" }; return labels[reason] || reason; }
+function labelReason(reason: string) { const labels: Record<string,string> = { chat_message:"Chat IA",voice_note:"Nota de voz",creative_analysis_image:"Análisis estático",creative_analysis_video:"Análisis de video",creative_analysis_script:"Análisis de guion",meta_analysis:"Análisis Meta",static_brief:"Dirección creativa",static_generate_medium:"Imagen estándar",static_generate_high:"Imagen alta",static_edit:"Corrección de imagen",reference_analysis:"Referencia visual",recharge:"Recarga",refund:"Reembolso",admin_grant:"Créditos de cortesía" }; return labels[reason] || reason; }

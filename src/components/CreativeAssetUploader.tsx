@@ -38,7 +38,7 @@ type CreativeAnalysisResult = {
   analysis: CreativeDissection;
 };
 
-type CreativeHistoryItem = {
+export type CreativeHistoryItem = {
   id: string;
   assetId?: string | null;
   name: string;

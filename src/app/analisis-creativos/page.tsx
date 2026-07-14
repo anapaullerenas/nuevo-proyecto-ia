@@ -1,5 +1,6 @@
 import { AppFrame, SetupState } from "@/components/AppFrame";
-import { CreativeAssetUploader } from "@/components/CreativeAssetUploader";
+import { CreativeAnalysisWorkspace } from "@/components/CreativeAnalysisWorkspace";
+import { ScriptAnalysis } from "@/lib/ai/script-analysis";
 import { getWorkspace } from "@/lib/workspace";
 
 export default async function AnalisisCreativosPage() {
@@ -23,7 +24,7 @@ export default async function AnalisisCreativosPage() {
     : { data: [] };
   const signedUrlByPath = new Map((signedFiles || []).map((file) => [file.path, file.signedUrl]));
 
-  const history = (analyses || []).map((item) => {
+  const visualHistory = (analyses || []).filter((item) => !isScriptAnalysis(item.analysis)).map((item) => {
     const asset = Array.isArray(item.creative_assets) ? item.creative_assets[0] : item.creative_assets;
     return {
       id: item.id,
@@ -40,21 +41,38 @@ export default async function AnalisisCreativosPage() {
     };
   });
 
+  const scriptHistory = (analyses || []).filter((item) => isScriptAnalysis(item.analysis)).map((item) => {
+    const analysis = item.analysis as unknown as ScriptAnalysis;
+    return {
+      id: item.id,
+      name: analysis.title || `Guion ${new Date(item.created_at).toLocaleDateString("es-MX")}`,
+      createdAt: item.created_at,
+      result: {
+        score: item.score || analysis.score || 0,
+        verdict: item.verdict || analysis.verdict || "",
+        analysis,
+      },
+    };
+  });
+
   return (
     <AppFrame active="/analisis-creativos" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page creative-analysis">
         <div className="studio-panel">
           <div className="panel-heading">
             <span className="eyebrow">Análisis creativos</span>
-            <h1>Entiende qué hace vender a cada creativo.</h1>
+            <h1>Entiende y fortalece cada idea antes de grabarla.</h1>
             <p>
-              Sube una imagen o video, analiza su estructura y vuelve a consultar
-              cada resultado desde la biblioteca de tu marca.
+              Analiza imágenes, videos o guiones con la información guardada de tu marca.
             </p>
           </div>
-          <CreativeAssetUploader brandId={workspace.activeBrand.id} initialHistory={history} />
+          <CreativeAnalysisWorkspace brandId={workspace.activeBrand.id} visualHistory={visualHistory} scriptHistory={scriptHistory} />
         </div>
       </section>
     </AppFrame>
   );
+}
+
+function isScriptAnalysis(value: unknown) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) && "source_type" in value && value.source_type === "script";
 }
