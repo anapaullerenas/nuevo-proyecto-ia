@@ -105,6 +105,9 @@ export async function POST(request: NextRequest) {
     amount?: number;
     reason?: string;
     status?: string;
+    email?: string;
+    fullName?: string;
+    note?: string;
   };
 
   try {
@@ -122,24 +125,90 @@ export async function POST(request: NextRequest) {
       if (error || !data) throw new Error("La solicitud ya fue resuelta.");
     } else if (body.action === "grant" && body.userId && Number(body.amount) > 0 && body.reason?.trim()) {
       const amount = Math.min(100_000, Math.round(Number(body.amount)));
-      const { error } = await admin.rpc("grant_credits", {
+      const { error } = await admin.rpc("admin_adjust_credits", {
         p_user_id: body.userId,
         p_amount: amount,
-        p_reason: "admin_grant",
+        p_reason: "admin_manual_grant",
+        p_admin_id: user.id,
         p_metadata: {
           reason: body.reason.trim(),
           granted_by: user.id,
-          provider: "manual",
-          model: "manual",
-          input_tokens: 0,
-          output_tokens: 0,
-          images: 0,
-          cost_usd: 0,
+          note: body.note?.trim() || null,
+        },
+      });
+      if (error) throw error;
+    } else if (body.action === "deduct" && body.userId && Number(body.amount) > 0 && body.reason?.trim()) {
+      const amount = Math.min(100_000, Math.round(Number(body.amount)));
+      const { error } = await admin.rpc("admin_adjust_credits", {
+        p_user_id: body.userId,
+        p_amount: -amount,
+        p_reason: "admin_manual_deduct",
+        p_admin_id: user.id,
+        p_metadata: {
+          reason: body.reason.trim(),
+          deducted_by: user.id,
+          note: body.note?.trim() || null,
         },
       });
       if (error) throw error;
     } else if (body.action === "status" && body.userId && ["active", "inactive"].includes(body.status || "")) {
       const { error } = await admin.from("profiles").update({ skool_status: body.status }).eq("id", body.userId);
+      if (error) throw error;
+    } else if (body.action === "add_access" && body.email) {
+      const email = normalizeEmail(body.email);
+      if (!email) return NextResponse.json({ error: "Escribe un correo válido." }, { status: 400 });
+
+      const { error: accessError } = await admin.from("manual_access_emails").upsert(
+        {
+          email,
+          email_normalized: email,
+          full_name: body.fullName?.trim() || null,
+          note: body.note?.trim() || "Alta manual desde admin",
+          status: "active",
+          created_by: user.id,
+          updated_by: user.id,
+        },
+        { onConflict: "email_normalized" },
+      );
+      if (accessError) throw accessError;
+
+      let authUserId = await findAuthUserIdByEmail(email);
+      if (!authUserId) {
+        const { data: created, error: createError } = await admin.auth.admin.createUser({
+          email,
+          email_confirm: true,
+          user_metadata: body.fullName?.trim()
+            ? { full_name: body.fullName.trim() }
+            : undefined,
+        });
+        if (createError && !createError.message.toLowerCase().includes("already")) throw createError;
+        authUserId = created.user?.id || (await findAuthUserIdByEmail(email));
+      }
+
+      if (authUserId) {
+        const { error: profileError } = await admin.from("profiles").upsert({
+          id: authUserId,
+          email,
+          full_name: body.fullName?.trim() || null,
+          skool_status: "active",
+        });
+        if (profileError) throw profileError;
+
+        const { error: walletError } = await admin.from("credit_wallets").upsert({
+          user_id: authUserId,
+          balance: 0,
+          monthly_allowance: 600,
+          allowance_used: 0,
+        }, { onConflict: "user_id", ignoreDuplicates: true });
+        if (walletError) throw walletError;
+      }
+    } else if (body.action === "access_status" && body.email && ["active", "inactive"].includes(body.status || "")) {
+      const email = normalizeEmail(body.email);
+      if (!email) return NextResponse.json({ error: "Correo no válido." }, { status: 400 });
+      const { error } = await admin
+        .from("manual_access_emails")
+        .update({ status: body.status, updated_by: user.id })
+        .eq("email_normalized", email);
       if (error) throw error;
     } else {
       return NextResponse.json({ error: "Acción administrativa incompleta." }, { status: 400 });
@@ -149,4 +218,16 @@ export async function POST(request: NextRequest) {
     console.error("admin action failed", error);
     return NextResponse.json({ error: "No se pudo completar la acción. Actualiza el panel e intenta nuevamente." }, { status: 500 });
   }
+
+  async function findAuthUserIdByEmail(email: string) {
+    const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (error) throw error;
+    return data.users.find((item) => item.email?.toLowerCase() === email)?.id || null;
+  }
+}
+
+function normalizeEmail(value: unknown) {
+  const email = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!email || email.length > 254 || !email.includes("@")) return "";
+  return email;
 }

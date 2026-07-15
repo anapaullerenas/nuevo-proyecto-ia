@@ -68,6 +68,7 @@ export default async function AdminPage() {
     { data: statics },
     { data: analyses },
     { data: metas },
+    { data: manualAccess },
     authUsers,
   ] = await Promise.all([
     admin
@@ -111,24 +112,40 @@ export default async function AdminPage() {
       .from("meta_imports")
       .select("owner_id,status,created_at")
       .gte("created_at", monthStart.toISOString()),
+    admin
+      .from("manual_access_emails")
+      .select("id,email,email_normalized,full_name,status,note,created_at,updated_at")
+      .order("created_at", { ascending: false }),
     admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ]);
-  const emailById = new Map(
-    authUsers.data.users.map((item) => [item.id, item.email || ""]),
+  const authUserList = authUsers.data.users || [];
+  const emailById = new Map(authUserList.map((item) => [item.id, item.email || ""]));
+  const authById = new Map(authUserList.map((item) => [item.id, item]));
+  const profileById = new Map((profiles || []).map((profile) => [profile.id, profile]));
+  const manualByEmail = new Map(
+    (manualAccess || []).map((item) => [String(item.email_normalized || item.email || "").toLowerCase(), item]),
   );
-  const users = (profiles || []).map((profile) => {
-    const wallet = (wallets || []).find((item) => item.user_id === profile.id);
+  const userIds = new Set<string>([
+    ...(profiles || []).map((profile) => profile.id),
+    ...authUserList.map((item) => item.id),
+  ]);
+  const users = [...userIds].map((userId) => {
+    const profile = profileById.get(userId);
+    const authUser = authById.get(userId);
+    const email = String(profile?.email || authUser?.email || "").toLowerCase();
+    const manual = manualByEmail.get(email);
+    const wallet = (wallets || []).find((item) => item.user_id === userId);
     const userMonthLedger = (monthLedger || []).filter(
-      (item) => item.user_id === profile.id,
+      (item) => item.user_id === userId,
     );
     const userHistory = (historyLedger || []).filter(
-      (item) => item.user_id === profile.id,
+      (item) => item.user_id === userId,
     );
     const userRecharge = (recharges || []).filter(
-      (item) => item.user_id === profile.id && item.status === "aprobada",
+      (item) => item.user_id === userId && item.status === "aprobada",
     );
     const storageBytes = (assets || [])
-      .filter((item) => item.owner_id === profile.id)
+      .filter((item) => item.owner_id === userId)
       .reduce((s, item) => s + Number(item.file_size || 0), 0);
     const apiCost = userMonthLedger.reduce(
       (s, item) =>
@@ -141,11 +158,17 @@ export default async function AdminPage() {
       0,
     );
     const storageCost = (storageBytes / 1e9) * 0.021;
+    const createdAt = profile?.created_at || authUser?.created_at || manual?.created_at || new Date().toISOString();
     return {
-      id: profile.id,
-      email: profile.email || emailById.get(profile.id) || "",
-      name: profile.full_name || "Sin nombre",
-      status: profile.skool_status,
+      id: userId,
+      email,
+      name: profile?.full_name || manual?.full_name || authUser?.user_metadata?.full_name || "Sin nombre",
+      status: profile?.skool_status || (manual?.status === "active" ? "active" : "pending"),
+      accessSource: manual ? "Manual" : "Club/registro",
+      hasAuthUser: Boolean(authUser),
+      hasProfile: Boolean(profile),
+      hasWallet: Boolean(wallet),
+      manualAccess: manual?.status || null,
       balance:
         Number(wallet?.balance || 0) +
         Math.max(
@@ -157,20 +180,20 @@ export default async function AdminPage() {
       apiCost,
       revenue,
       recharges: userRecharge.length,
-      images: (statics || []).filter((item) => item.owner_id === profile.id)
+      images: (statics || []).filter((item) => item.owner_id === userId)
         .length,
       analyses:
-        (analyses || []).filter((item) => item.owner_id === profile.id).length +
+        (analyses || []).filter((item) => item.owner_id === userId).length +
         (metas || []).filter(
-          (item) => item.owner_id === profile.id && item.status === "completed",
+          (item) => item.owner_id === userId && item.status === "completed",
         ).length,
       storageMb: storageBytes / 1e6,
       profit: revenue - apiCost - storageCost,
-      lastActivity: userHistory[0]?.created_at || profile.created_at,
-      createdAt: profile.created_at,
-      onboarding: profile.onboarding_completed,
+      lastActivity: userHistory[0]?.created_at || createdAt,
+      createdAt,
+      onboarding: Boolean(profile?.onboarding_completed),
       brands: (brands || [])
-        .filter((item) => item.owner_id === profile.id)
+        .filter((item) => item.owner_id === userId)
         .map((item) => item.name),
       ledger: userHistory.slice(0, 50).map((item) => {
         const metadata = item.metadata as {
@@ -230,6 +253,27 @@ export default async function AdminPage() {
         (metas?.filter((item) => item.status === "completed").length || 0),
     },
     users,
+    manualAccess: (manualAccess || []).map((item) => ({
+      id: item.id,
+      email: item.email,
+      status: item.status,
+      fullName: item.full_name,
+      note: item.note,
+      createdAt: item.created_at,
+      hasAuthUser: authUserList.some((authUser) => authUser.email?.toLowerCase() === String(item.email_normalized || item.email || "").toLowerCase()),
+      hasProfile: (profiles || []).some((profile) => String(profile.email || "").toLowerCase() === String(item.email_normalized || item.email || "").toLowerCase()),
+    })),
+    databaseOverview: {
+      authUsers: authUserList.length,
+      profiles: profiles?.length || 0,
+      wallets: wallets?.length || 0,
+      manualAccess: manualAccess?.length || 0,
+      manualActive: (manualAccess || []).filter((item) => item.status === "active").length,
+      clubTable: "miembros_club",
+      accessTable: "manual_access_emails",
+      profileTable: "profiles",
+      walletTable: "credit_wallets",
+    },
     recharges: (recharges || [])
       .filter((item) => item.status === "pendiente")
       .map((item) => ({

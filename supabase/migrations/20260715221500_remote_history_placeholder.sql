@@ -1,0 +1,5 @@
+-- Placeholder para alinear el historial local con Supabase remoto.
+-- La migración 20260715221500 ya aparece aplicada en la base remota de Ana Pau,
+-- pero el archivo original no estaba en el repositorio local/main al momento de
+-- esta intervención. No se ejecutan cambios aquí; evita reparar/revertir el
+-- historial remoto a ciegas y permite aplicar migraciones posteriores.

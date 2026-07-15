@@ -32,22 +32,55 @@ export async function POST(request: NextRequest) {
 
   const exception = isAccessException(email);
 
-  if (exception) {
+  const { data: manualAccess, error: manualAccessError } = await admin
+    .from("manual_access_emails")
+    .select("email_normalized,status")
+    .eq("email_normalized", email)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (manualAccessError) {
+    console.error("No se pudo consultar el acceso manual.", manualAccessError);
+    return NextResponse.json(
+      { error: "No pudimos consultar tu acceso. Intenta de nuevo." },
+      { status: 503 },
+    );
+  }
+
+  if (exception || manualAccess) {
     const directSession = await createDirectSession(email);
     if (directSession instanceof NextResponse) return directSession;
 
-    try {
-      await ensureExceptionWorkspace({
-        database: admin,
-        email,
-        userId: directSession.userId,
-      });
-    } catch (workspaceError) {
-      console.error("No se pudo asociar la cuenta recuperada.", workspaceError);
-      return NextResponse.json(
-        { error: "No pudimos abrir tu cuenta recuperada. Intenta de nuevo." },
-        { status: 503 },
-      );
+    if (manualAccess) {
+      try {
+        await ensureManualWorkspace({
+          database: admin,
+          email,
+          userId: directSession.userId,
+        });
+      } catch (workspaceError) {
+        console.error("No se pudo preparar la cuenta manual.", workspaceError);
+        return NextResponse.json(
+          { error: "No pudimos preparar tu cuenta. Intenta de nuevo." },
+          { status: 503 },
+        );
+      }
+    }
+
+    if (exception) {
+      try {
+        await ensureExceptionWorkspace({
+          database: admin,
+          email,
+          userId: directSession.userId,
+        });
+      } catch (workspaceError) {
+        console.error("No se pudo asociar la cuenta recuperada.", workspaceError);
+        return NextResponse.json(
+          { error: "No pudimos abrir tu cuenta recuperada. Intenta de nuevo." },
+          { status: 503 },
+        );
+      }
     }
 
     return NextResponse.json({ direct: true, redirectTo: "/dashboard" });
@@ -129,4 +162,34 @@ async function createDirectSession(email: string) {
   }
 
   return { userId: verified.user.id };
+}
+
+async function ensureManualWorkspace({
+  database,
+  email,
+  userId,
+}: {
+  database: ReturnType<typeof createSupabaseAdminClient>;
+  email: string;
+  userId: string;
+}) {
+  if (!database) throw new Error("missing admin database");
+
+  const { error: profileError } = await database.from("profiles").upsert({
+    id: userId,
+    email,
+    skool_status: "active",
+  });
+  if (profileError) throw profileError;
+
+  const { error: walletError } = await database.from("credit_wallets").upsert(
+    {
+      user_id: userId,
+      balance: 0,
+      monthly_allowance: 600,
+      allowance_used: 0,
+    },
+    { onConflict: "user_id", ignoreDuplicates: true },
+  );
+  if (walletError) throw walletError;
 }

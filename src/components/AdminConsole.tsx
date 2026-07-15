@@ -7,12 +7,16 @@ import {
   Check,
   CircleDollarSign,
   Coins,
+  Database,
   Download,
   Gauge,
   KeyRound,
+  MinusCircle,
+  PlusCircle,
   RefreshCw,
   Search,
   ShieldCheck,
+  UserPlus,
   UsersRound,
   X,
 } from "lucide-react";
@@ -70,6 +74,11 @@ type UserRow = {
   onboarding: boolean;
   brands: string[];
   ledger: LedgerRow[];
+  accessSource: string;
+  hasAuthUser: boolean;
+  hasProfile: boolean;
+  hasWallet: boolean;
+  manualAccess: string | null;
 };
 type Recharge = {
   id: string;
@@ -99,6 +108,27 @@ export type AdminDashboardData = {
     analyses: number;
   };
   users: UserRow[];
+  manualAccess: Array<{
+    id: string;
+    email: string;
+    status: string;
+    fullName: string | null;
+    note: string | null;
+    createdAt: string;
+    hasAuthUser: boolean;
+    hasProfile: boolean;
+  }>;
+  databaseOverview: {
+    authUsers: number;
+    profiles: number;
+    wallets: number;
+    manualAccess: number;
+    manualActive: number;
+    clubTable: string;
+    accessTable: string;
+    profileTable: string;
+    walletTable: string;
+  };
   recharges: Recharge[];
   pricing: Array<{
     module: string;
@@ -123,6 +153,9 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<UserRow | null>(null);
   const [busy, setBusy] = useState("");
+  const [newAccessEmail, setNewAccessEmail] = useState("");
+  const [newAccessName, setNewAccessName] = useState("");
+  const [newAccessNote, setNewAccessNote] = useState("");
   const [providers, setProviders] = useState<ProviderHealth[]>([]);
   const [providerBusy, setProviderBusy] = useState(true);
   const [providerError, setProviderError] = useState("");
@@ -166,13 +199,15 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
             (filter === "active" && u.status === "active") ||
             (filter === "empty" && u.balance < 50) ||
             (filter === "inactive" && u.status !== "active") ||
+            (filter === "manual" && u.manualAccess === "active") ||
+            (filter === "missing" && (!u.hasProfile || !u.hasWallet)) ||
             (filter === "recharge" && u.recharges > 0),
         )
         .sort((a, b) => (filter === "top" ? b.spent - a.spent : 0)),
     [data.users, query, filter],
   );
   async function action(payload: Record<string, unknown>) {
-    setBusy(String(payload.requestId || payload.userId || "action"));
+    setBusy(String(payload.requestId || payload.userId || payload.action || "action"));
     const response = await fetch("/api/admin", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -196,6 +231,10 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
       "Imágenes",
       "Análisis",
       "Storage MB",
+      "Origen acceso",
+      "Auth",
+      "Perfil",
+      "Wallet",
       "Última actividad",
     ];
     const rows = users.map((u) => [
@@ -210,6 +249,10 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
       u.images,
       u.analyses,
       u.storageMb.toFixed(1),
+      u.accessSource,
+      u.hasAuthUser ? "sí" : "no",
+      u.hasProfile ? "sí" : "no",
+      u.hasWallet ? "sí" : "no",
       u.lastActivity,
     ]);
     const blob = new Blob(
@@ -309,6 +352,147 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
         }}
         onRefresh={refreshProviders}
       />
+      <section className="admin-control-grid">
+        <article className="admin-manual-access">
+          <header>
+            <UserPlus />
+            <div>
+              <span className="eyebrow">Acceso manual</span>
+              <h2>Agregar usuaria por correo</h2>
+              <p>
+                Autoriza el correo, crea/activa su perfil si ya existe y deja la
+                cuenta lista para entrar por login directo.
+              </p>
+            </div>
+          </header>
+          <div className="admin-access-form">
+            <input
+              type="email"
+              placeholder="correo@ejemplo.com"
+              value={newAccessEmail}
+              onChange={(event) => setNewAccessEmail(event.target.value)}
+            />
+            <input
+              placeholder="Nombre opcional"
+              value={newAccessName}
+              onChange={(event) => setNewAccessName(event.target.value)}
+            />
+            <input
+              placeholder="Nota interna opcional"
+              value={newAccessNote}
+              onChange={(event) => setNewAccessNote(event.target.value)}
+            />
+            <button
+              disabled={busy === "add_access" || !newAccessEmail.trim()}
+              onClick={() =>
+                action({
+                  action: "add_access",
+                  email: newAccessEmail,
+                  fullName: newAccessName,
+                  note: newAccessNote,
+                })
+              }
+            >
+              <Check />
+              Dar acceso
+            </button>
+          </div>
+        </article>
+        <article className="admin-database-map">
+          <header>
+            <Database />
+            <div>
+              <span className="eyebrow">Base de datos</span>
+              <h2>Fuentes que está usando la plataforma</h2>
+            </div>
+          </header>
+          <div>
+            <span>
+              Auth Supabase <b>{data.databaseOverview.authUsers}</b>
+              <small>Usuarios que pueden iniciar sesión</small>
+            </span>
+            <span>
+              {data.databaseOverview.profileTable}{" "}
+              <b>{data.databaseOverview.profiles}</b>
+              <small>Perfiles registrados dentro de la app</small>
+            </span>
+            <span>
+              {data.databaseOverview.walletTable}{" "}
+              <b>{data.databaseOverview.wallets}</b>
+              <small>Wallets/créditos vinculados</small>
+            </span>
+            <span>
+              {data.databaseOverview.accessTable}{" "}
+              <b>
+                {data.databaseOverview.manualActive}/
+                {data.databaseOverview.manualAccess}
+              </b>
+              <small>Accesos manuales activos/totales</small>
+            </span>
+            <span>
+              {data.databaseOverview.clubTable}
+              <small>Lista externa que sigue validando suscripciones</small>
+            </span>
+          </div>
+        </article>
+      </section>
+      {data.manualAccess.length > 0 && (
+        <section className="admin-pricing">
+          <header>
+            <div>
+              <span className="eyebrow">Lista manual</span>
+              <h2>Correos autorizados desde admin</h2>
+            </div>
+            <small>Esta lista permite entrar aunque el correo no aparezca en la tabla del club.</small>
+          </header>
+          <div className="admin-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Correo</th>
+                  <th>Estado</th>
+                  <th>Auth</th>
+                  <th>Perfil</th>
+                  <th>Nota</th>
+                  <th>Alta</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.manualAccess.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <b>{item.fullName || "Sin nombre"}</b>
+                      <small>{item.email}</small>
+                    </td>
+                    <td>
+                      <span className={`admin-badge ${item.status}`}>{item.status}</span>
+                    </td>
+                    <td>{item.hasAuthUser ? "Sí" : "No"}</td>
+                    <td>{item.hasProfile ? "Sí" : "No"}</td>
+                    <td>{item.note || "—"}</td>
+                    <td>{new Date(item.createdAt).toLocaleDateString("es-MX")}</td>
+                    <td>
+                      <button
+                        className="admin-inline-button"
+                        onClick={() =>
+                          action({
+                            action: "access_status",
+                            email: item.email,
+                            status: item.status === "active" ? "inactive" : "active",
+                          })
+                        }
+                      >
+                        {item.status === "active" ? "Pausar" : "Activar"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       {data.recharges.length > 0 && (
         <section className="admin-recharge-queue">
           <header>
@@ -381,6 +565,8 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
               <option value="active">Activas</option>
               <option value="empty">Sin saldo</option>
               <option value="inactive">Inactivas</option>
+              <option value="manual">Acceso manual</option>
+              <option value="missing">Faltan datos</option>
               <option value="top">Top consumo</option>
               <option value="recharge">Con recargas</option>
             </select>
@@ -404,6 +590,7 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
                 <th>Imágenes</th>
                 <th>Análisis</th>
                 <th>Storage</th>
+                <th>Origen</th>
                 <th>Actividad</th>
               </tr>
             </thead>
@@ -431,6 +618,14 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
                   <td>{u.images}</td>
                   <td>{u.analyses}</td>
                   <td>{u.storageMb.toFixed(1)} MB</td>
+                  <td>
+                    <b>{u.accessSource}</b>
+                    <small>
+                      Auth {u.hasAuthUser ? "sí" : "no"} · Perfil{" "}
+                      {u.hasProfile ? "sí" : "no"} · Wallet{" "}
+                      {u.hasWallet ? "sí" : "no"}
+                    </small>
+                  </td>
                   <td>
                     {new Date(u.lastActivity).toLocaleDateString("es-MX")}
                   </td>
@@ -506,6 +701,12 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
           <span className="eyebrow">Detalle de usuaria</span>
           <h2>{selected.name}</h2>
           <p>{selected.email}</p>
+          <p className="drawer-muted">
+            Acceso: {selected.accessSource} · Auth{" "}
+            {selected.hasAuthUser ? "sí" : "no"} · Perfil{" "}
+            {selected.hasProfile ? "sí" : "no"} · Wallet{" "}
+            {selected.hasWallet ? "sí" : "no"}
+          </p>
           <div className="drawer-kpis">
             <span>
               <b>{selected.balance}</b> saldo
@@ -534,7 +735,24 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
                   });
               }}
             >
-              Regalar créditos
+              <PlusCircle />
+              Abonar saldo manual
+            </button>
+            <button
+              onClick={() => {
+                const amount = Number(prompt("Créditos a restar"));
+                const reason = prompt("Motivo interno");
+                if (amount && reason)
+                  action({
+                    action: "deduct",
+                    userId: selected.id,
+                    amount,
+                    reason,
+                  });
+              }}
+            >
+              <MinusCircle />
+              Restar saldo manual
             </button>
             <button
               onClick={() =>
@@ -737,6 +955,9 @@ function creditReason(reason: string, module: string | null) {
     voice_note: "Nota de voz",
     meta_analysis: "Análisis de Meta",
     admin_grant: "Créditos de cortesía",
+    admin_manual_grant: "Abono manual",
+    admin_manual_deduct: "Resta manual",
+    admin_manual_adjustment: "Ajuste manual",
   };
   return labels[key] || key.replaceAll("_", " ");
 }
