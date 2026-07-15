@@ -98,7 +98,8 @@ export async function POST(request: NextRequest) {
   if (!context) return NextResponse.json({ error: "Acceso restringido." }, { status: 403 });
 
   const { admin, user } = context;
-  const body = (await request.json()) as {
+  const isFormPost = !request.headers.get("content-type")?.includes("application/json");
+  const body = (isFormPost ? Object.fromEntries((await request.formData()).entries()) : await request.json()) as {
     action?: string;
     requestId?: string;
     userId?: string;
@@ -228,9 +229,11 @@ export async function POST(request: NextRequest) {
     } else {
       return NextResponse.json({ error: "Acción administrativa incompleta." }, { status: 400 });
     }
+    if (isFormPost) return NextResponse.redirect(new URL("/admin?accion=ok", request.url), { status: 303 });
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("admin action failed", error);
+    if (isFormPost) return NextResponse.redirect(new URL("/admin?accion=error", request.url), { status: 303 });
     return NextResponse.json({ error: "No se pudo completar la acción. Actualiza el panel e intenta nuevamente." }, { status: 500 });
   }
 
@@ -261,12 +264,14 @@ export async function POST(request: NextRequest) {
     }
     if (!authUserId) throw new Error("No pudimos crear o localizar a la usuaria.");
 
-    const { error: profileError } = await admin.from("profiles").upsert({
+    const profilePayload: { id: string; email: string; skool_status: string; full_name?: string } = {
       id: authUserId,
       email,
-      full_name: fullName?.trim() || null,
       skool_status: "active",
-    });
+    };
+    if (fullName?.trim()) profilePayload.full_name = fullName.trim();
+
+    const { error: profileError } = await admin.from("profiles").upsert(profilePayload);
     if (profileError) throw profileError;
 
     const { error: walletError } = await admin.from("credit_wallets").upsert(
