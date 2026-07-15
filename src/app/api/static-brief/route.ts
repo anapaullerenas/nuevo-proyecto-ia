@@ -24,6 +24,7 @@ import {
   getCuratedStaticFormat,
   selectAutomaticStaticFormat,
   staticFormatReferencePayload,
+  type StaticBrandMode,
 } from "@/lib/static-format-catalog";
 
 export const maxDuration = 120;
@@ -59,6 +60,7 @@ type StaticBriefInput = {
   format: string;
   funnelStage: string;
   archetypeId?: string;
+  brandMode?: StaticBrandMode;
   productAssetId?: string;
   logoAssetId?: string;
   serviceNoProduct?: boolean;
@@ -92,6 +94,7 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json()) as StaticBriefInput;
   const intent = body.intent?.trim();
+  const brandMode: StaticBrandMode = body.brandMode === "personal" ? "personal" : "product";
 
   if (!body.brandId || !intent || intent.length < 16) {
     return NextResponse.json(
@@ -207,6 +210,7 @@ export async function POST(request: NextRequest) {
     stage: body.funnelStage,
     intent,
     evidence,
+    brandMode,
     recentArchetypes: (recentCreatives || []).map((item) => item.archetype).filter(Boolean) as string[],
     performance,
   });
@@ -215,6 +219,7 @@ export async function POST(request: NextRequest) {
   } | null)?.analysis?.matched_archetype_id;
   const referenceMatchedFormat = getCuratedStaticFormat(referenceMatchId);
   const usableReferenceMatch = referenceMatchedFormat &&
+    referenceMatchedFormat.brand_modes.includes(brandMode) &&
     referenceMatchedFormat.required_evidence.every((requirement) => evidence[requirement])
     ? referenceMatchedFormat
     : null;
@@ -222,6 +227,12 @@ export async function POST(request: NextRequest) {
     ? usableReferenceMatch?.id || automaticFormat.id
     : body.archetypeId;
   const requestedFormat = getCuratedStaticFormat(requestedArchetypeId);
+  if (requestedFormat && !requestedFormat.brand_modes.includes(brandMode)) {
+    return NextResponse.json(
+      { error: "Ese formato pertenece a otra biblioteca creativa. Elige uno de la sección activa." },
+      { status: 409 },
+    );
+  }
   const missingEvidence = requestedFormat?.required_evidence.filter((requirement) => !evidence[requirement]) || [];
   if (missingEvidence.length) {
     return NextResponse.json(
@@ -309,6 +320,7 @@ export async function POST(request: NextRequest) {
         quality: "medium",
         concept: {
           intent,
+          brand_mode: brandMode,
           product_asset_id: body.productAssetId || null,
           service_no_product: Boolean(body.serviceNoProduct || !productAsset),
           reference_asset_ids: (references || []).map(

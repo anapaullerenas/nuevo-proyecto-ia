@@ -14,6 +14,7 @@ import {
   ImageIcon,
   Images,
   Loader2,
+  Package,
   Pencil,
   Plus,
   RefreshCw,
@@ -21,6 +22,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   Trash2,
+  UserRound,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -55,6 +57,7 @@ type StaticArchetype = {
   required_evidence?: StaticEvidence[];
   unlock_message?: string;
   objectives?: string[];
+  brand_modes?: Array<"product" | "personal">;
 };
 
 type StaticBrief = {
@@ -158,6 +161,9 @@ export function StaticStudio({
   const [stage, setStage] = useState("Conversión");
   const [archetypeId, setArchetypeId] = useState("automatico");
   const [directionMode, setDirectionMode] = useState<DirectionMode>("automatic");
+  const [creativeSubject, setCreativeSubject] = useState<"product" | "personal">(
+    initialAssets.length ? "product" : "personal",
+  );
   const [intent, setIntent] = useState("");
   const [proposals, setProposals] = useState(1);
   const [quality, setQuality] = useState<"medium" | "high">("high");
@@ -246,6 +252,9 @@ export function StaticStudio({
   const visibleGallery = gallery.slice(0, galleryVisible);
   const selectedArchetype =
     archetypes.find((item) => item.id === archetypeId) || null;
+  const visibleArchetypes = archetypes.filter((item) =>
+    (item.brand_modes || ["product"]).includes(creativeSubject),
+  );
   const selectedReference = initialReferences.find((item) => selectedReferenceIds.includes(item.id));
   const selectedReferenceMatch = selectedReference?.metadata?.analysis?.matched_archetype_id;
   const estimatedCredits = CREDIT_COSTS.static_brief + (quality === "high"
@@ -273,6 +282,7 @@ export function StaticStudio({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           brandId,
+          brandMode: creativeSubject,
           intent,
           format,
           funnelStage: stage,
@@ -545,6 +555,39 @@ export function StaticStudio({
                 <small>{intent.length}/320</small>
               </label>
 
+              <section className="creative-subject-picker">
+                <div>
+                  <span className="eyebrow">¿Qué vas a anunciar?</span>
+                  <h3>Elige la biblioteca creativa.</h3>
+                </div>
+                <div role="radiogroup" aria-label="Tipo de marca o anuncio">
+                  <button
+                    type="button"
+                    className={creativeSubject === "product" ? "selected" : ""}
+                    onClick={() => {
+                      setCreativeSubject("product");
+                      setArchetypeId(directionMode === "catalog" ? "oferta_directa" : "automatico");
+                    }}
+                  >
+                    <Package size={20} />
+                    <span><b>Producto</b><small>Packshots, beneficios, ofertas y comparativas</small></span>
+                    <em>{archetypes.filter((item) => (item.brand_modes || ["product"]).includes("product")).length} estilos</em>
+                  </button>
+                  <button
+                    type="button"
+                    className={creativeSubject === "personal" ? "selected" : ""}
+                    onClick={() => {
+                      setCreativeSubject("personal");
+                      setArchetypeId(directionMode === "catalog" ? "idea_texto_editorial" : "automatico");
+                    }}
+                  >
+                    <UserRound size={20} />
+                    <span><b>Marca personal</b><small>Retratos, ideas, educación y autoridad</small></span>
+                    <em>{archetypes.filter((item) => (item.brand_modes || ["product"]).includes("personal")).length} estilos</em>
+                  </button>
+                </div>
+              </section>
+
               <div className="static-direction-heading">
                 <div>
                   <span className="eyebrow">Dirección visual</span>
@@ -557,7 +600,7 @@ export function StaticStudio({
                 <button type="button" className={directionMode === "automatic" ? "selected" : ""} onClick={() => { setDirectionMode("automatic"); setArchetypeId("automatico"); }}>
                   <Sparkles size={17} /> Automático <small>Recomendado</small>
                 </button>
-                <button type="button" className={directionMode === "catalog" ? "selected" : ""} onClick={() => { setDirectionMode("catalog"); if (archetypeId === "automatico") setArchetypeId("oferta_directa"); }}>
+                <button type="button" className={directionMode === "catalog" ? "selected" : ""} onClick={() => { setDirectionMode("catalog"); if (archetypeId === "automatico") setArchetypeId(creativeSubject === "personal" ? "idea_texto_editorial" : "oferta_directa"); }}>
                   <WandSparkles size={17} /> Estilos Anapau
                 </button>
                 <button type="button" className={directionMode === "reference" ? "selected" : ""} onClick={() => setDirectionMode("reference")}>
@@ -574,14 +617,14 @@ export function StaticStudio({
 
               {directionMode === "catalog" && (
                 <div className="static-pattern-grid">
-                  {archetypes.map((item) => {
+                  {visibleArchetypes.map((item) => {
                     const locked = isLocked(item);
                     return (
                       <article key={item.id} className={`${archetypeId === item.id ? "selected" : ""} ${locked ? "locked" : ""}`}>
                         <button type="button" disabled={locked} onClick={() => setArchetypeId(item.id)}>
-                          <span className="pattern-wireframe" data-pattern={item.id} aria-hidden="true"><i /><i /><i /><i /></span>
+                          <PatternPreview pattern={item.id} />
                           <b>{item.label_visible}</b>
-                          <small>{item.visual_keys?.slice(0, 2).join(" · ")}</small>
+                          <small>{item.short_description}</small>
                           {!locked && archetypeId === item.id && <Check className="pattern-check" size={16} />}
                         </button>
                         {locked && <Link href={`/marcas/${brandId}/editar`}><span>Bloqueado</span>{item.unlock_message}</Link>}
@@ -609,16 +652,20 @@ export function StaticStudio({
             <aside className="static-builder-summary">
               <span className="eyebrow">Resumen</span>
               <section>
-                <b>Producto</b>
+                <b>Biblioteca</b>
+                <p>{creativeSubject === "product" ? "Producto" : "Marca personal"}</p>
+              </section>
+              <section>
+                <b>{creativeSubject === "product" ? "Producto" : "Persona o activo"}</b>
                 <div className="summary-product">
                   {!serviceNoProduct && initialAssets.find((asset) => asset.id === selectedAssetId)?.signed_url
                     ? <img src={initialAssets.find((asset) => asset.id === selectedAssetId)?.signed_url || ""} alt="" />
                     : <ImageIcon size={24} />}
-                  <span>{selectedProductLabel(initialAssets, selectedAssetId, serviceNoProduct)}</span>
+                  <span>{creativeSubject === "personal" && serviceNoProduct ? "Sin fotografía personal" : selectedProductLabel(initialAssets, selectedAssetId, serviceNoProduct)}</span>
                 </div>
                 <select value={serviceNoProduct ? "service" : selectedAssetId} onChange={(event) => { setServiceNoProduct(event.target.value === "service"); if (event.target.value !== "service") setSelectedAssetId(event.target.value); }}>
                   {initialAssets.map((asset, index) => <option value={asset.id} key={asset.id}>{assetDisplayLabel(asset, index)}</option>)}
-                  <option value="service">Sin foto de producto</option>
+                  <option value="service">{creativeSubject === "personal" ? "Sin fotografía personal" : "Sin foto de producto"}</option>
                 </select>
               </section>
               <section>
@@ -1518,6 +1565,46 @@ export function StaticStudio({
         </div>
       )}
     </div>
+  );
+}
+
+const patternSamples: Record<string, { kicker: string; headline: string; detail: string; badge: string }> = {
+  oferta_directa: { kicker: "OFERTA", headline: "-30% HOY", detail: "Tu producto aquí", badge: "COMPRAR" },
+  beneficios_apilados: { kicker: "POR QUÉ", headline: "3 BENEFICIOS", detail: "✓ Fácil  ✓ Rápido  ✓ Real", badge: "VER MÁS" },
+  antes_despues_sutil: { kicker: "RESULTADO", headline: "ANTES  →  DESPUÉS", detail: "Mismo encuadre", badge: "CASO REAL" },
+  problema_solucion: { kicker: "PROBLEMA", headline: "Esto te frena", detail: "SOLUCIÓN →", badge: "CÓMO" },
+  comparacion_ancla: { kicker: "ELIGE", headline: "$900  VS  $290", detail: "Alternativa   Tu oferta", badge: "AHORRA" },
+  prueba_social_flotante: { kicker: "COMPRA VERIFICADA", headline: "“Sí funcionó”", detail: "— Cliente real  ★★★★★", badge: "RESEÑA" },
+  ugc_casual: { kicker: "POV", headline: "Persona usando", detail: "↗ beneficio real", badge: "UGC" },
+  busqueda_solucion: { kicker: "⌕ BUSCAR", headline: "¿Cómo consigo…?", detail: "Tu producto responde", badge: "SOLUCIÓN" },
+  producto_heroe_editorial: { kicker: "NUEVO", headline: "PRODUCTO", detail: "Una promesa", badge: "HÉROE" },
+  post_its: { kicker: "NOTA", headline: "Oferta encontrada", detail: "-20%   hasta hoy", badge: "HOY" },
+  idea_texto_editorial: { kicker: "UNA IDEA", headline: "NO NECESITAS MÁS CONTENIDO.", detail: "Necesitas una postura.", badge: "— TU NOMBRE" },
+  retrato_autoridad: { kicker: "EXPERTA EN", headline: "Tu promesa", detail: "Nombre · Rol real", badge: "RETRATO" },
+  opinion_contraria: { kicker: "TE DIJERON", headline: "MÁS ES MEJOR", detail: "No. Mejor es más claro.", badge: "MI OPINIÓN" },
+  framework_educativo: { kicker: "MI MÉTODO", headline: "01 → 02 → 03", detail: "Diagnostica · Decide · Ejecuta", badge: "GUÁRDALO" },
+  cita_firmada: { kicker: "“", headline: "UNA FRASE PROPIA QUE TE REPRESENTA", detail: "— Nombre y apellido", badge: "CITA" },
+  anuncio_evento_personal: { kicker: "MASTERCLASS", headline: "TU TEMA AQUÍ", detail: "25 JUL · 7:00 PM", badge: "REGÍSTRATE" },
+  mini_caso_cliente: { kicker: "CASO REAL", headline: "ANTES → PROCESO → RESULTADO", detail: "Cliente · cambio verificable", badge: "VER CASO" },
+  lista_accion: { kicker: "CHECKLIST", headline: "4 COSAS QUE HARÍA HOY", detail: "✓ Una  ✓ Dos  ✓ Tres  ✓ Cuatro", badge: "GUARDAR" },
+};
+
+function PatternPreview({ pattern }: { pattern: string }) {
+  const sample = patternSamples[pattern] || {
+    kicker: "ESTRUCTURA",
+    headline: "IDEA PRINCIPAL",
+    detail: "Apoyo visual",
+    badge: "ACCIÓN",
+  };
+  return (
+    <span className={`pattern-mockup pattern-${pattern}`} aria-hidden="true">
+      <span className="mock-kicker">{sample.kicker}</span>
+      <span className="mock-portrait"><i /></span>
+      <span className="mock-product"><i /></span>
+      <strong>{sample.headline}</strong>
+      <small>{sample.detail}</small>
+      <em>{sample.badge}</em>
+    </span>
   );
 }
 

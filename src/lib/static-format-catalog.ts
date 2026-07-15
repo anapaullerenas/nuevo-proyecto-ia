@@ -7,6 +7,7 @@ export type CuratedStaticFormat = StaticArchetype & {
   use_when: string;
   visual_keys: string[];
   objectives: string[];
+  brand_modes: StaticBrandMode[];
   required_evidence: StaticEvidence[];
   unlock_message?: string;
   prompt_template_ref: string;
@@ -19,6 +20,7 @@ export type CuratedStaticFormat = StaticArchetype & {
 };
 
 export type StaticAspectRatio = "1:1" | "4:5" | "9:16";
+export type StaticBrandMode = "product" | "personal";
 export type StaticEvidence = "testimonial" | "verified_numbers" | "before_after" | "price_comparison";
 export type StaticLayoutRecipe = {
   composition: string;
@@ -33,6 +35,64 @@ const sharedRules = [
   "Una idea principal, lectura en dos segundos, márgenes de 6-8% y al menos 30% de aire visual.",
   "Usar únicamente activos, beneficios y pruebas verdaderas de la marca activa.",
 ];
+
+function personalBrandFormat({
+  id,
+  label,
+  stage,
+  description,
+  useWhen,
+  visualKeys,
+  prompt,
+  layout,
+  hierarchy,
+  zones,
+}: {
+  id: string;
+  label: string;
+  stage: string;
+  description: string;
+  useWhen: string;
+  visualKeys: string[];
+  prompt: string;
+  layout: string;
+  hierarchy: string[];
+  zones: [string, string, string];
+}) {
+  return {
+    id,
+    name: id,
+    label_visible: label,
+    stage,
+    thumbnail_path: `/archetypes/curated/${id}.webp`,
+    short_description: description,
+    use_when: useWhen,
+    visual_keys: visualKeys,
+    prompt_fragment: prompt,
+    structure: {
+      reference_blueprint: {
+        layout,
+        hierarchy,
+        product_treatment: "La persona, su idea, su método o su resultado ocupan el rol protagonista; no inventar productos físicos.",
+        copy_pattern: "Una idea central breve y apoyos que provienen de la memoria real de la marca personal.",
+        density: "Baja o media, con lectura clara en tamaño móvil.",
+        cta_behavior: "Sólo una acción coherente: seguir, guardar, registrarse, comentar o conocer la oferta.",
+      },
+      estructura: {
+        zona_superior: zones[0],
+        zona_media: zones[1],
+        zona_inferior: zones[2],
+      },
+      art_direction_default: {
+        decision_visual_fuerte: description,
+        camara_y_encuadre: "Editorial frontal, con jerarquía de revista y margen suficiente para lectura móvil.",
+        superficie_y_entorno: "Contexto auténtico del creador o fondo editorial construido desde su identidad visual.",
+        props: "Ninguno salvo elementos reales de su trabajo.",
+      },
+      rules: [...sharedRules, "No inventar credenciales, resultados, clientes, citas ni experiencia profesional."],
+    },
+  };
+}
 
 const BASE_CURATED_STATIC_FORMATS = [
   {
@@ -366,6 +426,102 @@ const BASE_CURATED_STATIC_FORMATS = [
       rules: sharedRules,
     },
   },
+  personalBrandFormat({
+    id: "idea_texto_editorial",
+    label: "Idea editorial",
+    stage: "Descubrimiento",
+    description: "Una frase fuerte ocupa casi todo el anuncio y convierte una opinión en identidad.",
+    useWhen: "Quieres posicionar una idea, una creencia o una frase reconocible sin depender de fotografía.",
+    visualKeys: ["Texto protagonista", "Sin fotografía", "Firma discreta"],
+    prompt: "Anuncio tipográfico editorial de marca personal. Una sola idea contundente de máximo 46 caracteres domina el lienzo, con una palabra acentuada, firma o nombre discreto y abundante aire. No añadir fotografía, tarjetas vacías ni texto decorativo.",
+    layout: "Tipografía a gran escala con una palabra acentuada y firma pequeña en la base.",
+    hierarchy: ["idea", "énfasis", "firma"],
+    zones: ["Etiqueta de tema mínima.", "Frase dominante en 2-4 líneas.", "Nombre, rol o CTA discreto."],
+  }),
+  personalBrandFormat({
+    id: "retrato_autoridad",
+    label: "Retrato de autoridad",
+    stage: "Consideración",
+    description: "El rostro construye confianza y una promesa concreta explica la autoridad.",
+    useWhen: "La persona es parte central de la marca y existe una fotografía propia utilizable.",
+    visualKeys: ["Retrato real", "Promesa lateral", "Nombre y rol"],
+    prompt: "Retrato editorial auténtico de la persona de la marca ocupando 50-60% del lienzo, con una promesa breve al costado, nombre y rol reales. Luz natural o de estudio coherente; no usar rostros genéricos si existe un activo real.",
+    layout: "Retrato asimétrico a un lado y bloque editorial de texto al otro.",
+    hierarchy: ["rostro", "promesa", "nombre y rol"],
+    zones: ["Promesa o tema breve.", "Retrato real a sangre con texto lateral.", "Nombre, rol y acción."],
+  }),
+  personalBrandFormat({
+    id: "opinion_contraria",
+    label: "Opinión contraria",
+    stage: "Descubrimiento",
+    description: "Contrasta una creencia común con la postura propia para detener el scroll.",
+    useWhen: "Tienes una postura clara, defendible y coherente con la experiencia de la persona.",
+    visualKeys: ["Mito tachado", "Postura fuerte", "Firma"],
+    prompt: "Anuncio de opinión contraria dividido en dos niveles: arriba una creencia común tachada editorialmente; abajo la postura propia en tipografía dominante. Firma real y ningún claim inventado.",
+    layout: "Creencia pequeña tachada arriba; opinión propia grande abajo con subrayado manual.",
+    hierarchy: ["mito", "postura", "firma"],
+    zones: ["Creencia o consejo común.", "Postura propia dominante.", "Firma y descriptor."],
+  }),
+  personalBrandFormat({
+    id: "framework_educativo",
+    label: "Framework educativo",
+    stage: "Consideración",
+    description: "Un método propio se vuelve un diagrama sencillo, guardable y fácil de recordar.",
+    useWhen: "Existe un proceso real de tres o cuatro pasos que la audiencia puede aplicar.",
+    visualKeys: ["3 pasos", "Diagrama real", "Autoridad"],
+    prompt: "Diagrama educativo de máximo cuatro pasos con números grandes, conexiones claras y una frase por paso. Usar únicamente un método presente en la memoria de marca. Debe parecer una página editorial útil, no una infografía corporativa saturada.",
+    layout: "Título arriba y recorrido numerado de tres pasos conectados en el centro.",
+    hierarchy: ["nombre del método", "pasos", "resultado"],
+    zones: ["Nombre del framework.", "Tres o cuatro pasos conectados.", "Resultado o invitación a guardar."],
+  }),
+  personalBrandFormat({
+    id: "cita_firmada",
+    label: "Cita firmada",
+    stage: "Descubrimiento",
+    description: "Una cita propia se presenta como pieza de pensamiento, no como testimonio de cliente.",
+    useWhen: "Hay una frase original de la persona que resume su punto de vista.",
+    visualKeys: ["Comillas editoriales", "Cita propia", "Firma visible"],
+    prompt: "Cita original de la persona en una composición editorial con comillas grandes, texto protagonista y firma real. No usar estrellas, avatar de cliente ni indicadores de reseña: es pensamiento del autor, no prueba social.",
+    layout: "Comillas grandes, cita centrada y firma manuscrita o nombre en la base.",
+    hierarchy: ["comillas", "cita", "autor"],
+    zones: ["Comillas o tema.", "Cita propia dominante.", "Nombre y rol real."],
+  }),
+  personalBrandFormat({
+    id: "anuncio_evento_personal",
+    label: "Evento o masterclass",
+    stage: "Conversión",
+    description: "La persona, el tema y la fecha se ordenan como un cartel editorial de convocatoria.",
+    useWhen: "Promueves una masterclass, sesión, webinar, taller o transmisión con datos confirmados.",
+    visualKeys: ["Persona + tema", "Fecha clara", "CTA registro"],
+    prompt: "Cartel editorial de evento con retrato real opcional, título de la sesión, fecha y hora confirmadas, y CTA único. Jerarquía inequívoca; no inventar fechas, invitados, cupos ni credenciales.",
+    layout: "Retrato recortado en un tercio; bloque de título, fecha y CTA en los otros dos.",
+    hierarchy: ["tema", "persona", "fecha", "registro"],
+    zones: ["Etiqueta del evento.", "Título y retrato de la persona.", "Fecha, hora y CTA."],
+  }),
+  personalBrandFormat({
+    id: "mini_caso_cliente",
+    label: "Mini caso de cliente",
+    stage: "Retargeting",
+    description: "Un resultado real se explica con contexto, intervención y cambio verificable.",
+    useWhen: "Existe un caso de cliente autorizado con resultado o aprendizaje específico.",
+    visualKeys: ["Caso real", "3 momentos", "Resultado"],
+    prompt: "Mini caso de cliente en tres bloques: contexto, intervención y resultado verificable. Usar nombre, cifra o testimonio sólo si existen en la memoria. Apariencia de ficha editorial, no reseña genérica de cinco estrellas.",
+    layout: "Cabecera de caso y tres módulos secuenciales conectados por una línea.",
+    hierarchy: ["cliente o contexto", "intervención", "resultado"],
+    zones: ["Título del caso.", "Contexto → intervención → resultado.", "Oferta o CTA discreto."],
+  }),
+  personalBrandFormat({
+    id: "lista_accion",
+    label: "Lista accionable",
+    stage: "Consideración",
+    description: "Una lista breve transforma conocimiento en una pieza útil que invita a guardar.",
+    useWhen: "Quieres enseñar recomendaciones, errores, pasos o decisiones concretas.",
+    visualKeys: ["Checklist", "4 puntos", "Guardar"],
+    prompt: "Checklist editorial con máximo cuatro puntos breves, números o checks claramente alineados y una invitación discreta a guardar. Cada punto debe salir del conocimiento real de la marca personal.",
+    layout: "Título superior, cuatro renglones amplios con checks y cierre pequeño.",
+    hierarchy: ["tema", "lista", "acción"],
+    zones: ["Título útil y específico.", "Tres o cuatro puntos accionables.", "Firma o invitación a guardar."],
+  }),
 ];
 
 const DEFAULT_LAYOUTS: Record<StaticAspectRatio, StaticLayoutRecipe> = {
@@ -409,12 +565,40 @@ const FORMAT_RULES: Record<string, Partial<CuratedStaticFormat>> = {
   busqueda_solucion: { objectives: ["Descubrimiento", "Consideración"], required_evidence: [] },
   producto_heroe_editorial: { objectives: ["Descubrimiento", "Consideración"], required_evidence: [] },
   post_its: { objectives: ["Conversión", "Retargeting"], required_evidence: [] },
+  idea_texto_editorial: { objectives: ["Descubrimiento"], required_evidence: [] },
+  retrato_autoridad: { objectives: ["Descubrimiento", "Consideración"], required_evidence: [] },
+  opinion_contraria: { objectives: ["Descubrimiento"], required_evidence: [] },
+  framework_educativo: { objectives: ["Consideración"], required_evidence: [] },
+  cita_firmada: { objectives: ["Descubrimiento", "Consideración"], required_evidence: [] },
+  anuncio_evento_personal: { objectives: ["Conversión"], required_evidence: [] },
+  mini_caso_cliente: {
+    objectives: ["Consideración", "Retargeting"],
+    required_evidence: ["testimonial"],
+    unlock_message: "Agrega un caso o testimonio real para desbloquear este formato.",
+  },
+  lista_accion: { objectives: ["Descubrimiento", "Consideración"], required_evidence: [] },
 };
+
+const PERSONAL_FORMAT_IDS = new Set([
+  "idea_texto_editorial",
+  "retrato_autoridad",
+  "opinion_contraria",
+  "framework_educativo",
+  "cita_firmada",
+  "anuncio_evento_personal",
+  "mini_caso_cliente",
+  "lista_accion",
+]);
 
 export const CURATED_STATIC_FORMATS: CuratedStaticFormat[] = BASE_CURATED_STATIC_FORMATS.map((format) => ({
   ...format,
   version: "1.0.0",
   objectives: FORMAT_RULES[format.id]?.objectives || [format.stage],
+  brand_modes: PERSONAL_FORMAT_IDS.has(format.id)
+    ? ["personal"]
+    : ["prueba_social_flotante", "ugc_casual"].includes(format.id)
+      ? ["product", "personal"]
+      : ["product"],
   required_evidence: FORMAT_RULES[format.id]?.required_evidence || [],
   unlock_message: FORMAT_RULES[format.id]?.unlock_message,
   prompt_template_ref: `static/${format.id}/v1`,
@@ -447,21 +631,26 @@ export function selectAutomaticStaticFormat({
   stage,
   intent,
   evidence,
+  brandMode = "product",
   recentArchetypes = [],
   performance = {},
 }: {
   stage: string;
   intent: string;
   evidence: BrandEvidence;
+  brandMode?: StaticBrandMode;
   recentArchetypes?: string[];
   performance?: Record<string, number>;
 }) {
-  const eligible = CURATED_STATIC_FORMATS.filter((format) => isStaticFormatUnlocked(format, evidence));
+  const eligible = CURATED_STATIC_FORMATS.filter((format) =>
+    format.brand_modes.includes(brandMode) && isStaticFormatUnlocked(format, evidence));
   const coldStartDefaults: Record<string, string> = {
-    Descubrimiento: "problema_solucion",
-    Consideración: "beneficios_apilados",
-    Conversión: "oferta_directa",
-    Retargeting: evidence.testimonial ? "prueba_social_flotante" : "post_its",
+    Descubrimiento: brandMode === "personal" ? "idea_texto_editorial" : "problema_solucion",
+    Consideración: brandMode === "personal" ? "framework_educativo" : "beneficios_apilados",
+    Conversión: brandMode === "personal" ? "anuncio_evento_personal" : "oferta_directa",
+    Retargeting: evidence.testimonial
+      ? brandMode === "personal" ? "mini_caso_cliente" : "prueba_social_flotante"
+      : brandMode === "personal" ? "lista_accion" : "post_its",
   };
   const normalizedIntent = intent.toLowerCase();
   const scored = eligible.map((format) => {
@@ -471,6 +660,9 @@ export function selectAutomaticStaticFormat({
     if (/precio|oferta|promoción|descuento|venta/.test(normalizedIntent) && ["oferta_directa", "comparacion_ancla", "post_its"].includes(format.id)) score += 18;
     if (/problema|solución|dolor|frustr/.test(normalizedIntent) && format.id === "problema_solucion") score += 20;
     if (/beneficio|explicar|ventaja/.test(normalizedIntent) && format.id === "beneficios_apilados") score += 18;
+    if (/idea|opinión|creencia|posicionar/.test(normalizedIntent) && ["idea_texto_editorial", "opinion_contraria"].includes(format.id)) score += 20;
+    if (/enseñar|pasos|método|framework|lista/.test(normalizedIntent) && ["framework_educativo", "lista_accion"].includes(format.id)) score += 20;
+    if (/evento|masterclass|webinar|taller|registro/.test(normalizedIntent) && format.id === "anuncio_evento_personal") score += 24;
     score += Math.max(-20, Math.min(20, performance[format.id] || 0));
     score -= recentArchetypes.slice(0, 5).filter((id) => id === format.id).length * 15;
     return { format, score };

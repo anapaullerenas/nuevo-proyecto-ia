@@ -41,4 +41,27 @@ assert.notEqual(
   "Diversity should penalize a repeatedly used pattern",
 );
 
+assert.equal(
+  selectAutomaticStaticFormat({
+    stage: "Descubrimiento",
+    intent: "Quiero posicionar una idea de mi marca personal",
+    evidence: noEvidence,
+    brandMode: "personal",
+  }).id,
+  "idea_texto_editorial",
+  "Personal brands must use their own cold-start library",
+);
+
+assert.equal(
+  CURATED_STATIC_FORMATS.filter((item) => item.brand_modes.includes("product")).length >= 10,
+  true,
+  "The product library should expose at least ten formats",
+);
+
+assert.equal(
+  CURATED_STATIC_FORMATS.filter((item) => item.brand_modes.includes("personal")).length >= 10,
+  true,
+  "The personal brand library should expose at least ten formats",
+);
+
 console.log("Static selector: evidence, cold start and diversity checks passed.");
