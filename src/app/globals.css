@@ -3959,6 +3959,45 @@ svg {
   font-size: 9px;
 }
 
+.admin-top-actions {
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 18px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(99, 46, 89, .08);
+}
+
+.admin-top-actions button {
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  background: #632e59;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.admin-top-actions button:nth-child(2) {
+  border: 1px solid rgba(99, 46, 89, .14);
+  color: #632e59;
+  background: #f7edf3;
+}
+
+.admin-top-actions svg {
+  width: 17px;
+}
+
+.admin-top-actions span {
+  color: rgba(99, 46, 89, .65);
+  font-size: 12px;
+}
+
 @media (max-width: 980px) {
   .landing-hero,
   .auth-page,

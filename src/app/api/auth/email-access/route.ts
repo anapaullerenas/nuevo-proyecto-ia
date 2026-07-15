@@ -47,11 +47,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (exception || manualAccess) {
+  const { data: activeProfile, error: profileAccessError } = await admin
+    .from("profiles")
+    .select("id,email,skool_status")
+    .ilike("email", email)
+    .eq("skool_status", "active")
+    .limit(1)
+    .maybeSingle();
+
+  if (profileAccessError) {
+    console.error("No se pudo consultar el perfil activo.", profileAccessError);
+    return NextResponse.json(
+      { error: "No pudimos consultar tu acceso. Intenta de nuevo." },
+      { status: 503 },
+    );
+  }
+
+  if (exception || manualAccess || activeProfile) {
     const directSession = await createDirectSession(email);
     if (directSession instanceof NextResponse) return directSession;
 
-    if (manualAccess) {
+    if (manualAccess || activeProfile) {
       try {
         await ensureManualWorkspace({
           database: admin,

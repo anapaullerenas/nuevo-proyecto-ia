@@ -192,6 +192,31 @@ export async function POST(request: NextRequest) {
       if (accessError) throw accessError;
 
       await ensureUserForEmail(email, body.fullName);
+    } else if (body.action === "repair_access" && (body.email || body.userId)) {
+      const email = body.email ? normalizeEmail(body.email) : await findEmailByUserId(body.userId || "");
+      if (!email) return NextResponse.json({ error: "Correo no válido." }, { status: 400 });
+
+      const targetUserId = await ensureUserForEmail(email, body.fullName);
+
+      const { error: accessError } = await admin.from("manual_access_emails").upsert(
+        {
+          email,
+          email_normalized: email,
+          full_name: body.fullName?.trim() || null,
+          note: body.note?.trim() || "Acceso reparado desde admin",
+          status: "active",
+          created_by: user.id,
+          updated_by: user.id,
+        },
+        { onConflict: "email_normalized" },
+      );
+      if (accessError) throw accessError;
+
+      const { error: statusError } = await admin
+        .from("profiles")
+        .update({ skool_status: "active" })
+        .eq("id", targetUserId);
+      if (statusError) throw statusError;
     } else if (body.action === "access_status" && body.email && ["active", "inactive"].includes(body.status || "")) {
       const email = normalizeEmail(body.email);
       if (!email) return NextResponse.json({ error: "Correo no válido." }, { status: 400 });
@@ -213,6 +238,14 @@ export async function POST(request: NextRequest) {
     const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
     if (error) throw error;
     return data.users.find((item) => item.email?.toLowerCase() === email)?.id || null;
+  }
+
+  async function findEmailByUserId(userId: string) {
+    if (!/^[0-9a-f-]{36}$/i.test(userId)) return "";
+    const { data: profile } = await admin.from("profiles").select("email").eq("id", userId).maybeSingle();
+    if (profile?.email) return normalizeEmail(profile.email);
+    const { data } = await admin.auth.admin.getUserById(userId);
+    return normalizeEmail(data.user?.email || "");
   }
 
   async function ensureUserForEmail(email: string, fullName?: string) {

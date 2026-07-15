@@ -279,8 +279,43 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
     100,
     (data.metrics.apiCost / data.metrics.limit) * 100,
   );
+  const addUserFromPrompt = () => {
+    const email = prompt("Correo del nuevo usuario");
+    if (!email) return;
+    const fullName = prompt("Nombre opcional") || "";
+    action({
+      action: "add_access",
+      email,
+      fullName,
+      note: "Alta manual desde botón superior",
+    });
+  };
+  const repairAccessFromPrompt = () => {
+    const email = prompt("Correo de la usuaria a reparar");
+    if (!email) return;
+    action({
+      action: "repair_access",
+      email,
+      note: "Reparación manual desde botón superior",
+    });
+  };
   return (
     <section className="admin-shell admin-operations">
+      <div className="admin-top-actions">
+        <button type="button" onClick={addUserFromPrompt}>
+          <UserPlus />
+          Agregar nuevo usuario
+        </button>
+        <button type="button" onClick={repairAccessFromPrompt}>
+          <ShieldCheck />
+          Reparar acceso por correo
+        </button>
+        <span>
+          Si alguien no puede entrar, usa “Reparar acceso”: activa perfil,
+          wallet de 600 créditos y lista manual. Base: Auth Supabase, profiles,
+          credit_wallets y manual_access_emails.
+        </span>
+      </div>
       <div className="panel-heading split">
         <div>
           <span className="eyebrow">Panel madre · este mes</span>
@@ -853,6 +888,19 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
               }
             >
               {selected.status === "active" ? "Desactivar" : "Activar"}
+            </button>
+            <button
+              onClick={() =>
+                action({
+                  action: "repair_access",
+                  userId: selected.id,
+                  email: selected.email,
+                  note: "Reparación manual desde detalle de usuaria",
+                })
+              }
+            >
+              <ShieldCheck />
+              Reparar acceso
             </button>
           </div>
           <h3>Historial de créditos</h3>
