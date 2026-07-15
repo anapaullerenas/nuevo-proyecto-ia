@@ -311,7 +311,7 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
           Reparar acceso por correo
         </button>
         <span>
-          Si alguien no puede entrar, usa “Reparar acceso”: activa perfil,
+          Admin soporte v2 · Si alguien no puede entrar, usa “Reparar acceso”: activa perfil,
           wallet de 600 créditos y lista manual. Base: Auth Supabase, profiles,
           credit_wallets y manual_access_emails.
         </span>
