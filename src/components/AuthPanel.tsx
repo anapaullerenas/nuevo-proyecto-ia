@@ -18,7 +18,9 @@ export function AuthPanel({ mode }: { mode: Mode }) {
     setMessage("");
 
     if (!isSupabaseConfigured()) {
-      setMessage("Estamos ajustando la plataforma. Intenta de nuevo en unos minutos.");
+      setMessage(
+        "Estamos ajustando la plataforma. Intenta de nuevo en unos minutos.",
+      );
       return;
     }
 
@@ -32,7 +34,12 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const payload = (await response.json()) as { direct?: boolean; redirectTo?: string; message?: string; error?: string };
+      const payload = (await response.json()) as {
+        direct?: boolean;
+        redirectTo?: string;
+        message?: string;
+        error?: string;
+      };
 
       setIsLoading(false);
       if (response.ok && payload.direct) {
@@ -40,7 +47,9 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         router.refresh();
         return;
       }
-      setMessage(payload.message || payload.error || "No pudimos validar tu acceso.");
+      setMessage(
+        payload.message || payload.error || "No pudimos validar tu acceso.",
+      );
       return;
     }
 
@@ -65,7 +74,9 @@ export function AuthPanel({ mode }: { mode: Mode }) {
     }
 
     if (!data.session) {
-      setMessage("Cuenta creada. Revisa tu correo para activar el acceso y volver al onboarding.");
+      setMessage(
+        "Cuenta creada. Revisa tu correo para activar el acceso y volver al onboarding.",
+      );
       return;
     }
 
@@ -74,24 +85,41 @@ export function AuthPanel({ mode }: { mode: Mode }) {
 
   return (
     <form className="auth-panel" onSubmit={handleSubmit}>
-      <span className="eyebrow">{mode === "registro" ? "Crear acceso" : "Entrar"}</span>
-      <h1>{mode === "registro" ? "Empieza con tu cuenta y luego registra tu marca." : "Vuelve a tu centro creativo."}</h1>
+      <span className="eyebrow">
+        {mode === "registro" ? "Crear acceso" : "Entrar"}
+      </span>
+      <h1>
+        {mode === "registro"
+          ? "Empieza con tu cuenta y luego registra tu marca."
+          : "Vuelve a tu centro creativo."}
+      </h1>
       <p>
         {mode === "registro"
           ? "Después de crear usuario, la plataforma te lleva al onboarding de marca. Nada aparece precargado."
-          : "Escribe el correo con el que estás inscrita en la comunidad. Te enviaremos un enlace seguro para entrar."}
+          : "Escribe el correo con el que estás inscrita en la comunidad. Validaremos tu acceso y entrarás directamente."}
       </p>
 
       {mode === "registro" && (
         <label>
           Nombre
-          <input name="fullName" autoComplete="name" placeholder="Ej. Ana Paula" required />
+          <input
+            name="fullName"
+            autoComplete="name"
+            placeholder="Ej. Ana Paula"
+            required
+          />
         </label>
       )}
 
       <label>
         Correo
-        <input name="email" type="email" autoComplete="email" placeholder="correo@marca.com" required />
+        <input
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="correo@marca.com"
+          required
+        />
       </label>
 
       {mode === "registro" && (
@@ -112,7 +140,8 @@ export function AuthPanel({ mode }: { mode: Mode }) {
 
       <button className="primary-action" type="submit" disabled={isLoading}>
         {isLoading ? <Loader2 className="spin" size={17} /> : null}
-        {mode === "registro" ? "Crear cuenta" : "Enviarme acceso"} <ArrowRight size={17} />
+        {mode === "registro" ? "Crear cuenta" : "Entrar a la plataforma"}{" "}
+        <ArrowRight size={17} />
       </button>
     </form>
   );

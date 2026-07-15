@@ -1,17 +1,80 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Check, Clipboard, FileJson, Loader2, Sparkles } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { WorkspaceBrand } from "@/lib/workspace";
 
+type ContentOwner = "owner" | "team" | "agency" | "mixed";
+
 type BrandForm = {
-  name: string; website: string; category: string; content_owner: string; audience: string; offer: string; voice: string; creative_goal: string;
+  name: string; website: string; category: string; content_owner: ContentOwner; audience: string; offer: string; voice: string; creative_goal: string;
   brand_story: string; differentiators: string; pains: string; desires: string; objections: string; awareness: string; angles: string; proof: string; beliefs: string; forbidden_claims: string; visual_direction: string;
 };
 
 const strategicKeys = ["brand_story", "differentiators", "pains", "desires", "objections", "awareness", "angles", "proof", "beliefs", "forbidden_claims", "visual_direction"] as const;
+
+const EXTRACTION_PROMPT = `Actúa como estratega creativo senior especializado en anuncios de performance. Tu tarea es llenar el onboarding de mi marca con la máxima profundidad posible SIN inventar nada.
+
+FASE 1 — FUENTES
+Antes de preguntar, extrae todo lo que puedas de: (a) esta conversación e información previa, (b) el sitio web / Instagram si te lo doy, (c) reviews, testimonios o ads anteriores que te pegue. Usa el lenguaje literal de clientes cuando exista.
+
+FASE 2 — PREGUNTAS
+Identifica solo los huecos que las fuentes no cubren. Hazme máximo 10 preguntas, ordenadas por impacto en la venta, agrupadas por tema. Para cada una dame un ejemplo de respuesta útil para que sepa el nivel de detalle que esperas. No entregues nada hasta que responda.
+
+FASE 3 — ENTREGA
+Devuelve ÚNICAMENTE JSON válido, sin markdown, con esta estructura:
+{"brand":{"name":"","website":"","category":"","content_creator":"","audience":"","offer":"","voice":"","creative_goal":""},"strategic_context":{"brand_story":"","differentiators":"","pains":"","desires":"","objections":"","awareness":"","angles":[""],"proof":[""],"beliefs":"","forbidden_claims":[""],"visual_direction":""}}
+
+REGLAS POR CAMPO (respeta el formato exacto que pide cada uno):
+- audience: quién compra, contexto de vida, lenguaje real y situación actual — no demografía genérica.
+- offer: qué vendo, para quién, cómo funciona, precio y condiciones relevantes.
+- voice: cómo habla la marca Y qué nunca diría.
+- creative_goal: qué necesita lograr con sus anuncios (negocio, no vanidad).
+- brand_story: por qué existe y qué quiere cambiar.
+- differentiators: qué hace distinta la oferta y por qué creerlo (no adjetivos, mecanismos).
+- pains: problemas, frustraciones y momentos detonantes concretos.
+- desires: resultado funcional + emocional + identidad deseada.
+- objections: pares "objeción → evidencia que la resuelve".
+- awareness: qué sabe hoy la audiencia del problema y de la solución (nivel dominante + matices).
+- angles: un ángulo por elemento del array, tipificado: problema, deseo, mecanismo, prueba, identidad...
+- proof: solo pruebas verificables (testimonios reales, cifras, proceso, credenciales). Si no hay, déjalo vacío.
+- beliefs: formato "parte de creer X → debe llegar a creer Y".
+- forbidden_claims: qué no se puede prometer, decir ni mostrar (legal + Meta + marca).
+- visual_direction: fotografía, luz, textura, tipografía y cosas a evitar.
+
+REGLAS GLOBALES: separa hechos de supuestos y usa solo hechos en el JSON; nunca inventes claims, cifras ni testimonios; convierte respuestas vagas en lenguaje accionable para copy y arte; lo que no se sepa queda vacío ("").`;
+
+function normalizeContentOwner(value: unknown): ContentOwner | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+  if (normalized === "owner" || normalized === "team" || normalized === "agency" || normalized === "mixed") return normalized;
+
+  const hasOwner = /duen|fundador|propietari|\byo\b|persona.*marca|owner/.test(normalized);
+  const hasTeam = /equipo|intern/.test(normalized);
+  const hasAgency = /agencia|freelance|extern|ugc/.test(normalized);
+  const matchedGroups = [hasOwner, hasTeam, hasAgency].filter(Boolean).length;
+
+  if (/mixt|combin|varias|amb[oa]s/.test(normalized) || matchedGroups > 1) return "mixed";
+  if (hasOwner) return "owner";
+  if (hasTeam) return "team";
+  if (hasAgency) return "agency";
+
+  return null;
+}
+
+function fieldText(value: unknown) {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string").join("\n");
+  return null;
+}
 
 export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca madre" }: { initialBrand?: WorkspaceBrand; submitLabel?: string }) {
   const router = useRouter();
@@ -22,32 +85,45 @@ export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca
   const [copied, setCopied] = useState(false);
   const context = initialBrand?.strategic_context || {};
   const [form, setForm] = useState<BrandForm>({
-    name: initialBrand?.name || "", website: initialBrand?.website || "", category: initialBrand?.category || "", content_owner: initialBrand?.content_owner || "owner", audience: initialBrand?.audience || "", offer: initialBrand?.offer || "", voice: initialBrand?.voice || "", creative_goal: initialBrand?.creative_goal || "",
+    name: initialBrand?.name || "", website: initialBrand?.website || "", category: initialBrand?.category || "", content_owner: normalizeContentOwner(initialBrand?.content_owner) || "owner", audience: initialBrand?.audience || "", offer: initialBrand?.offer || "", voice: initialBrand?.voice || "", creative_goal: initialBrand?.creative_goal || "",
     brand_story: context.brand_story || "", differentiators: context.differentiators || "", pains: context.pains || "", desires: context.desires || "", objections: context.objections || "", awareness: context.awareness || "", angles: context.angles || "", proof: context.proof || "", beliefs: context.beliefs || "", forbidden_claims: context.forbidden_claims || "", visual_direction: context.visual_direction || "",
   });
 
-  const extractionPrompt = useMemo(() => buildExtractionPrompt(form.name), [form.name]);
-  const update = (key: keyof BrandForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const update = <Key extends keyof BrandForm>(key: Key, value: BrandForm[Key]) => setForm((current) => ({ ...current, [key]: value }));
 
   async function copyPrompt() {
-    await navigator.clipboard.writeText(extractionPrompt);
+    await navigator.clipboard.writeText(EXTRACTION_PROMPT);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
 
   function importFromAi() {
     try {
-      const parsed = JSON.parse(importText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, ""));
+      const cleaned = importText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "");
+      const jsonStart = cleaned.indexOf("{");
+      const jsonEnd = cleaned.lastIndexOf("}");
+      const parsed = JSON.parse(jsonStart >= 0 && jsonEnd >= jsonStart ? cleaned.slice(jsonStart, jsonEnd + 1) : cleaned);
       const brand = parsed.brand || parsed;
       const strategic = parsed.strategic_context || parsed.contexto_estrategico || {};
+      const contentCreator = brand.content_creator ?? brand.content_owner;
+      const contentOwner = normalizeContentOwner(contentCreator);
       setForm((current) => {
         const next = { ...current };
-        (["name", "website", "category", "audience", "offer", "voice", "creative_goal"] as const).forEach((key) => { if (typeof brand[key] === "string") next[key] = brand[key]; });
-        strategicKeys.forEach((key) => { const value = strategic[key]; if (typeof value === "string") next[key] = value; else if (Array.isArray(value)) next[key] = value.join("\n"); });
+        (["name", "website", "category", "audience", "offer", "voice", "creative_goal"] as const).forEach((key) => {
+          const value = fieldText(brand[key]);
+          if (value !== null) next[key] = value;
+        });
+        if (contentOwner) next.content_owner = contentOwner;
+        strategicKeys.forEach((key) => {
+          const value = fieldText(strategic[key]);
+          if (value !== null) next[key] = value;
+        });
         return next;
       });
       setMode("manual");
-      setMessage("Contexto importado. Revísalo y guarda la marca.");
+      setMessage(typeof contentCreator === "string" && contentCreator.trim() && !contentOwner
+        ? "Contexto importado. Revisa manualmente quién crea el contenido y guarda la marca."
+        : "Contexto importado. Revísalo y guarda la marca.");
     } catch {
       setMessage("No pude leer ese JSON. Pídele a la IA que respete exactamente el formato del prompt.");
     }
@@ -110,7 +186,7 @@ export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca
       </section>
 
       <section className="brand-brief-fields">
-        <div className="form-grid"><Field label="Nombre de marca" value={form.name} onChange={(value) => update("name", value)} required placeholder="Escribe el nombre de tu marca" /><Field label="Sitio o Instagram" value={form.website} onChange={(value) => update("website", value)} placeholder="https:// o @usuario" /><Field label="Categoría" value={form.category} onChange={(value) => update("category", value)} required placeholder="Ej. educación, servicios, retail o tecnología" /><label>Quién crea el contenido<select value={form.content_owner} onChange={(event) => update("content_owner", event.target.value)}><option value="owner">La persona/dueña lo crea</option><option value="team">Tiene equipo interno</option><option value="agency">Agencia o freelancer</option><option value="mixed">Mixto</option></select></label></div>
+        <div className="form-grid"><Field label="Nombre de marca" value={form.name} onChange={(value) => update("name", value)} required placeholder="Escribe el nombre de tu marca" /><Field label="Sitio o Instagram" value={form.website} onChange={(value) => update("website", value)} placeholder="https:// o @usuario" /><Field label="Categoría" value={form.category} onChange={(value) => update("category", value)} required placeholder="Ej. educación, servicios, retail o tecnología" /><label>Quién crea el contenido<select value={form.content_owner} onChange={(event) => update("content_owner", normalizeContentOwner(event.target.value) || "owner")}><option value="owner">La persona/dueña lo crea</option><option value="team">Tiene equipo interno</option><option value="agency">Agencia o freelancer</option><option value="mixed">Mixto</option></select></label></div>
         <TextField label="Audiencia y avatar" value={form.audience} onChange={(value) => update("audience", value)} required placeholder="Quién compra, contexto de vida, lenguaje y situación actual." />
         <TextField label="Oferta principal" value={form.offer} onChange={(value) => update("offer", value)} required placeholder="Qué vendes, para quién, cómo funciona, precio y condiciones relevantes." />
         <div className="form-grid"><TextField label="Voz de marca" value={form.voice} onChange={(value) => update("voice", value)} required placeholder="Cómo habla y qué nunca diría." /><TextField label="Objetivo creativo" value={form.creative_goal} onChange={(value) => update("creative_goal", value)} placeholder="Qué necesita lograr con sus anuncios." /></div>
@@ -129,7 +205,3 @@ export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca
 
 function Field({ label, value, onChange, placeholder, required }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; required?: boolean }) { return <label>{label}<input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} required={required} /></label>; }
 function TextField({ label, value, onChange, placeholder, required }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; required?: boolean }) { return <label>{label}<textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} required={required} /></label>; }
-
-function buildExtractionPrompt(brandName: string) {
-  return `Actúa como estratega creativo senior y arquitecta de marca. Revisa TODA nuestra conversación e información previa sobre ${brandName || "mi marca"}. Tu objetivo es convertir lo que ya sabes en un brief profundo para crear anuncios de performance sin inventar datos.\n\nPrimero identifica qué información falta. Si faltan datos importantes, hazme máximo 10 preguntas incisivas sobre oferta, avatar, dolores, deseos, objeciones, nivel de conciencia, mecanismo, pruebas, ángulos, voz, claims permitidos y dirección visual. No entregues el JSON hasta que responda.\n\nDespués devuelve ÚNICAMENTE JSON válido, sin markdown, con esta estructura exacta:\n{"brand":{"name":"","website":"","category":"","audience":"","offer":"","voice":"","creative_goal":""},"strategic_context":{"brand_story":"","differentiators":"","pains":"","desires":"","objections":"","awareness":"","angles":[""],"proof":[""],"beliefs":"","forbidden_claims":[""],"visual_direction":""}}\n\nReglas: separa hechos de supuestos; no inventes claims, cifras ni testimonios; usa el lenguaje real de la audiencia cuando exista; convierte ideas vagas en información accionable para copy, conceptos y dirección de arte; si algo no se sabe, déjalo vacío.`;
-}

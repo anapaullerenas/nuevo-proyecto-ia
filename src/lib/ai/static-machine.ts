@@ -98,8 +98,9 @@ export type StaticArchetype = {
 };
 
 export function normalizeStaticBrief(value: Partial<StaticBrief> | null | undefined, fallbackArchetype = "automatico"): StaticBrief {
-  const fineCopyWords = [value?.texto_secundario, value?.cta, value?.disclaimer].filter(Boolean).join(" ").trim().split(/\s+/).filter(Boolean).length;
-  const renderMode = value?.text_render_mode === "layered" || Boolean(value?.disclaimer?.trim()) || fineCopyWords > 8 ? "layered" : "baked";
+  // Normal generation produces a finished ad. A post-render card must never
+  // cover an otherwise good composition unless a caller opts in explicitly.
+  const renderMode: StaticBrief["text_render_mode"] = "baked";
   return {
     arquetipo: value?.arquetipo || fallbackArchetype,
     arquetipo_label: value?.arquetipo_label || "Automático",

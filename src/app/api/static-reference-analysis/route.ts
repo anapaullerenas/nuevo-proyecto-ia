@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import {
+  chargeCredits,
+  CREDIT_COSTS,
+  creditErrorStatus,
+  refundCredits,
+} from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 
 export const maxDuration = 120;
@@ -11,15 +16,27 @@ type Input = {
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return NextResponse.json({ error: "La plataforma no está conectada." }, { status: 500 });
+  if (!supabase)
+    return NextResponse.json(
+      { error: "La plataforma no está conectada." },
+      { status: 500 },
+    );
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Inicia sesión para analizar referencias." }, { status: 401 });
+  if (!user)
+    return NextResponse.json(
+      { error: "Inicia sesión para analizar referencias." },
+      { status: 401 },
+    );
 
   const { assetId } = (await request.json()) as Input;
-  if (!assetId) return NextResponse.json({ error: "Falta la referencia." }, { status: 400 });
+  if (!assetId)
+    return NextResponse.json(
+      { error: "Falta la referencia." },
+      { status: 400 },
+    );
 
   const { data: asset } = await supabase
     .from("brand_assets")
@@ -29,24 +46,73 @@ export async function POST(request: NextRequest) {
     .eq("kind", "style_reference")
     .maybeSingle();
 
-  if (!asset) return NextResponse.json({ error: "No encontré la referencia." }, { status: 404 });
+  if (!asset)
+    return NextResponse.json(
+      { error: "No encontré la referencia." },
+      { status: 404 },
+    );
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "El análisis visual aún no está activo." }, { status: 503 });
+  if (!apiKey)
+    return NextResponse.json(
+      { error: "El análisis visual aún no está activo." },
+      { status: 503 },
+    );
 
-  const { count: analyzedCount } = await supabase.from("brand_assets").select("id", { count: "exact", head: true }).eq("brand_id", asset.brand_id).eq("owner_id", user.id).eq("kind", "style_reference").filter("metadata->>analysis_status", "eq", "ready");
-  let creditCharge = { charged: false, amount: 0 };
+  const { count: analyzedCount } = await supabase
+    .from("brand_assets")
+    .select("id", { count: "exact", head: true })
+    .eq("brand_id", asset.brand_id)
+    .eq("owner_id", user.id)
+    .eq("kind", "style_reference")
+    .filter("metadata->>analysis_status", "eq", "ready");
+  let creditCharge: Awaited<ReturnType<typeof chargeCredits>> = {
+    charged: false,
+    amount: 0,
+    operationId: null,
+  };
   if ((analyzedCount || 0) >= 6) {
     try {
-      creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS.reference_analysis, reason: "reference_analysis", brandId: asset.brand_id, provider: "openai", model: "gpt-4.1-mini", inputTokens: 1800, outputTokens: 900, costUsd: estimateCostUsd({ provider: "openai", model: "gpt-4.1-mini", inputTokens: 1800, outputTokens: 900 }), route: "analysis" });
-    } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) }); }
+      creditCharge = await chargeCredits({
+        userId: user.id,
+        amount: CREDIT_COSTS.reference_analysis,
+        reason: "reference_analysis",
+        brandId: asset.brand_id,
+        provider: "openai",
+        model: "gpt-4.1-mini",
+        inputTokens: 1800,
+        outputTokens: 900,
+        costUsd: estimateCostUsd({
+          provider: "openai",
+          model: "gpt-4.1-mini",
+          inputTokens: 1800,
+          outputTokens: 900,
+        }),
+        route: "analysis",
+      });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "No pudimos validar tus créditos.",
+        },
+        { status: creditErrorStatus(error) },
+      );
+    }
   }
   try {
-    const { data: blob, error: downloadError } = await supabase.storage.from(asset.bucket_id).download(asset.storage_path);
-    if (downloadError || !blob) throw new Error(downloadError?.message || "No se pudo leer la imagen.");
+    const { data: blob, error: downloadError } = await supabase.storage
+      .from(asset.bucket_id)
+      .download(asset.storage_path);
+    if (downloadError || !blob)
+      throw new Error(downloadError?.message || "No se pudo leer la imagen.");
 
     const encoded = Buffer.from(await blob.arrayBuffer()).toString("base64");
-    const mime = asset.mime_type?.startsWith("image/") ? asset.mime_type : "image/png";
+    const mime = asset.mime_type?.startsWith("image/")
+      ? asset.mime_type
+      : "image/png";
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -67,7 +133,13 @@ export async function POST(request: NextRequest) {
             role: "user",
             content: [
               { type: "text", text: `Referencia: ${asset.file_name}` },
-              { type: "image_url", image_url: { url: `data:${mime};base64,${encoded}`, detail: "high" } },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mime};base64,${encoded}`,
+                  detail: "high",
+                },
+              },
             ],
           },
         ],
@@ -86,12 +158,22 @@ export async function POST(request: NextRequest) {
       analysis_status: "ready",
       analyzed_at: new Date().toISOString(),
     };
-    const { error: updateError } = await supabase.from("brand_assets").update({ metadata }).eq("id", asset.id);
+    const { error: updateError } = await supabase
+      .from("brand_assets")
+      .update({ metadata })
+      .eq("id", asset.id);
     if (updateError) throw new Error(updateError.message);
 
     return NextResponse.json({ assetId: asset.id, analysis });
   } catch (error) {
-    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "reference_analysis", asset.brand_id);
+    if (creditCharge.charged)
+      await refundCredits(
+        user.id,
+        creditCharge.amount,
+        "reference_analysis",
+        asset.brand_id,
+        creditCharge.operationId,
+      );
     console.error("reference analysis failed", error);
     await supabase
       .from("brand_assets")
@@ -102,6 +184,12 @@ export async function POST(request: NextRequest) {
         },
       })
       .eq("id", asset.id);
-    return NextResponse.json({ error: "No pudimos leer esta referencia. Si hubo cobro, los créditos ya fueron devueltos." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          "No pudimos leer esta referencia. Si hubo cobro, los créditos ya fueron devueltos.",
+      },
+      { status: 500 },
+    );
   }
 }

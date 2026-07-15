@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import sharp from "sharp";
 import { getImageSize, StaticBrief } from "@/lib/ai/static-machine";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import {
+  chargeCredits,
+  CREDIT_COSTS,
+  creditErrorStatus,
+  refundCredits,
+} from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
-import { appendInputFidelityWhenSupported, imageApiErrorFromResponse, imageGenerationFailure } from "@/lib/ai/image-api-errors";
+import {
+  appendInputFidelityWhenSupported,
+  imageApiErrorFromResponse,
+  imageGenerationFailure,
+} from "@/lib/ai/image-api-errors";
 
 export const maxDuration = 300;
 
@@ -12,80 +20,161 @@ type EditInput = { staticId: string; instruction: string };
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return NextResponse.json({ error: "La plataforma no está conectada." }, { status: 500 });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Inicia sesión para corregir la imagen." }, { status: 401 });
+  if (!supabase)
+    return NextResponse.json(
+      { error: "La plataforma no está conectada." },
+      { status: 500 },
+    );
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user)
+    return NextResponse.json(
+      { error: "Inicia sesión para corregir la imagen." },
+      { status: 401 },
+    );
 
   const body = (await request.json()) as EditInput;
   const instruction = body.instruction?.trim();
   if (!body.staticId || !instruction || instruction.length < 6) {
-    return NextResponse.json({ error: "Describe la corrección puntual que quieres hacer." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Describe la corrección puntual que quieres hacer." },
+      { status: 400 },
+    );
   }
 
   const { data: source } = await supabase
     .from("static_creatives")
-    .select("id,brand_id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version")
+    .select(
+      "id,brand_id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version",
+    )
     .eq("id", body.staticId)
     .eq("owner_id", user.id)
     .maybeSingle();
-  if (!source?.storage_path) return NextResponse.json({ error: "No encontré la imagen que quieres corregir." }, { status: 404 });
+  if (!source?.storage_path)
+    return NextResponse.json(
+      { error: "No encontré la imagen que quieres corregir." },
+      { status: 404 },
+    );
 
-  const { data: sourceBlob, error: sourceError } = await supabase.storage.from("creative-assets").download(source.storage_path);
-  if (sourceError || !sourceBlob) return NextResponse.json({ error: "No pudimos abrir la versión elegida." }, { status: 400 });
+  const { data: sourceBlob, error: sourceError } = await supabase.storage
+    .from("creative-assets")
+    .download(source.storage_path);
+  if (sourceError || !sourceBlob)
+    return NextResponse.json(
+      { error: "No pudimos abrir la versión elegida." },
+      { status: 400 },
+    );
 
   let creditCharge;
   try {
-    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS.static_edit, reason: "static_edit", brandId: source.brand_id, provider: "openai", model: "gpt-image-2-medium", images: 1, costUsd: estimateCostUsd({ provider: "openai", model: "gpt-image-2-medium", images: 1 }), route: "image" });
+    creditCharge = await chargeCredits({
+      userId: user.id,
+      amount: CREDIT_COSTS.static_edit,
+      reason: "static_edit",
+      brandId: source.brand_id,
+      provider: "openai",
+      model: "gpt-image-2-medium",
+      images: 1,
+      costUsd: estimateCostUsd({
+        provider: "openai",
+        model: "gpt-image-2-medium",
+        images: 1,
+      }),
+      route: "image",
+    });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "No pudimos validar tus créditos.",
+      },
+      { status: creditErrorStatus(error) },
+    );
   }
   try {
     const sourceBuffer = Buffer.from(await sourceBlob.arrayBuffer());
     const currentFicha = source.ficha as StaticBrief;
     const replacement = parseTextReplacement(instruction);
-    const nextFicha = replacement ? replaceFichaText(currentFicha, replacement.from, replacement.to) : currentFicha;
-    const changedFichaText = JSON.stringify(nextFicha) !== JSON.stringify(currentFicha);
+    const nextFicha = replacement
+      ? replaceFichaText(currentFicha, replacement.from, replacement.to)
+      : currentFicha;
+    const changedFichaText =
+      JSON.stringify(nextFicha) !== JSON.stringify(currentFicha);
 
-    let output: Buffer;
-    if (replacement && changedFichaText && currentFicha.text_render_mode === "layered") {
-      output = await replaceExactTextBlock(sourceBuffer, nextFicha);
-    } else {
-      output = await editWithImageModel(sourceBuffer, source.format || "4:5 Feed", source.quality === "high" ? "high" : "medium", instruction);
-    }
+    const output = await editWithImageModel(
+      sourceBuffer,
+      source.format || "4:5 Feed",
+      source.quality === "high" ? "high" : "medium",
+      instruction,
+    );
 
     const storagePath = `${user.id}/${source.brand_id}/static-edit-${Date.now()}-${crypto.randomUUID()}.png`;
-    const { error: uploadError } = await supabase.storage.from("creative-assets").upload(storagePath, output, { contentType: "image/png" });
+    const { error: uploadError } = await supabase.storage
+      .from("creative-assets")
+      .upload(storagePath, output, { contentType: "image/png" });
     if (uploadError) throw uploadError;
-    const { data: signed } = await supabase.storage.from("creative-assets").createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+    const { data: signed } = await supabase.storage
+      .from("creative-assets")
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
 
-    const { data: saved, error: saveError } = await supabase.from("static_creatives").insert({
-      brand_id: source.brand_id,
-      owner_id: user.id,
-      storage_path: storagePath,
-      prompt: `${source.prompt || ""}\nCORRECCIÓN: ${instruction}`,
-      ficha: nextFicha,
-      archetype: source.archetype,
-      format: source.format,
-      funnel_stage: source.funnel_stage,
-      quality: source.quality,
-      version: (source.version || 1) + 1,
-      parent_id: source.id,
-      concept: { edit_instruction: instruction, source_static_id: source.id, text_only_edit: Boolean(replacement && changedFichaText) },
-      qa_report: { status: "version_corregida", instruction },
-      status: "edited",
-    }).select("id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,parent_id,status,created_at").single();
+    const { data: saved, error: saveError } = await supabase
+      .from("static_creatives")
+      .insert({
+        brand_id: source.brand_id,
+        owner_id: user.id,
+        storage_path: storagePath,
+        prompt: `${source.prompt || ""}\nCORRECCIÓN: ${instruction}`,
+        ficha: nextFicha,
+        archetype: source.archetype,
+        format: source.format,
+        funnel_stage: source.funnel_stage,
+        quality: source.quality,
+        version: (source.version || 1) + 1,
+        parent_id: source.id,
+        concept: {
+          edit_instruction: instruction,
+          source_static_id: source.id,
+          text_only_edit: Boolean(replacement && changedFichaText),
+        },
+        qa_report: { status: "version_corregida", instruction },
+        status: "edited",
+      })
+      .select(
+        "id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,parent_id,status,created_at",
+      )
+      .single();
     if (saveError) throw saveError;
 
-    return NextResponse.json({ static: { ...saved, public_url: signed?.signedUrl || null } });
+    return NextResponse.json({
+      static: { ...saved, public_url: signed?.signedUrl || null },
+    });
   } catch (error) {
-    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "static_edit", source.brand_id);
+    if (creditCharge.charged)
+      await refundCredits(
+        user.id,
+        creditCharge.amount,
+        "static_edit",
+        source.brand_id,
+        creditCharge.operationId,
+      );
     console.error("static edit failed", error);
     const failure = imageGenerationFailure(error);
-    return NextResponse.json({ error: failure.message, code: failure.code }, { status: failure.status });
+    return NextResponse.json(
+      { error: failure.message, code: failure.code },
+      { status: failure.status },
+    );
   }
 }
 
-async function editWithImageModel(source: Buffer, format: string, quality: "medium" | "high", instruction: string) {
+async function editWithImageModel(
+  source: Buffer,
+  format: string,
+  quality: "medium" | "high",
+  instruction: string,
+) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("Image editing is not configured");
   const form = new FormData();
@@ -96,9 +185,20 @@ async function editWithImageModel(source: Buffer, format: string, quality: "medi
   form.append("n", "1");
   form.append("output_format", "png");
   appendInputFidelityWhenSupported(form, model);
-  form.append("image[]", new Blob([new Uint8Array(source)], { type: "image/png" }), "version-original.png");
-  form.append("prompt", `Edita esta pieza publicitaria. Aplica SOLAMENTE este cambio: ${instruction}. Conserva exactamente composición, dimensiones, producto, envase, iluminación, modelo, logo, colores y todos los demás textos. No rediseñes la pieza. No añadas elementos. Devuelve una sola imagen terminada.`);
-  const response = await fetch("https://api.openai.com/v1/images/edits", { method: "POST", headers: { authorization: `Bearer ${apiKey}` }, body: form });
+  form.append(
+    "image[]",
+    new Blob([new Uint8Array(source)], { type: "image/png" }),
+    "version-original.png",
+  );
+  form.append(
+    "prompt",
+    `Edita esta pieza publicitaria. Aplica SOLAMENTE este cambio: ${instruction}. Conserva exactamente composición, dimensiones, producto, envase, iluminación, modelo, logo, colores y todos los demás textos. No rediseñes la pieza. No añadas elementos. Devuelve una sola imagen terminada.`,
+  );
+  const response = await fetch("https://api.openai.com/v1/images/edits", {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
   if (!response.ok) throw await imageApiErrorFromResponse(response);
   const data = await response.json();
   const b64 = data.data?.[0]?.b64_json;
@@ -122,7 +222,8 @@ function parseTextReplacement(instruction: string) {
 }
 
 function replaceFichaText(ficha: StaticBrief, from: string, to: string) {
-  const replace = (value: string) => value.replace(new RegExp(escapeRegExp(from), "gi"), to);
+  const replace = (value: string) =>
+    value.replace(new RegExp(escapeRegExp(from), "gi"), to);
   return {
     ...ficha,
     concepto: replace(ficha.concepto),
@@ -133,36 +234,6 @@ function replaceFichaText(ficha: StaticBrief, from: string, to: string) {
   };
 }
 
-async function replaceExactTextBlock(source: Buffer, ficha: StaticBrief) {
-  const image = sharp(source);
-  const metadata = await image.metadata();
-  const width = metadata.width || 1080;
-  const height = metadata.height || 1350;
-  const margin = Math.round(width * .07);
-  const headlineSize = Math.round(width * .058);
-  const secondarySize = Math.round(width * .029);
-  const disclaimerSize = Math.round(width * .018);
-  const boxHeight = Math.round(height * (ficha.disclaimer ? .22 : .18));
-  const boxY = height - boxHeight - margin;
-  const palette = /^#[0-9a-f]{6}$/i.test(ficha.paleta[0] || "") ? ficha.paleta[0] : "#632E59";
-  const headline = textLines(ficha.texto_principal, 30, margin * 1.45, boxY + headlineSize * 1.18, headlineSize * 1.05);
-  const secondaryY = boxY + headlineSize * (headline.count > 1 ? 3.05 : 2.05);
-  const cta = escapeSvg(ficha.cta);
-  const ctaWidth = Math.min(width * .3, Math.max(170, cta.length * secondarySize * .56));
-  const overlay = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><style>.copy{font-family:'Helvetica Neue',Arial,sans-serif;fill:#fff}.h{font-size:${headlineSize}px;font-weight:800}.s{font-size:${secondarySize}px;font-weight:600}.c{font-size:${secondarySize}px;font-weight:800;fill:${palette}}.l{font-size:${disclaimerSize}px;font-weight:500;fill:rgba(255,255,255,.86)}</style><rect x="${margin}" y="${boxY}" width="${width-margin*2}" height="${boxHeight}" rx="${Math.round(width*.025)}" fill="${palette}"/><text class="copy h">${headline.svg}</text><text x="${margin*1.45}" y="${secondaryY}" class="copy s">${escapeSvg(ficha.texto_secundario)}</text>${ficha.cta_usage === "button" ? `<rect x="${width-margin*1.45-ctaWidth}" y="${boxY+headlineSize*1.15}" width="${ctaWidth}" height="${secondarySize*1.75}" rx="${secondarySize*.88}" fill="#fff6f0"/>` : ""}${ficha.cta_usage !== "none" ? `<text x="${width-margin*1.45-ctaWidth/2}" y="${boxY+headlineSize*1.15+secondarySize*1.15}" text-anchor="middle" class="copy c">${cta}</text>` : ""}${ficha.disclaimer?`<text x="${margin*1.45}" y="${boxY+boxHeight-disclaimerSize*1.5}" class="copy l">${escapeSvg(ficha.disclaimer)}</text>`:""}</svg>`;
-  return image.composite([{ input: Buffer.from(overlay) }]).png().toBuffer();
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-
-function textLines(value: string, max: number, x: number, y: number, lineHeight: number) {
-  const words = escapeSvg(value).split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  for (const word of words) {
-    const current = lines.at(-1) || "";
-    if (!current || `${current} ${word}`.length > max) lines.push(word); else lines[lines.length - 1] = `${current} ${word}`;
-  }
-  const visible = lines.slice(0, 2);
-  return { count: visible.length, svg: visible.map((line, index) => `<tspan x="${x}" y="${y+index*lineHeight}">${line}</tspan>`).join("") };
-}
-
-function escapeSvg(value: string) { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[character] || character); }
-function escapeRegExp(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }

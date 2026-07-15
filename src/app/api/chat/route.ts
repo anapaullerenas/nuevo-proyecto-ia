@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CHAT_STRATEGIST_PROMPT } from "@/lib/ai/prompts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import {
+  chargeCredits,
+  CREDIT_COSTS,
+  creditErrorStatus,
+  refundCredits,
+} from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 
 type ChatInput = {
@@ -13,7 +18,10 @@ export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
 
   if (!supabase) {
-    return NextResponse.json({ error: "La plataforma aun no esta configurada." }, { status: 500 });
+    return NextResponse.json(
+      { error: "La plataforma aun no esta configurada." },
+      { status: 500 },
+    );
   }
 
   const {
@@ -21,30 +29,51 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Inicia sesión para usar el chat." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Inicia sesión para usar el chat." },
+      { status: 401 },
+    );
   }
 
   const body = (await request.json()) as ChatInput;
   const userMessage = body.message?.trim();
 
   if (!userMessage) {
-    return NextResponse.json({ error: "Escribe o dicta una pregunta para continuar." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Escribe o dicta una pregunta para continuar." },
+      { status: 400 },
+    );
   }
 
   const { data: brand } = await supabase
     .from("brands")
-    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context")
+    .select(
+      "id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context",
+    )
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (!brand) {
-    return NextResponse.json({ error: "Primero registra una marca para darle contexto a la IA." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Primero registra una marca para darle contexto a la IA." },
+      { status: 400 },
+    );
   }
 
-  const [{ data: economics }, { data: recipes }, { data: latestMeta }, { data: latestCreative }] = await Promise.all([
-    supabase.from("brand_economics").select("*").eq("brand_id", brand.id).eq("owner_id", user.id).maybeSingle(),
+  const [
+    { data: economics },
+    { data: recipes },
+    { data: latestMeta },
+    { data: latestCreative },
+  ] = await Promise.all([
+    supabase
+      .from("brand_economics")
+      .select("*")
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .maybeSingle(),
     supabase
       .from("brand_recipes")
       .select("rule")
@@ -119,7 +148,8 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
 }
 `;
 
-  let conversation: { id: string; title: string; updated_at: string } | null = null;
+  let conversation: { id: string; title: string; updated_at: string } | null =
+    null;
   let history: Array<{ role: "user" | "assistant"; content: string }> = [];
 
   if (body.conversationId) {
@@ -132,7 +162,10 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
       .maybeSingle();
 
     if (!existingConversation) {
-      return NextResponse.json({ error: "No encontramos esa conversación." }, { status: 404 });
+      return NextResponse.json(
+        { error: "No encontramos esa conversación." },
+        { status: 404 },
+      );
     }
 
     conversation = existingConversation;
@@ -144,20 +177,52 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
       .order("created_at", { ascending: false })
       .limit(8);
 
-    history = (storedMessages || [])
-      .reverse()
-      .map((message) => ({
-        role: message.role as "user" | "assistant",
-        content: message.content,
-      }));
+    history = (storedMessages || []).reverse().map((message) => ({
+      role: message.role as "user" | "assistant",
+      content: message.content,
+    }));
   }
 
-  const preferredProvider = process.env.ANTHROPIC_API_KEY ? "anthropic" as const : "openai" as const;
-  const preferredModel = preferredProvider === "anthropic" ? (process.env.ANTHROPIC_MODEL || "claude-sonnet-5") : (process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini");
+  const preferredProvider = process.env.ANTHROPIC_API_KEY
+    ? ("anthropic" as const)
+    : ("openai" as const);
+  const preferredModel =
+    preferredProvider === "anthropic"
+      ? process.env.ANTHROPIC_MODEL || "claude-sonnet-5"
+      : process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini";
   let creditCharge;
   try {
-    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS.chat_message, reason: "chat_message", brandId: brand.id, provider: preferredProvider, model: preferredModel, inputTokens: 2600, outputTokens: 900, costUsd: estimateCostUsd({ provider: preferredProvider, model: preferredProvider === "anthropic" ? "claude-sonnet-5" : "gpt-4.1-mini", inputTokens: 2600, outputTokens: 900 }), route: "chat" });
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) }); }
+    creditCharge = await chargeCredits({
+      userId: user.id,
+      amount: CREDIT_COSTS.chat_message,
+      reason: "chat_message",
+      brandId: brand.id,
+      provider: preferredProvider,
+      model: preferredModel,
+      inputTokens: 2600,
+      outputTokens: 900,
+      costUsd: estimateCostUsd({
+        provider: preferredProvider,
+        model:
+          preferredProvider === "anthropic"
+            ? "claude-sonnet-5"
+            : "gpt-4.1-mini",
+        inputTokens: 2600,
+        outputTokens: 900,
+      }),
+      route: "chat",
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "No pudimos validar tus créditos.",
+      },
+      { status: creditErrorStatus(error) },
+    );
+  }
 
   let answer = "";
   let provider: "anthropic" | "openai" = "anthropic";
@@ -169,25 +234,40 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
       answer = await askOpenAI(brandContext, history, userMessage);
       provider = "openai";
     } catch (openAiError) {
-      if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "chat_message", brand.id);
+      if (creditCharge.charged)
+        await refundCredits(
+          user.id,
+          creditCharge.amount,
+          "chat_message",
+          brand.id,
+          creditCharge.operationId,
+        );
       console.error("chat providers failed", anthropicError, openAiError);
-      return NextResponse.json({ error: "La estratega no pudo responder en este momento. Intenta nuevamente; tus créditos fueron devueltos." }, { status: 500 });
+      return NextResponse.json(
+        {
+          error:
+            "La estratega no pudo responder en este momento. Intenta nuevamente; tus créditos fueron devueltos.",
+        },
+        { status: 500 },
+      );
     }
   }
 
   try {
     if (!conversation) {
-      const { data: createdConversation, error: conversationError } = await supabase
-        .from("chat_conversations")
-        .insert({
-          owner_id: user.id,
-          brand_id: brand.id,
-          title: conversationTitle(userMessage),
-        })
-        .select("id,title,updated_at")
-        .single();
+      const { data: createdConversation, error: conversationError } =
+        await supabase
+          .from("chat_conversations")
+          .insert({
+            owner_id: user.id,
+            brand_id: brand.id,
+            title: conversationTitle(userMessage),
+          })
+          .select("id,title,updated_at")
+          .single();
 
-      if (conversationError || !createdConversation) throw conversationError || new Error("No se creó la conversación.");
+      if (conversationError || !createdConversation)
+        throw conversationError || new Error("No se creó la conversación.");
       conversation = createdConversation;
     } else {
       const updatedAt = new Date().toISOString();
@@ -203,19 +283,49 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
     const { data: savedMessages, error: messageError } = await supabase
       .from("chat_messages")
       .insert([
-        { conversation_id: conversation.id, owner_id: user.id, role: "user", content: userMessage },
-        { conversation_id: conversation.id, owner_id: user.id, role: "assistant", content: answer },
+        {
+          conversation_id: conversation.id,
+          owner_id: user.id,
+          role: "user",
+          content: userMessage,
+        },
+        {
+          conversation_id: conversation.id,
+          owner_id: user.id,
+          role: "assistant",
+          content: answer,
+        },
       ])
       .select("id,role");
 
     if (messageError) throw messageError;
-    const assistantMessage = savedMessages?.find((message) => message.role === "assistant");
+    const assistantMessage = savedMessages?.find(
+      (message) => message.role === "assistant",
+    );
 
-    return NextResponse.json({ answer, provider, conversation, messageId: assistantMessage?.id });
+    return NextResponse.json({
+      answer,
+      provider,
+      conversation,
+      messageId: assistantMessage?.id,
+    });
   } catch (persistenceError) {
-    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "chat_message", brand.id);
+    if (creditCharge.charged)
+      await refundCredits(
+        user.id,
+        creditCharge.amount,
+        "chat_message",
+        brand.id,
+        creditCharge.operationId,
+      );
     console.error("chat history persistence failed", persistenceError);
-    return NextResponse.json({ error: "La respuesta se generó, pero no pudimos guardarla. Tus créditos fueron devueltos; intenta nuevamente." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          "La respuesta se generó, pero no pudimos guardarla. Tus créditos fueron devueltos; intenta nuevamente.",
+      },
+      { status: 500 },
+    );
   }
 }
 
@@ -255,7 +365,9 @@ async function askAnthropic(
 
   const data = await response.json();
   const text = data.content
-    ?.map((part: { type: string; text?: string }) => (part.type === "text" ? part.text : ""))
+    ?.map((part: { type: string; text?: string }) =>
+      part.type === "text" ? part.text : "",
+    )
     .join("")
     .trim();
 
@@ -282,8 +394,14 @@ async function askOpenAI(
       temperature: 0.65,
       max_tokens: 1400,
       messages: [
-        { role: "system", content: `${CHAT_STRATEGIST_PROMPT}\n\n${brandContext}` },
-        ...history.map((message) => ({ role: message.role, content: message.content })),
+        {
+          role: "system",
+          content: `${CHAT_STRATEGIST_PROMPT}\n\n${brandContext}`,
+        },
+        ...history.map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
         { role: "user", content: userMessage },
       ],
     }),

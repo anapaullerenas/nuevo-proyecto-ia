@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CREATIVE_DISSECTION_PROMPT } from "@/lib/ai/prompts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import {
+  chargeCredits,
+  CREDIT_COSTS,
+  creditErrorStatus,
+  refundCredits,
+} from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 
 type CreativeAnalysisInput = {
@@ -43,7 +48,10 @@ export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
 
   if (!supabase) {
-    return NextResponse.json({ error: "La plataforma aun no esta configurada." }, { status: 500 });
+    return NextResponse.json(
+      { error: "La plataforma aun no esta configurada." },
+      { status: 500 },
+    );
   }
 
   const {
@@ -51,7 +59,10 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Inicia sesión para analizar creativos." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Inicia sesión para analizar creativos." },
+      { status: 401 },
+    );
   }
 
   let body: ParsedCreativeAnalysisInput;
@@ -59,13 +70,21 @@ export async function POST(request: NextRequest) {
     body = await parseCreativeAnalysisRequest(request);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No pude leer el creativo enviado." },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "No pude leer el creativo enviado.",
+      },
       { status: 400 },
     );
   }
 
   if (!body.assetId) {
-    return NextResponse.json({ error: "Falta el creativo a analizar." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Falta el creativo a analizar." },
+      { status: 400 },
+    );
   }
 
   const { data: asset, error: assetError } = await supabase
@@ -76,37 +95,86 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (assetError || !asset) {
-    return NextResponse.json({ error: "No encontre ese creativo en tu cuenta." }, { status: 404 });
+    return NextResponse.json(
+      { error: "No encontre ese creativo en tu cuenta." },
+      { status: 404 },
+    );
   }
 
   const { data: brand } = await supabase
     .from("brands")
-    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context")
+    .select(
+      "id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context",
+    )
     .eq("id", asset.brand_id)
     .eq("owner_id", user.id)
     .maybeSingle();
 
   if (!brand) {
-    return NextResponse.json({ error: "No encontre la marca del creativo." }, { status: 404 });
+    return NextResponse.json(
+      { error: "No encontre la marca del creativo." },
+      { status: 404 },
+    );
   }
 
-  await supabase.from("creative_assets").update({ status: "processing" }).eq("id", asset.id).eq("owner_id", user.id);
+  await supabase
+    .from("creative_assets")
+    .update({ status: "processing" })
+    .eq("id", asset.id)
+    .eq("owner_id", user.id);
 
-  const reason = asset.asset_type === "video" ? "creative_analysis_video" : "creative_analysis_image";
+  const reason =
+    asset.asset_type === "video"
+      ? "creative_analysis_video"
+      : "creative_analysis_image";
   const visionModel = process.env.OPENAI_VISION_MODEL || "gpt-4.1";
   let creditCharge;
   try {
-    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS[reason], reason, brandId: asset.brand_id, provider: "openai", model: visionModel, inputTokens: asset.asset_type === "video" ? 8000 : 2500, outputTokens: 3500, costUsd: estimateCostUsd({ provider: "openai", model: visionModel, inputTokens: asset.asset_type === "video" ? 8000 : 2500, outputTokens: 3500 }), route: "analysis" });
+    creditCharge = await chargeCredits({
+      userId: user.id,
+      amount: CREDIT_COSTS[reason],
+      reason,
+      brandId: asset.brand_id,
+      provider: "openai",
+      model: visionModel,
+      inputTokens: asset.asset_type === "video" ? 8000 : 2500,
+      outputTokens: 3500,
+      costUsd: estimateCostUsd({
+        provider: "openai",
+        model: visionModel,
+        inputTokens: asset.asset_type === "video" ? 8000 : 2500,
+        outputTokens: 3500,
+      }),
+      route: "analysis",
+    });
   } catch (error) {
-    await supabase.from("creative_assets").update({ status: "uploaded" }).eq("id", asset.id).eq("owner_id", user.id);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) });
+    await supabase
+      .from("creative_assets")
+      .update({ status: "uploaded" })
+      .eq("id", asset.id)
+      .eq("owner_id", user.id);
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "No pudimos validar tus créditos.",
+      },
+      { status: creditErrorStatus(error) },
+    );
   }
 
   try {
-    const imageInputs = await getImageInputs(supabase, asset, body.frames || []);
+    const imageInputs = await getImageInputs(
+      supabase,
+      asset,
+      body.frames || [],
+    );
 
     if (!imageInputs.length) {
-      throw new Error("No pude leer imagenes o frames para analizar este creativo.");
+      throw new Error(
+        "No pude leer imagenes o frames para analizar este creativo.",
+      );
     }
 
     const { data: recipes } = await supabase
@@ -117,21 +185,34 @@ export async function POST(request: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(12);
 
-    const transcript = asset.asset_type === "video"
-      ? await transcribeVideo(supabase, asset, body.audioFile, body.audioDurationSeconds)
-      : null;
+    const transcript =
+      asset.asset_type === "video"
+        ? await transcribeVideo(
+            supabase,
+            asset,
+            body.audioFile,
+            body.audioDurationSeconds,
+          )
+        : null;
     const aiResult = await analyzeWithOpenAI({
       brand,
       asset,
       imageInputs,
       transcript,
-      previousRecipes: (recipes || []).map((recipe) => recipe.rule).filter(Boolean),
+      previousRecipes: (recipes || [])
+        .map((recipe) => recipe.rule)
+        .filter(Boolean),
     });
-    const result = asset.asset_type === "video" && transcript
-      ? attachVerifiedVideoEvidence(aiResult, transcript, imageInputs)
-      : aiResult;
+    const result =
+      asset.asset_type === "video" && transcript
+        ? attachVerifiedVideoEvidence(aiResult, transcript, imageInputs)
+        : aiResult;
 
-    await supabase.from("creative_assets").update({ status: "analyzed" }).eq("id", asset.id).eq("owner_id", user.id);
+    await supabase
+      .from("creative_assets")
+      .update({ status: "analyzed" })
+      .eq("id", asset.id)
+      .eq("owner_id", user.id);
 
     const { data: savedAnalysis, error: saveError } = await supabase
       .from("creative_analyses")
@@ -158,11 +239,25 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ analysis: savedAnalysis });
   } catch (error) {
-    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, reason, asset.brand_id);
+    if (creditCharge.charged)
+      await refundCredits(
+        user.id,
+        creditCharge.amount,
+        reason,
+        asset.brand_id,
+        creditCharge.operationId,
+      );
     console.error("creative analysis failed", error);
-    await supabase.from("creative_assets").update({ status: "failed" }).eq("id", asset.id).eq("owner_id", user.id);
+    await supabase
+      .from("creative_assets")
+      .update({ status: "failed" })
+      .eq("id", asset.id)
+      .eq("owner_id", user.id);
     return NextResponse.json(
-      { error: "No pudimos terminar este análisis. Tus créditos fueron devueltos; prueba nuevamente con el archivo original." },
+      {
+        error:
+          "No pudimos terminar este análisis. Tus créditos fueron devueltos; prueba nuevamente con el archivo original.",
+      },
       { status: 500 },
     );
   }
@@ -170,12 +265,17 @@ export async function POST(request: NextRequest) {
 
 async function transcribeVideo(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
-  asset: { storage_path: string | null; file_name: string | null; mime_type: string | null },
+  asset: {
+    storage_path: string | null;
+    file_name: string | null;
+    mime_type: string | null;
+  },
   extractedAudio?: File,
   extractedAudioDurationSeconds?: number,
 ): Promise<VideoTranscript> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("La transcripción del video aún no está activa.");
+  if (!apiKey)
+    throw new Error("La transcripción del video aún no está activa.");
 
   let source: Blob;
   let sourceName: string;
@@ -186,9 +286,17 @@ async function transcribeVideo(
     sourceName = extractedAudio.name || "audio-completo.wav";
     sourceType = extractedAudio.type || "audio/wav";
   } else {
-    if (!asset.storage_path) throw new Error("El video grande debe analizarse desde el archivo original seleccionado.");
-    const { data, error } = await supabase.storage.from("creative-assets").download(asset.storage_path);
-    if (error || !data) throw new Error(error?.message || "No pude descargar el video para escucharlo.");
+    if (!asset.storage_path)
+      throw new Error(
+        "El video grande debe analizarse desde el archivo original seleccionado.",
+      );
+    const { data, error } = await supabase.storage
+      .from("creative-assets")
+      .download(asset.storage_path);
+    if (error || !data)
+      throw new Error(
+        error?.message || "No pude descargar el video para escucharlo.",
+      );
     source = data;
     sourceName = asset.file_name || "creativo.mp4";
     sourceType = asset.mime_type || data.type || "video/mp4";
@@ -206,24 +314,36 @@ async function transcribeVideo(
     requestTimestampedTranscript(apiKey, audioFile),
   ]);
 
-  const precision = precisionResult.status === "fulfilled" ? precisionResult.value : null;
-  const timestamped = timestampResult.status === "fulfilled" ? timestampResult.value : null;
+  const precision =
+    precisionResult.status === "fulfilled" ? precisionResult.value : null;
+  const timestamped =
+    timestampResult.status === "fulfilled" ? timestampResult.value : null;
 
   if (!precision?.text && !timestamped?.text) {
-    const precisionError = precisionResult.status === "rejected" ? precisionResult.reason : null;
-    const timestampError = timestampResult.status === "rejected" ? timestampResult.reason : null;
-    console.error("OpenAI transcription failed", { precisionError, timestampError });
-    throw new Error("OpenAI no pudo reconstruir el audio completo. No se generó un análisis parcial.");
+    const precisionError =
+      precisionResult.status === "rejected" ? precisionResult.reason : null;
+    const timestampError =
+      timestampResult.status === "rejected" ? timestampResult.reason : null;
+    console.error("OpenAI transcription failed", {
+      precisionError,
+      timestampError,
+    });
+    throw new Error(
+      "OpenAI no pudo reconstruir el audio completo. No se generó un análisis parcial.",
+    );
   }
 
   const text = precision?.text || timestamped?.text || "";
-  const durationSeconds = timestamped?.duration || extractedAudioDurationSeconds || undefined;
+  const durationSeconds =
+    timestamped?.duration || extractedAudioDurationSeconds || undefined;
   const segments = timestamped?.segments?.length
-    ? timestamped.segments.map((segment) => ({
-        start: Number(segment.start) || 0,
-        end: Number(segment.end) || 0,
-        text: segment.text?.trim() || "",
-      })).filter((segment) => segment.text)
+    ? timestamped.segments
+        .map((segment) => ({
+          start: Number(segment.start) || 0,
+          end: Number(segment.end) || 0,
+          text: segment.text?.trim() || "",
+        }))
+        .filter((segment) => segment.text)
     : text
       ? [{ start: 0, end: durationSeconds || 0, text }]
       : [];
@@ -249,14 +369,19 @@ async function requestPrecisionTranscript(apiKey: string, audioFile: File) {
     "Transcribe literalmente el anuncio completo en español. Conserva nombres de marca, cifras, anglicismos, muletillas, repeticiones y llamadas a la acción; no resumas ni completes frases.",
   );
 
-  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-    method: "POST",
-    headers: { authorization: `Bearer ${apiKey}` },
-    body: form,
-  });
+  const response = await fetch(
+    "https://api.openai.com/v1/audio/transcriptions",
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}` },
+      body: form,
+    },
+  );
 
   if (!response.ok) {
-    throw new Error(`gpt-4o-transcribe respondió ${response.status}: ${(await response.text()).slice(0, 180)}`);
+    throw new Error(
+      `gpt-4o-transcribe respondió ${response.status}: ${(await response.text()).slice(0, 180)}`,
+    );
   }
 
   return (await response.json()) as { text?: string };
@@ -271,14 +396,19 @@ async function requestTimestampedTranscript(apiKey: string, audioFile: File) {
   form.append("timestamp_granularities[]", "segment");
   form.append("temperature", "0");
 
-  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-    method: "POST",
-    headers: { authorization: `Bearer ${apiKey}` },
-    body: form,
-  });
+  const response = await fetch(
+    "https://api.openai.com/v1/audio/transcriptions",
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}` },
+      body: form,
+    },
+  );
 
   if (!response.ok) {
-    throw new Error(`whisper-1 respondió ${response.status}: ${(await response.text()).slice(0, 180)}`);
+    throw new Error(
+      `whisper-1 respondió ${response.status}: ${(await response.text()).slice(0, 180)}`,
+    );
   }
 
   return (await response.json()) as {
@@ -288,7 +418,9 @@ async function requestTimestampedTranscript(apiKey: string, audioFile: File) {
   };
 }
 
-async function parseCreativeAnalysisRequest(request: NextRequest): Promise<ParsedCreativeAnalysisInput> {
+async function parseCreativeAnalysisRequest(
+  request: NextRequest,
+): Promise<ParsedCreativeAnalysisInput> {
   const contentType = request.headers.get("content-type") || "";
 
   if (!contentType.includes("multipart/form-data")) {
@@ -308,7 +440,8 @@ async function parseCreativeAnalysisRequest(request: NextRequest): Promise<Parse
   let frames: CreativeAnalysisInput["frames"] = [];
   if (typeof rawFrames === "string" && rawFrames) {
     const parsed = JSON.parse(rawFrames) as unknown;
-    if (!Array.isArray(parsed)) throw new Error("Los frames del video no tienen un formato válido.");
+    if (!Array.isArray(parsed))
+      throw new Error("Los frames del video no tienen un formato válido.");
     frames = parsed as CreativeAnalysisInput["frames"];
   }
 
@@ -316,13 +449,20 @@ async function parseCreativeAnalysisRequest(request: NextRequest): Promise<Parse
     assetId,
     frames,
     audioFile: audio instanceof File && audio.size ? audio : undefined,
-    audioDurationSeconds: typeof rawDuration === "string" ? Number(rawDuration) || undefined : undefined,
+    audioDurationSeconds:
+      typeof rawDuration === "string"
+        ? Number(rawDuration) || undefined
+        : undefined,
   };
 }
 
 async function getImageInputs(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
-  asset: { asset_type: string; storage_path: string | null; mime_type: string | null },
+  asset: {
+    asset_type: string;
+    storage_path: string | null;
+    mime_type: string | null;
+  },
   frames: Array<string | { image: string; timestamp: number }>,
 ): Promise<OpenAIContentInput[]> {
   if (frames.length) {
@@ -330,8 +470,18 @@ async function getImageInputs(
       const image = typeof frame === "string" ? frame : frame.image;
       const timestamp = typeof frame === "string" ? null : frame.timestamp;
       return [
-        { type: "input_text" as const, text: timestamp === null ? `Frame visual ${index + 1}` : `FRAME VERIFICADO ${index + 1} · ${formatSeconds(timestamp)}` },
-        { type: "input_image" as const, image_url: image, detail: "high" as const },
+        {
+          type: "input_text" as const,
+          text:
+            timestamp === null
+              ? `Frame visual ${index + 1}`
+              : `FRAME VERIFICADO ${index + 1} · ${formatSeconds(timestamp)}`,
+        },
+        {
+          type: "input_image" as const,
+          image_url: image,
+          detail: "high" as const,
+        },
       ];
     });
   }
@@ -339,8 +489,11 @@ async function getImageInputs(
   if (asset.asset_type !== "image") return [];
   if (!asset.storage_path) return [];
 
-  const { data, error } = await supabase.storage.from("creative-assets").download(asset.storage_path);
-  if (error || !data) throw new Error(error?.message || "No pude descargar la imagen.");
+  const { data, error } = await supabase.storage
+    .from("creative-assets")
+    .download(asset.storage_path);
+  if (error || !data)
+    throw new Error(error?.message || "No pude descargar la imagen.");
 
   const buffer = Buffer.from(await data.arrayBuffer());
   const mimeType = asset.mime_type || data.type || "image/png";
@@ -393,9 +546,16 @@ TRANSCRIPCION REAL DEL AUDIO
 ${transcript?.text ? transcript.text : "No aplica o no hay audio comprobable."}
 
 SEGMENTOS CON TIEMPOS
-${transcript?.segments.length
-  ? transcript.segments.map((segment) => `[${formatSeconds(segment.start)}-${formatSeconds(segment.end)}] ${segment.text}`).join("\n")
-  : "No hay segmentos con tiempos. No inventes diálogo."}
+${
+  transcript?.segments.length
+    ? transcript.segments
+        .map(
+          (segment) =>
+            `[${formatSeconds(segment.start)}-${formatSeconds(segment.end)}] ${segment.text}`,
+        )
+        .join("\n")
+    : "No hay segmentos con tiempos. No inventes diálogo."
+}
 `;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -444,11 +604,16 @@ ${transcript?.segments.length
 }
 
 function attachVerifiedVideoEvidence(
-  result: ReturnType<typeof normalizeAnalysisShape> & { score: number; verdict: string },
+  result: ReturnType<typeof normalizeAnalysisShape> & {
+    score: number;
+    verdict: string;
+  },
   transcript: VideoTranscript,
   imageInputs: OpenAIContentInput[],
 ) {
-  const structuralAnalysis = isRecord(result.structural_analysis) ? result.structural_analysis : {};
+  const structuralAnalysis = isRecord(result.structural_analysis)
+    ? result.structural_analysis
+    : {};
   const verifiedTranscription = transcript.segments.map((segment) => ({
     second: formatSeconds(segment.start),
     text: segment.text,
@@ -466,7 +631,8 @@ function attachVerifiedVideoEvidence(
       transcript_characters: transcript.text.length,
       transcript_segments: transcript.segments.length,
       duration_seconds: transcript.durationSeconds || null,
-      visual_frames: imageInputs.filter((input) => input.type === "input_image").length,
+      visual_frames: imageInputs.filter((input) => input.type === "input_image")
+        .length,
       transcription_model: transcript.textModel,
       timestamp_model: transcript.timestampModel || null,
     },
@@ -488,7 +654,9 @@ async function saveWinningRecipes({
 }) {
   const cleanRules = rules
     .map((rule) => rule.trim())
-    .filter((rule, index, list) => rule.length > 8 && list.indexOf(rule) === index)
+    .filter(
+      (rule, index, list) => rule.length > 8 && list.indexOf(rule) === index,
+    )
     .slice(0, 8);
 
   if (!cleanRules.length) return;
@@ -520,22 +688,38 @@ function normalizeAnalysisShape(json: Record<string, unknown>) {
     signals: isRecord(json.signals)
       ? json.signals
       : {
-          scroll_stop: { level: "Medio", note: "Requiere revisar el primer impacto visual." },
-          clarity: { level: "Medio", note: "Requiere reforzar que se vende y para quien." },
-          offer: { level: "Medio", note: "Requiere hacer mas concreta la razon para actuar." },
+          scroll_stop: {
+            level: "Medio",
+            note: "Requiere revisar el primer impacto visual.",
+          },
+          clarity: {
+            level: "Medio",
+            note: "Requiere reforzar que se vende y para quien.",
+          },
+          offer: {
+            level: "Medio",
+            note: "Requiere hacer mas concreta la razon para actuar.",
+          },
         },
-    structural_analysis: isRecord(json.structural_analysis) ? json.structural_analysis : {},
+    structural_analysis: isRecord(json.structural_analysis)
+      ? json.structural_analysis
+      : {},
     dashboard: isRecord(json.dashboard) ? json.dashboard : {},
-    psychological_analysis: isRecord(json.psychological_analysis) ? json.psychological_analysis : {},
+    psychological_analysis: isRecord(json.psychological_analysis)
+      ? json.psychological_analysis
+      : {},
     persuasion_triggers: toArray(json.persuasion_triggers),
     emotional_arc: toArray(json.emotional_arc),
     evidence_timeline: toArray(json.evidence_timeline),
     winning_recipe: toStringArray(json.winning_recipe),
     keep: toStringArray(json.keep),
     test: toStringArray(json.test || json.change || json.produce_next),
-    original_script: typeof json.original_script === "string" ? json.original_script : "",
+    original_script:
+      typeof json.original_script === "string" ? json.original_script : "",
     script_variants: toArray(json.script_variants || json.variants),
-    replication_plan: isRecord(json.replication_plan) ? json.replication_plan : {},
+    replication_plan: isRecord(json.replication_plan)
+      ? json.replication_plan
+      : {},
     generation_prompts: toArray(json.generation_prompts),
     source_coverage: isRecord(json.source_coverage) ? json.source_coverage : {},
   };
@@ -547,7 +731,10 @@ function formatSeconds(value: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function extractResponseText(data: { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> }) {
+function extractResponseText(data: {
+  output_text?: string;
+  output?: Array<{ content?: Array<{ text?: string }> }>;
+}) {
   if (data.output_text) return data.output_text;
   return (
     data.output
@@ -591,7 +778,10 @@ function toArray(value: unknown) {
 
 function toStringArray(value: unknown) {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  return value.filter(
+    (item): item is string =>
+      typeof item === "string" && item.trim().length > 0,
+  );
 }
 
 function normalizeVerdict(value: unknown, score: unknown) {
