@@ -72,11 +72,20 @@ export type AdminDashboardData = {
   recharges: Recharge[];
   pricing: Array<{
     module: string;
+    label: string;
+    description: string;
     credits: number;
+    estimated: number;
     average: number;
     price: number;
+    profit: number;
+    marginPercent: number;
     margin: number;
   }>;
+  trial: {
+    includedCredits: number;
+    realCostLimit: number;
+  };
 };
 
 export function AdminConsole({ data }: { data: AdminDashboardData }) {
@@ -221,6 +230,13 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
         <span>
           Anthropic <b>${data.metrics.anthropicCost.toFixed(2)}</b>
         </span>
+        <span>
+          Inicio{" "}
+          <b>
+            {data.trial.includedCredits.toLocaleString("es-MX")} cr · $
+            {data.trial.realCostLimit.toFixed(2)} costo real
+          </b>
+        </span>
       </div>
       {data.recharges.length > 0 && (
         <section className="admin-recharge-queue">
@@ -355,28 +371,43 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
       </section>
       <section className="admin-pricing">
         <header>
-          <span className="eyebrow">Costos y precios</span>
-          <h2>Margen vivo por acción</h2>
+          <div>
+            <span className="eyebrow">Costos y precios</span>
+            <h2>Modelo financiero por acción</h2>
+          </div>
+          <small>
+            Precio para usuaria vs. costo estimado, costo real promedio y
+            ganancia bruta.
+          </small>
         </header>
         <div className="admin-table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Acción</th>
+                <th>Qué cobra</th>
                 <th>Créditos</th>
-                <th>Precio equivalente</th>
-                <th>Costo API promedio</th>
-                <th>Margen</th>
+                <th>Paga usuaria</th>
+                <th>Costo API estimado</th>
+                <th>Costo real prom.</th>
+                <th>Ganancia bruta</th>
+                <th>Margen bruto</th>
               </tr>
             </thead>
             <tbody>
               {data.pricing.map((p) => (
                 <tr key={p.module}>
-                  <td>{p.module}</td>
+                  <td>
+                    <b>{p.label}</b>
+                    <small>{p.module}</small>
+                  </td>
+                  <td>{p.description}</td>
                   <td>{p.credits}</td>
                   <td>${p.price.toFixed(2)}</td>
-                  <td>${p.average.toFixed(4)}</td>
-                  <td>{p.margin ? `${p.margin.toFixed(1)}x` : "Sin datos"}</td>
+                  <td>${p.estimated.toFixed(3)}</td>
+                  <td>{p.average ? `$${p.average.toFixed(3)}` : "Sin uso aún"}</td>
+                  <td>${p.profit.toFixed(3)}</td>
+                  <td>{p.marginPercent}%</td>
                 </tr>
               ))}
             </tbody>

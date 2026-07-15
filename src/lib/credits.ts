@@ -92,7 +92,7 @@ export async function chargeCredits(input: ChargeInput) {
     if (error.message.includes("insufficient_credits"))
       throw new CreditError(
         "insufficient_credits",
-        "No tienes créditos suficientes para esta acción. Recarga desde Cuenta para continuar.",
+        "Ya usaste el saldo incluido o no tienes créditos suficientes para esta acción. Recarga desde Cuenta para continuar.",
       );
     if (error.message.includes("daily_credit_limit"))
       throw new CreditError(

@@ -1,6 +1,7 @@
 export const CREDIT_USD_VALUE = 0.01;
-export const INITIAL_INCLUDED_CREDITS = 300;
+export const INITIAL_INCLUDED_CREDITS = 600;
 export const INITIAL_INCLUDED_USD = INITIAL_INCLUDED_CREDITS * CREDIT_USD_VALUE;
+export const TRIAL_REAL_COST_LIMIT_USD = 3;
 
 export type CreditCatalogItem = {
   module: string;
@@ -14,10 +15,10 @@ export type CreditCatalogItem = {
 export const CREDIT_CATALOG = [
   {
     module: "chat_message",
-    label: "Chat estratega",
-    description: "Cada pregunta o respuesta estratégica dentro del chat.",
-    credits: 3,
-    estimatedCostUsd: 0.0213,
+    label: "Chat ligero",
+    description: "Pregunta estratégica frecuente dentro del chat.",
+    credits: 1,
+    estimatedCostUsd: 0.002,
     category: "chat",
   },
   {
@@ -32,47 +33,47 @@ export const CREDIT_CATALOG = [
     module: "creative_analysis_image",
     label: "Análisis de imagen",
     description: "Diagnóstico creativo de un estático o imagen publicitaria.",
-    credits: 60,
-    estimatedCostUsd: 0.0066,
+    credits: 8,
+    estimatedCostUsd: 0.007,
     category: "analysis",
   },
   {
     module: "creative_analysis_video",
     label: "Análisis de video",
     description: "Lectura de guion, frames y aprendizajes de un video.",
-    credits: 120,
-    estimatedCostUsd: 0.0088,
+    credits: 18,
+    estimatedCostUsd: 0.025,
     category: "analysis",
   },
   {
     module: "creative_analysis_script",
     label: "Guion",
     description: "Analizar, mejorar o generar un guion listo para grabar.",
-    credits: 40,
-    estimatedCostUsd: 0.0038,
+    credits: 5,
+    estimatedCostUsd: 0.004,
     category: "analysis",
   },
   {
     module: "meta_analysis",
     label: "Análisis Meta",
     description: "Procesar export de Meta Ads y convertirlo en aprendizajes.",
-    credits: 120,
-    estimatedCostUsd: 0.0068,
+    credits: 12,
+    estimatedCostUsd: 0.007,
     category: "analysis",
   },
   {
     module: "static_brief",
     label: "Ficha creativa",
     description: "Dirección estratégica antes de crear una imagen.",
-    credits: 15,
-    estimatedCostUsd: 0.0046,
+    credits: 4,
+    estimatedCostUsd: 0.005,
     category: "image",
   },
   {
     module: "static_generate_medium",
     label: "Imagen estándar",
     description: "Generación de una imagen publicitaria en calidad estándar.",
-    credits: 120,
+    credits: 35,
     estimatedCostUsd: 0.07,
     category: "image",
   },
@@ -80,7 +81,7 @@ export const CREDIT_CATALOG = [
     module: "static_generate_high",
     label: "Imagen alta",
     description: "Generación de una imagen publicitaria en calidad alta.",
-    credits: 250,
+    credits: 80,
     estimatedCostUsd: 0.19,
     category: "image",
   },
@@ -88,7 +89,7 @@ export const CREDIT_CATALOG = [
     module: "static_edit",
     label: "Corrección de imagen",
     description: "Edición o corrección de un estático generado.",
-    credits: 80,
+    credits: 30,
     estimatedCostUsd: 0.07,
     category: "image",
   },
@@ -96,8 +97,8 @@ export const CREDIT_CATALOG = [
     module: "reference_analysis",
     label: "Referencia visual",
     description: "Lectura de una imagen de referencia para guiar dirección visual.",
-    credits: 20,
-    estimatedCostUsd: 0.0022,
+    credits: 4,
+    estimatedCostUsd: 0.002,
     category: "analysis",
   },
 ] as const satisfies readonly CreditCatalogItem[];
@@ -114,6 +115,15 @@ export const CREDIT_LABELS = Object.fromEntries(
 
 export function creditPriceUsd(credits: number) {
   return Number((credits * CREDIT_USD_VALUE).toFixed(2));
+}
+
+export function estimatedGrossProfitUsd(credits: number, estimatedCostUsd: number) {
+  return Number((creditPriceUsd(credits) - estimatedCostUsd).toFixed(3));
+}
+
+export function estimatedGrossMargin(credits: number, estimatedCostUsd: number) {
+  const price = creditPriceUsd(credits);
+  return price > 0 ? Math.round(((price - estimatedCostUsd) / price) * 100) : 0;
 }
 
 export function catalogItem(module: string) {

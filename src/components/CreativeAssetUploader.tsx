@@ -12,6 +12,7 @@ import {
   MAX_PERSISTED_CREATIVE_SIZE_BYTES,
   MAX_PERSISTED_CREATIVE_SIZE_LABEL,
 } from "@/lib/creative-upload-limits";
+import { CREDIT_COSTS } from "@/lib/credit-catalog";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getSupabaseEnv } from "@/lib/supabase/config";
 import styles from "./CreativeAssetUploader.module.css";
@@ -538,7 +539,7 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
                 {item.status === "listo" && item.assetId && item.analysisStatus !== "listo" && (
                   <button className="primary-action" type="button" onClick={() => analyzeItem(item)} disabled={item.analysisStatus === "analizando"}>
                     {item.analysisStatus === "analizando" ? <Loader2 className="spin" size={15} /> : <Brain size={15} />}
-                    {item.analysisStatus === "analizando" ? "Analizando..." : "Analizar ahora · 120 cr"}
+                    {item.analysisStatus === "analizando" ? "Analizando..." : `Analizar ahora · ${item.assetType === "video" ? CREDIT_COSTS.creative_analysis_video : CREDIT_COSTS.creative_analysis_image} cr`}
                   </button>
                 )}
               </article>

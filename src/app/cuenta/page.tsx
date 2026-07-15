@@ -4,6 +4,13 @@ import { AppFrame, SetupState } from "@/components/AppFrame";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspace } from "@/lib/workspace";
 import { RechargePackages } from "@/components/RechargePackages";
+import {
+  CREDIT_CATALOG,
+  CREDIT_LABELS,
+  TRIAL_REAL_COST_LIMIT_USD,
+  creditPriceUsd,
+  INITIAL_INCLUDED_CREDITS,
+} from "@/lib/credit-catalog";
 
 export default async function CuentaPage() {
   const workspace = await getWorkspace();
@@ -27,7 +34,7 @@ export default async function CuentaPage() {
       .maybeSingle(),
   ]);
   const wallet = workspace.wallet;
-  const allowance = Number(wallet?.monthly_allowance || 5000);
+  const allowance = Number(wallet?.monthly_allowance || INITIAL_INCLUDED_CREDITS);
   const allowanceUsed = Number(wallet?.allowance_used || 0);
   const allowanceRemaining = Math.max(0, allowance - allowanceUsed);
 
@@ -88,7 +95,7 @@ export default async function CuentaPage() {
           {!workspace.isUnlimited && (
             <section className="allowance-card">
               <div>
-                <span>Cuota mensual</span>
+                <span>Créditos incluidos</span>
                 <b>
                   {allowanceRemaining.toLocaleString("es-MX")} de{" "}
                   {allowance.toLocaleString("es-MX")} disponibles
@@ -102,19 +109,31 @@ export default async function CuentaPage() {
                 />
               </div>
               <small>
+                Tu cuenta inicia con {INITIAL_INCLUDED_CREDITS.toLocaleString("es-MX")} créditos. El uso incluido está protegido por un tope real de ${TRIAL_REAL_COST_LIMIT_USD.toFixed(2)} de IA.
+              </small>
+              <small>
                 Saldo comprado sin vencimiento:{" "}
                 {Number(wallet?.balance || 0).toLocaleString("es-MX")} créditos
               </small>
             </section>
           )}
           <RechargePackages pendingFolio={pendingRecharge?.folio} />
-          <div className="usage-table">
-            <b>Referencia de consumo</b>
-            <p>
-              Chat: 3 créditos · Análisis de guion: 40 · Estático: 60 · Video:
-              120 · Meta: 120 · Imagen: 120 estándar / 250 alta.
-            </p>
-          </div>
+          <section className="usage-table account-cost-table">
+            <header>
+              <b>Costos por acción</b>
+              <small>1 crédito = $0.01 de saldo</small>
+            </header>
+            <div>
+              {CREDIT_CATALOG.map((item) => (
+                <article key={item.module}>
+                  <span>{item.label}</span>
+                  <small>{item.description}</small>
+                  <b>{item.credits} cr</b>
+                  <em>${creditPriceUsd(item.credits).toFixed(2)}</em>
+                </article>
+              ))}
+            </div>
+          </section>
           <section className="ledger-history">
             <header>
               <b>Historial de créditos</b>
@@ -165,6 +184,7 @@ export default async function CuentaPage() {
 
 function labelReason(reason: string, module?: string) {
   const labels: Record<string, string> = {
+    ...CREDIT_LABELS,
     chat_message: "Chat IA",
     voice_note: "Nota de voz",
     creative_analysis_image: "Análisis estático",

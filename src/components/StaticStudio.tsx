@@ -26,6 +26,7 @@ import {
   ReferenceUploader,
   type StyleReference,
 } from "@/components/ReferenceUploader";
+import { CREDIT_COSTS } from "@/lib/credit-catalog";
 
 type BrandAsset = {
   id: string;
@@ -740,7 +741,7 @@ export function StaticStudio({
                   <small className="studio-reference-cost">
                     {unlimitedCredits
                       ? "Análisis de referencia incluido."
-                      : "Hasta 6 referencias analizadas están incluidas por marca; a partir de la séptima, cada nueva usa 20 créditos."}
+                      : `Hasta 6 referencias analizadas están incluidas por marca; a partir de la séptima, cada nueva usa ${CREDIT_COSTS.reference_analysis} créditos.`}
                     {` ${selectedReferenceIds.length} de ${referenceCount} activas para esta pieza.`}
                   </small>
                 </section>
@@ -823,7 +824,7 @@ export function StaticStudio({
                     ? "Preparando dirección…"
                     : unlimitedCredits
                       ? "Crear ficha del anuncio · incluido"
-                      : "Crear ficha del anuncio · 15 cr"}
+                      : `Crear ficha del anuncio · ${CREDIT_COSTS.static_brief} cr`}
                 </button>
               </div>
             </details>
@@ -989,7 +990,7 @@ export function StaticStudio({
                     ? "Corrigiendo…"
                     : unlimitedCredits
                       ? "Crear versión corregida · incluido"
-                      : "Crear versión corregida · 80 cr"}
+                      : `Crear versión corregida · ${CREDIT_COSTS.static_edit} cr`}
                 </button>
               </div>
             </>
@@ -1122,7 +1123,7 @@ export function StaticStudio({
                   <small>
                     {unlimitedCredits
                       ? "Incluido en tu cuenta"
-                      : `${quality === "high" ? 250 : 120} créditos por propuesta`}
+                      : `${quality === "high" ? CREDIT_COSTS.static_generate_high : CREDIT_COSTS.static_generate_medium} créditos por propuesta`}
                   </small>
                 </div>
                 <button

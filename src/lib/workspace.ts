@@ -70,10 +70,7 @@ export async function getWorkspace() {
 
 function monthlyRemaining(wallet: { monthly_allowance?: number | null; allowance_used?: number | null; allowance_reset_at?: string | null } | null) {
   if (!wallet) return 0;
-  const reset = wallet.allowance_reset_at ? new Date(wallet.allowance_reset_at) : null;
-  const now = new Date();
-  const currentMonth = reset && reset.getUTCFullYear() === now.getUTCFullYear() && reset.getUTCMonth() === now.getUTCMonth();
-  return Math.max(0, Number(wallet.monthly_allowance || INITIAL_INCLUDED_CREDITS) - (currentMonth ? Number(wallet.allowance_used || 0) : 0));
+  return Math.max(0, Number(wallet.monthly_allowance || INITIAL_INCLUDED_CREDITS) - Number(wallet.allowance_used || 0));
 }
 
 export function labelContentOwner(value: string | null) {

@@ -183,9 +183,9 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
     }));
   }
 
-  const preferredProvider = process.env.ANTHROPIC_API_KEY
-    ? ("anthropic" as const)
-    : ("openai" as const);
+  const preferredProvider = process.env.OPENAI_API_KEY
+    ? ("openai" as const)
+    : ("anthropic" as const);
   const preferredModel =
     preferredProvider === "anthropic"
       ? process.env.ANTHROPIC_MODEL || "claude-sonnet-5"
@@ -225,15 +225,16 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
   }
 
   let answer = "";
-  let provider: "anthropic" | "openai" = "anthropic";
+  let provider: "anthropic" | "openai" = preferredProvider;
 
   try {
-    answer = await askAnthropic(brandContext, history, userMessage);
-  } catch (anthropicError) {
+    answer = await askOpenAI(brandContext, history, userMessage);
+    provider = "openai";
+  } catch (openAiError) {
     try {
-      answer = await askOpenAI(brandContext, history, userMessage);
-      provider = "openai";
-    } catch (openAiError) {
+      answer = await askAnthropic(brandContext, history, userMessage);
+      provider = "anthropic";
+    } catch (anthropicError) {
       if (creditCharge.charged)
         await refundCredits(
           user.id,
@@ -242,7 +243,7 @@ Aprendizaje: ${String((latestCreative.analysis as { winning_reason?: string } | 
           brand.id,
           creditCharge.operationId,
         );
-      console.error("chat providers failed", anthropicError, openAiError);
+      console.error("chat providers failed", openAiError, anthropicError);
       return NextResponse.json(
         {
           error:

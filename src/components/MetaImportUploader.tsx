@@ -17,6 +17,7 @@ import {
   Trophy,
   UploadCloud,
 } from "lucide-react";
+import { CREDIT_COSTS } from "@/lib/credit-catalog";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type UploadItem = {
@@ -240,7 +241,7 @@ export function MetaImportUploader({ brandId, initialHistory }: { brandId: strin
                 {item.status === "listo" && item.importId && item.analysisStatus !== "listo" && (
                   <button className="primary-action" type="button" onClick={() => analyzeImport(item)} disabled={item.analysisStatus === "analizando"}>
                     {item.analysisStatus === "analizando" ? <Loader2 className="spin" size={15} /> : <Sparkles size={15} />}
-                    {item.analysisStatus === "analizando" ? "Analizando creativos..." : "Analizar y guardar · 150 cr"}
+                    {item.analysisStatus === "analizando" ? "Analizando creativos..." : `Analizar y guardar · ${CREDIT_COSTS.meta_analysis} cr`}
                   </button>
                 )}
               </article>

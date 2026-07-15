@@ -3,7 +3,14 @@ import { BrandMark } from "@/components/BrandIdentity";
 import { AdminConsole, AdminDashboardData } from "@/components/AdminConsole";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { CREDIT_COSTS } from "@/lib/credits";
+import {
+  CREDIT_CATALOG,
+  INITIAL_INCLUDED_CREDITS,
+  TRIAL_REAL_COST_LIMIT_USD,
+  creditPriceUsd,
+  estimatedGrossMargin,
+  estimatedGrossProfitUsd,
+} from "@/lib/credit-catalog";
 
 export default async function AdminPage() {
   const session = await createSupabaseServerClient();
@@ -143,7 +150,7 @@ export default async function AdminPage() {
         Number(wallet?.balance || 0) +
         Math.max(
           0,
-          Number(wallet?.monthly_allowance || 5000) -
+          Number(wallet?.monthly_allowance || INITIAL_INCLUDED_CREDITS) -
             Number(wallet?.allowance_used || 0),
         ),
       spent: Number(wallet?.lifetime_spent || 0),
@@ -234,10 +241,10 @@ export default async function AdminPage() {
         old:
           new Date().getTime() - new Date(item.created_at).getTime() > 86400000,
       })),
-    pricing: Object.entries(CREDIT_COSTS).map(([module, credits]) => {
+    pricing: CREDIT_CATALOG.map((catalog) => {
       const rows = (monthLedger || []).filter(
         (item) =>
-          (item.metadata as { module?: string } | null)?.module === module,
+          (item.metadata as { module?: string } | null)?.module === catalog.module,
       );
       const average = rows.length
         ? rows.reduce(
@@ -249,14 +256,25 @@ export default async function AdminPage() {
             0,
           ) / rows.length
         : 0;
+      const observedCost = average || catalog.estimatedCostUsd;
+      const price = creditPriceUsd(catalog.credits);
       return {
-        module,
-        credits,
+        module: catalog.module,
+        label: catalog.label,
+        description: catalog.description,
+        credits: catalog.credits,
+        estimated: catalog.estimatedCostUsd,
         average,
-        price: credits * 0.01,
-        margin: average > 0 ? (credits * 0.01) / average : 0,
+        price,
+        profit: average ? Number((price - average).toFixed(3)) : estimatedGrossProfitUsd(catalog.credits, catalog.estimatedCostUsd),
+        marginPercent: average && price > 0 ? Math.round(((price - average) / price) * 100) : estimatedGrossMargin(catalog.credits, catalog.estimatedCostUsd),
+        margin: observedCost > 0 ? price / observedCost : 0,
       };
     }),
+    trial: {
+      includedCredits: INITIAL_INCLUDED_CREDITS,
+      realCostLimit: TRIAL_REAL_COST_LIMIT_USD,
+    },
   };
   return (
     <main className="admin-page">
