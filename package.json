@@ -5,6 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "verify:ownership": "node scripts/assert-ana-project.mjs",
+    "deploy:production": "node scripts/assert-ana-project.mjs --production && npx vercel --global-config \"$HOME/.local/share/platform-profiles/vercel-ana\" --prod --scope anapaulopezlle-2168s-projects",
+    "vercel:whoami": "npx vercel --global-config \"$HOME/.local/share/platform-profiles/vercel-ana\" whoami",
+    "supabase:projects": "npx supabase projects list --profile ana",
+    "supabase:link": "npx supabase link --profile ana --project-ref rjjrwthkyeuxzecomkga",
     "typecheck": "tsc --noEmit",
     "test:compose": "tsx scripts/test-compose.ts",
     "start": "next start",

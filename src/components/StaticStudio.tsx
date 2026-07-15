@@ -22,7 +22,10 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import type { StyleReference } from "@/components/ReferenceUploader";
+import {
+  ReferenceUploader,
+  type StyleReference,
+} from "@/components/ReferenceUploader";
 
 type BrandAsset = {
   id: string;
@@ -58,8 +61,19 @@ type StaticBrief = {
   cta_usage: "none" | "text" | "button";
   disclaimer: string;
   text_render_mode: "baked" | "layered";
-  composicion: { zona_superior: string; zona_media: string; zona_inferior: string };
-  art_direction: { decision_visual_fuerte: string; iluminacion: string; camara_y_encuadre: string; superficie_y_entorno: string; props: string; tratamiento_color: string };
+  composicion: {
+    zona_superior: string;
+    zona_media: string;
+    zona_inferior: string;
+  };
+  art_direction: {
+    decision_visual_fuerte: string;
+    iluminacion: string;
+    camara_y_encuadre: string;
+    superficie_y_entorno: string;
+    props: string;
+    tratamiento_color: string;
+  };
   paleta: string[];
   emocion_objetivo: string;
   por_que_funciona: string;
@@ -89,7 +103,11 @@ type GeneratedStatic = {
 };
 
 type OpenStep = "setup" | "style" | "intent";
-type StudioMemory = { assetId?: string; format?: string; serviceNoProduct?: boolean };
+type StudioMemory = {
+  assetId?: string;
+  format?: string;
+  serviceNoProduct?: boolean;
+};
 
 const formats = ["1:1 Feed", "4:5 Feed", "9:16 Story/Reel"];
 const stages = ["Descubrimiento", "Consideración", "Conversión", "Retargeting"];
@@ -118,8 +136,12 @@ export function StaticStudio({
   initialReferences: StyleReference[];
   unlimitedCredits?: boolean;
 }) {
-  const [selectedAssetId, setSelectedAssetId] = useState(initialAssets[0]?.id || "");
-  const [serviceNoProduct, setServiceNoProduct] = useState(initialAssets.length === 0);
+  const [selectedAssetId, setSelectedAssetId] = useState(
+    initialAssets[0]?.id || "",
+  );
+  const [serviceNoProduct, setServiceNoProduct] = useState(
+    initialAssets.length === 0,
+  );
   const [format, setFormat] = useState("4:5 Feed");
   const [stage, setStage] = useState("Conversión");
   const [archetypeId, setArchetypeId] = useState("automatico");
@@ -129,14 +151,22 @@ export function StaticStudio({
   const [brief, setBrief] = useState<StaticBrief | null>(null);
   const [creativeId, setCreativeId] = useState<string | null>(null);
   const [gallery, setGallery] = useState(initialGallery);
-  const [selectedCreative, setSelectedCreative] = useState<GeneratedStatic | null>(null);
+  const [selectedCreative, setSelectedCreative] =
+    useState<GeneratedStatic | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<"brief" | "generate" | "edit" | null>(null);
   const [exampleIndex, setExampleIndex] = useState(0);
   const [openStep, setOpenStep] = useState<OpenStep>("intent");
   const [correction, setCorrection] = useState("");
   const [fullScreen, setFullScreen] = useState(false);
-  const [referencePreview, setReferencePreview] = useState<StaticArchetype | null>(null);
+  const [referencePreview, setReferencePreview] =
+    useState<StaticArchetype | null>(null);
+  const [selectedReferenceIds, setSelectedReferenceIds] = useState(
+    initialReferences.slice(0, 10).map((item) => item.id),
+  );
+  const [referenceCount, setReferenceCount] = useState(
+    initialReferences.length,
+  );
   const [remainingProposals, setRemainingProposals] = useState(0);
   const [variantOffset, setVariantOffset] = useState(0);
   const [galleryVisible, setGalleryVisible] = useState(12);
@@ -145,20 +175,30 @@ export function StaticStudio({
   const correctionRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    const id = window.setInterval(() => setExampleIndex((current) => (current + 1) % examples.length), 3000);
+    const id = window.setInterval(
+      () => setExampleIndex((current) => (current + 1) % examples.length),
+      3000,
+    );
     return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        const raw = window.localStorage.getItem(`static-studio-memory:${brandId}`);
-        const memory = raw ? JSON.parse(raw) as StudioMemory : null;
-        if (memory?.assetId && initialAssets.some((asset) => asset.id === memory.assetId)) {
+        const raw = window.localStorage.getItem(
+          `static-studio-memory:${brandId}`,
+        );
+        const memory = raw ? (JSON.parse(raw) as StudioMemory) : null;
+        if (
+          memory?.assetId &&
+          initialAssets.some((asset) => asset.id === memory.assetId)
+        ) {
           setSelectedAssetId(memory.assetId);
         }
-        if (memory?.format && formats.includes(memory.format)) setFormat(memory.format);
-        if (typeof memory?.serviceNoProduct === "boolean") setServiceNoProduct(memory.serviceNoProduct);
+        if (memory?.format && formats.includes(memory.format))
+          setFormat(memory.format);
+        if (typeof memory?.serviceNoProduct === "boolean")
+          setServiceNoProduct(memory.serviceNoProduct);
       } catch {
         // A damaged local preference should never block the studio.
       } finally {
@@ -170,21 +210,36 @@ export function StaticStudio({
 
   useEffect(() => {
     if (!memoryReady) return;
-    const memory: StudioMemory = { assetId: selectedAssetId, format, serviceNoProduct };
-    window.localStorage.setItem(`static-studio-memory:${brandId}`, JSON.stringify(memory));
+    const memory: StudioMemory = {
+      assetId: selectedAssetId,
+      format,
+      serviceNoProduct,
+    };
+    window.localStorage.setItem(
+      `static-studio-memory:${brandId}`,
+      JSON.stringify(memory),
+    );
   }, [brandId, format, memoryReady, selectedAssetId, serviceNoProduct]);
 
-  const identityReady = initialLogos.length > 0 || initialReferences.length > 0 || initialAssets.length > 0;
+  const identityReady =
+    initialLogos.length > 0 ||
+    initialReferences.length > 0 ||
+    initialAssets.length > 0;
   const productReady = true;
-  const selectedUrl = selectedCreative?.public_url || selectedCreative?.signed_url || "";
+  const selectedUrl =
+    selectedCreative?.public_url || selectedCreative?.signed_url || "";
   const latestCreative = gallery[0] || null;
   const visibleGallery = gallery.slice(0, galleryVisible);
-  const selectedArchetype = archetypes.find((item) => item.id === archetypeId) || null;
+  const selectedArchetype =
+    archetypes.find((item) => item.id === archetypeId) || null;
 
   async function handleCreateBrief(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
-    if (intent.trim().length < 16) return setMessage("Cuéntanos un poco más sobre lo que quieres comunicar.");
+    if (intent.trim().length < 16)
+      return setMessage(
+        "Cuéntanos un poco más sobre lo que quieres comunicar.",
+      );
     setBusy("brief");
     setSelectedCreative(null);
     setCorrection("");
@@ -202,18 +257,25 @@ export function StaticStudio({
           productAssetId: serviceNoProduct ? undefined : selectedAssetId,
           serviceNoProduct,
           logoAssetId: initialLogos[0]?.id,
-          referenceAssetIds: initialReferences.slice(0, 10).map((item) => item.id),
+          referenceAssetIds: selectedReferenceIds,
         }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo preparar el anuncio.");
+      if (!response.ok)
+        throw new Error(data.error || "No se pudo preparar el anuncio.");
       setBrief(data.ficha);
       setCreativeId(data.creativeId);
       setRemainingProposals(0);
       setVariantOffset(0);
-      setMessage("Dirección lista. Revisa el texto en el lienzo y genera la imagen.");
+      setMessage(
+        "Dirección lista. Revisa el texto en el lienzo y genera la imagen.",
+      );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo preparar el anuncio.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo preparar el anuncio.",
+      );
     } finally {
       setBusy(null);
     }
@@ -240,32 +302,54 @@ export function StaticStudio({
           productAssetId: serviceNoProduct ? undefined : selectedAssetId,
           serviceNoProduct,
           logoAssetId: initialLogos[0]?.id,
-          referenceAssetIds: initialReferences.slice(0, 10).map((item) => item.id),
+          referenceAssetIds: selectedReferenceIds,
         }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo generar la imagen.");
+      if (!response.ok)
+        throw new Error(data.error || "No se pudo generar la imagen.");
       const created = (data.statics || []) as GeneratedStatic[];
       setGallery((current) => [...created, ...current]);
       setSelectedCreative(created[0] || null);
-      const pending = variantOffset === 0 ? Math.max(0, proposals - 1) : Math.max(0, remainingProposals - 1);
+      const pending =
+        variantOffset === 0
+          ? Math.max(0, proposals - 1)
+          : Math.max(0, remainingProposals - 1);
       setRemainingProposals(pending);
       setVariantOffset((current) => current + 1);
-      setMessage(pending > 0 ? `Propuesta creada y guardada. Revísala antes de generar ${pending === 1 ? "la siguiente" : `las ${pending} restantes`}.` : "Propuesta creada y guardada en la galería.");
+      setMessage(
+        pending > 0
+          ? `Propuesta creada y guardada. Revísala antes de generar ${pending === 1 ? "la siguiente" : `las ${pending} restantes`}.`
+          : "Propuesta creada y guardada en la galería.",
+      );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo generar la imagen.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo generar la imagen.",
+      );
     } finally {
       setBusy(null);
     }
   }
 
   async function deleteCreative(item: GeneratedStatic) {
-    if (!window.confirm("¿Borrar esta pieza de la galería? Esta acción no se puede deshacer.")) return;
+    if (
+      !window.confirm(
+        "¿Borrar esta pieza de la galería? Esta acción no se puede deshacer.",
+      )
+    )
+      return;
     setMessage("");
-    const response = await fetch(`/api/static-library/${item.id}`, { method: "DELETE" });
+    const response = await fetch(`/api/static-library/${item.id}`, {
+      method: "DELETE",
+    });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) return setMessage(data.error || "No se pudo borrar la pieza.");
-    setGallery((current) => current.filter((creative) => creative.id !== item.id));
+    if (!response.ok)
+      return setMessage(data.error || "No se pudo borrar la pieza.");
+    setGallery((current) =>
+      current.filter((creative) => creative.id !== item.id),
+    );
     if (selectedCreative?.id === item.id) {
       setSelectedCreative(null);
       setBrief(null);
@@ -275,31 +359,45 @@ export function StaticStudio({
   }
 
   async function handleCorrection() {
-    if (!selectedCreative || correction.trim().length < 6) return setMessage("Escribe la corrección puntual que quieres hacer.");
+    if (!selectedCreative || correction.trim().length < 6)
+      return setMessage("Escribe la corrección puntual que quieres hacer.");
     setBusy("edit");
     setMessage("");
     try {
       const response = await fetch("/api/static-edit", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ staticId: selectedCreative.id, instruction: correction.trim() }),
+        body: JSON.stringify({
+          staticId: selectedCreative.id,
+          instruction: correction.trim(),
+        }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo corregir la imagen.");
+      if (!response.ok)
+        throw new Error(data.error || "No se pudo corregir la imagen.");
       const edited = data.static as GeneratedStatic;
       setGallery((current) => [edited, ...current]);
       setSelectedCreative(edited);
       setCorrection("");
-      setMessage(`Corrección guardada como versión ${edited.version}. La anterior sigue disponible.`);
+      setMessage(
+        `Corrección guardada como versión ${edited.version}. La anterior sigue disponible.`,
+      );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo corregir la imagen.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo corregir la imagen.",
+      );
     } finally {
       setBusy(null);
     }
   }
 
-  function updateBrief<K extends keyof StaticBrief>(key: K, value: StaticBrief[K]) {
-    setBrief((current) => current ? { ...current, [key]: value } : current);
+  function updateBrief<K extends keyof StaticBrief>(
+    key: K,
+    value: StaticBrief[K],
+  ) {
+    setBrief((current) => (current ? { ...current, [key]: value } : current));
   }
 
   function resetPiece() {
@@ -316,7 +414,9 @@ export function StaticStudio({
     setVariantOffset(0);
     setMessage("");
     setOpenStep("intent");
-    window.requestAnimationFrame(() => stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    window.requestAnimationFrame(() =>
+      stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   }
 
   function viewCreative(item: GeneratedStatic) {
@@ -324,16 +424,20 @@ export function StaticStudio({
     setSelectedCreative(item);
     setCorrection("");
     setMessage("");
-    window.requestAnimationFrame(() => stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    window.requestAnimationFrame(() =>
+      stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   }
 
   function editCreative(item: GeneratedStatic, newVersion = false) {
     setBrief(null);
     setSelectedCreative(item);
     setCorrection("");
-    setMessage(newVersion
-      ? "Describe un cambio concreto para crear una nueva versión sin borrar la anterior."
-      : "Esta pieza está lista para corregirse. Escribe un solo cambio puntual.");
+    setMessage(
+      newVersion
+        ? "Describe un cambio concreto para crear una nueva versión sin borrar la anterior."
+        : "Esta pieza está lista para corregirse. Escribe un solo cambio puntual.",
+    );
     window.setTimeout(() => {
       stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       correctionRef.current?.focus();
@@ -357,7 +461,9 @@ export function StaticStudio({
           <div className="studio-flow-header">
             <span className="eyebrow">Nueva pieza</span>
             <h2>De la idea al anuncio.</h2>
-            <p>Tu marca ya está preparada. Solo dinos qué quieres comunicar hoy.</p>
+            <p>
+              Tu marca ya está preparada. Solo dinos qué quieres comunicar hoy.
+            </p>
           </div>
 
           <div className="studio-readiness">
@@ -365,22 +471,45 @@ export function StaticStudio({
               {identityReady ? <Check /> : <ImageIcon />}
               <span>
                 <b>Identidad de {brandName}</b>
-                <small>{initialAssets.length} activos de producto · {initialReferences.length} referencias · {initialLogos.length} logotipos · todo opcional</small>
+                <small>
+                  {initialAssets.length} activos de producto ·{" "}
+                  {initialReferences.length} referencias · {initialLogos.length}{" "}
+                  logotipos · todo opcional
+                </small>
               </span>
             </div>
-            <Link href={`/marcas/${brandId}/editar`}>{identityReady ? "Administrar" : "Agregar contexto"}</Link>
+            <Link href={`/marcas/${brandId}/editar`}>
+              {identityReady ? "Administrar" : "Agregar contexto"}
+            </Link>
           </div>
 
           <form className="studio-steps" onSubmit={handleCreateBrief}>
-            <details open={openStep === "setup"} onToggle={(event) => event.currentTarget.open && setOpenStep("setup")}>
+            <details
+              open={openStep === "setup"}
+              onToggle={(event) =>
+                event.currentTarget.open && setOpenStep("setup")
+              }
+            >
               <summary>
                 <StepNumber number="01" done={productReady} />
-                <span><b>Activo principal y formato</b><small>{selectedProductLabel(initialAssets, selectedAssetId, serviceNoProduct)} · {format}</small></span>
+                <span>
+                  <b>Activo principal y formato</b>
+                  <small>
+                    {selectedProductLabel(
+                      initialAssets,
+                      selectedAssetId,
+                      serviceNoProduct,
+                    )}{" "}
+                    · {format}
+                  </small>
+                </span>
                 <ChevronDown />
               </summary>
               <div className="studio-step-body setup-grid">
                 <div>
-                  <label className="field-label">Foto de producto o activo principal</label>
+                  <label className="field-label">
+                    Foto de producto o activo principal
+                  </label>
                   <div className="compact-product-row">
                     {initialAssets.map((asset, index) => {
                       const label = assetDisplayLabel(asset, index);
@@ -388,18 +517,34 @@ export function StaticStudio({
                         <button
                           type="button"
                           key={asset.id}
-                          className={selectedAssetId === asset.id && !serviceNoProduct ? "selected" : ""}
-                          onClick={() => { setSelectedAssetId(asset.id); setServiceNoProduct(false); }}
+                          className={
+                            selectedAssetId === asset.id && !serviceNoProduct
+                              ? "selected"
+                              : ""
+                          }
+                          onClick={() => {
+                            setSelectedAssetId(asset.id);
+                            setServiceNoProduct(false);
+                          }}
                         >
-                          {asset.signed_url && <img src={asset.signed_url} alt={label} />}
+                          {asset.signed_url && (
+                            <img src={asset.signed_url} alt={label} />
+                          )}
                           <span>{label}</span>
-                          {selectedAssetId === asset.id && !serviceNoProduct && <Check />}
+                          {selectedAssetId === asset.id &&
+                            !serviceNoProduct && <Check />}
                         </button>
                       );
                     })}
                   </div>
                   <label className="service-toggle compact">
-                    <input type="checkbox" checked={serviceNoProduct} onChange={(event) => setServiceNoProduct(event.target.checked)} />
+                    <input
+                      type="checkbox"
+                      checked={serviceNoProduct}
+                      onChange={(event) =>
+                        setServiceNoProduct(event.target.checked)
+                      }
+                    />
                     <span>Esta pieza no necesita una foto de producto.</span>
                   </label>
                 </div>
@@ -407,7 +552,12 @@ export function StaticStudio({
                   <label className="field-label">Formato</label>
                   <div className="format-capsules">
                     {formats.map((item) => (
-                      <button type="button" key={item} className={format === item ? "selected" : ""} onClick={() => setFormat(item)}>
+                      <button
+                        type="button"
+                        key={item}
+                        className={format === item ? "selected" : ""}
+                        onClick={() => setFormat(item)}
+                      >
                         <span className={`format-icon ${formatClass(item)}`} />
                         <b>{item}</b>
                       </button>
@@ -417,28 +567,84 @@ export function StaticStudio({
               </div>
             </details>
 
-            <details open={openStep === "style"} onToggle={(event) => event.currentTarget.open && setOpenStep("style")}>
+            <details
+              open={openStep === "style"}
+              onToggle={(event) =>
+                event.currentTarget.open && setOpenStep("style")
+              }
+            >
               <summary>
                 <StepNumber number="02" done />
-                <span><b>Etapa y estructura</b><small>{stage} · {archetypeId === "automatico" ? "Automático" : archetypes.find((item) => item.id === archetypeId)?.label_visible}</small></span>
+                <span>
+                  <b>Etapa y estructura</b>
+                  <small>
+                    {stage} ·{" "}
+                    {archetypeId === "automatico"
+                      ? "Automático"
+                      : archetypes.find((item) => item.id === archetypeId)
+                          ?.label_visible}
+                  </small>
+                </span>
                 <ChevronDown />
               </summary>
               <div className="studio-step-body">
                 <div className="stage-tabs compact-tabs">
-                  {stages.map((item) => <button key={item} type="button" className={stage === item ? "selected" : ""} onClick={() => setStage(item)}>{item}</button>)}
+                  {stages.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      className={stage === item ? "selected" : ""}
+                      onClick={() => setStage(item)}
+                    >
+                      {item}
+                    </button>
+                  ))}
                 </div>
                 <div className="archetype-section-heading">
-                  <div><span className="eyebrow">Estructura del anuncio</span><b>Elige visualmente cómo se contará la idea.</b></div>
-                  <small>Son referencias de composición. La pieza final usará tu identidad.</small>
+                  <div>
+                    <span className="eyebrow">Estructura del anuncio</span>
+                    <b>Elige visualmente cómo se contará la idea.</b>
+                  </div>
+                  <small>
+                    Son referencias de composición. La pieza final usará tu
+                    identidad.
+                  </small>
                 </div>
-                <div className="archetype-format-strip" aria-label="Formatos de anuncio disponibles">
-                  <button type="button" className={archetypeId === "automatico" ? "selected automatic" : "automatic"} onClick={() => setArchetypeId("automatico")}>
-                    <span className="archetype-mini-visual automatic"><Sparkles /></span>
+                <div
+                  className="archetype-format-strip"
+                  aria-label="Formatos de anuncio disponibles"
+                >
+                  <button
+                    type="button"
+                    className={
+                      archetypeId === "automatico"
+                        ? "selected automatic"
+                        : "automatic"
+                    }
+                    onClick={() => setArchetypeId("automatico")}
+                  >
+                    <span className="archetype-mini-visual automatic">
+                      <Sparkles />
+                    </span>
                     <b>Automático</b>
                   </button>
                   {archetypes.map((item) => (
-                    <button type="button" data-archetype={item.id} key={item.id} className={archetypeId === item.id ? "selected" : ""} onClick={() => setArchetypeId(item.id)}>
-                      <span className="archetype-mini-visual">{item.thumbnail_path && <img src={item.thumbnail_path} alt="" aria-hidden="true" />}</span>
+                    <button
+                      type="button"
+                      data-archetype={item.id}
+                      key={item.id}
+                      className={archetypeId === item.id ? "selected" : ""}
+                      onClick={() => setArchetypeId(item.id)}
+                    >
+                      <span className="archetype-mini-visual">
+                        {item.thumbnail_path && (
+                          <img
+                            src={item.thumbnail_path}
+                            alt=""
+                            aria-hidden="true"
+                          />
+                        )}
+                      </span>
                       <b>{item.label_visible}</b>
                     </button>
                   ))}
@@ -446,74 +652,208 @@ export function StaticStudio({
 
                 {selectedArchetype?.thumbnail_path ? (
                   <div className="archetype-reference-panel">
-                    <button type="button" className="archetype-reference-visual" onClick={() => setReferencePreview(selectedArchetype)} aria-label={`Ampliar referencia de ${selectedArchetype.label_visible}`}>
-                      <img src={selectedArchetype.thumbnail_path} alt={`Referencia visual: ${selectedArchetype.label_visible}`} />
-                      <span><Expand size={15} /> Ver referencia completa</span>
+                    <button
+                      type="button"
+                      className="archetype-reference-visual"
+                      onClick={() => setReferencePreview(selectedArchetype)}
+                      aria-label={`Ampliar referencia de ${selectedArchetype.label_visible}`}
+                    >
+                      <img
+                        src={selectedArchetype.thumbnail_path}
+                        alt={`Referencia visual: ${selectedArchetype.label_visible}`}
+                      />
+                      <span>
+                        <Expand size={15} /> Ver referencia completa
+                      </span>
                     </button>
                     <div className="archetype-reference-copy">
                       <span className="eyebrow">Referencia seleccionada</span>
                       <h3>{selectedArchetype.label_visible}</h3>
                       <p>{selectedArchetype.short_description}</p>
                       <div className="archetype-visual-keys">
-                        {selectedArchetype.visual_keys?.map((key) => <span key={key}>{key}</span>)}
+                        {selectedArchetype.visual_keys?.map((key) => (
+                          <span key={key}>{key}</span>
+                        ))}
                       </div>
-                      <small><b>Úsalo cuando</b>{selectedArchetype.use_when}</small>
-                      <div className="archetype-recipe-note"><WandSparkles size={16} /><span>La plataforma tomará esta arquitectura visual y la adaptará a tu oferta, tus textos y tu identidad.</span></div>
+                      <small>
+                        <b>Úsalo cuando</b>
+                        {selectedArchetype.use_when}
+                      </small>
+                      <div className="archetype-recipe-note">
+                        <WandSparkles size={16} />
+                        <span>
+                          La plataforma tomará esta arquitectura visual y la
+                          adaptará a tu oferta, tus textos y tu identidad.
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ) : (
                   <div className="archetype-reference-panel automatic">
-                    <div className="archetype-automatic-stage"><Sparkles /><span><b>Dirección automática</b>La estratega elegirá una de las 10 estructuras según tu objetivo, etapa y mensaje.</span></div>
+                    <div className="archetype-automatic-stage">
+                      <Sparkles />
+                      <span>
+                        <b>Dirección automática</b>La estratega elegirá una de
+                        las 10 estructuras según tu objetivo, etapa y mensaje.
+                      </span>
+                    </div>
                     <div className="archetype-reference-copy">
                       <span className="eyebrow">Recomendado para empezar</span>
                       <h3>La mejor estructura para tu idea</h3>
-                      <p>No necesitas adivinar el formato. La plataforma compara tu brief con las diez recetas visuales y elige la más adecuada.</p>
-                      <div className="archetype-recipe-note"><WandSparkles size={16} /><span>La decisión también queda guardada en el JSON y guía la composición de la imagen.</span></div>
+                      <p>
+                        No necesitas adivinar el formato. La plataforma compara
+                        tu brief con las diez recetas visuales y elige la más
+                        adecuada.
+                      </p>
+                      <div className="archetype-recipe-note">
+                        <WandSparkles size={16} />
+                        <span>
+                          La decisión también queda guardada en el JSON y guía
+                          la composición de la imagen.
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
+
+                <section className="brand-reference-zone studio-reference-zone">
+                  <header>
+                    <div>
+                      <span className="eyebrow">
+                        Referencia propia · opcional
+                      </span>
+                      <h3>Sube una imagen para guiar el estilo</h3>
+                    </div>
+                    <p>
+                      Tomaremos composición, jerarquía y atmósfera. La marca, el
+                      producto y los textos seguirán siendo los de{" "}
+                      <b>{brandName}</b>.
+                    </p>
+                  </header>
+                  <ReferenceUploader
+                    brandId={brandId}
+                    initialReferences={initialReferences}
+                    selectedIds={selectedReferenceIds}
+                    onSelectionChange={setSelectedReferenceIds}
+                    onItemsChange={(ids) => setReferenceCount(ids.length)}
+                  />
+                  <small className="studio-reference-cost">
+                    {unlimitedCredits
+                      ? "Análisis de referencia incluido."
+                      : "Hasta 6 referencias analizadas están incluidas por marca; a partir de la séptima, cada nueva usa 20 créditos."}
+                    {` ${selectedReferenceIds.length} de ${referenceCount} activas para esta pieza.`}
+                  </small>
+                </section>
               </div>
             </details>
 
-            <details className="intent-focus-step" open={openStep === "intent"} onToggle={(event) => event.currentTarget.open && setOpenStep("intent")}>
+            <details
+              className="intent-focus-step"
+              open={openStep === "intent"}
+              onToggle={(event) =>
+                event.currentTarget.open && setOpenStep("intent")
+              }
+            >
               <summary>
                 <StepNumber number="03" done={intent.trim().length >= 16} />
-                <span><b>Qué quieres comunicar</b><small>{intent ? `${intent.slice(0, 74)}${intent.length > 74 ? "…" : ""}` : "Escribe la intención de esta pieza"}</small></span>
+                <span>
+                  <b>Qué quieres comunicar</b>
+                  <small>
+                    {intent
+                      ? `${intent.slice(0, 74)}${intent.length > 74 ? "…" : ""}`
+                      : "Escribe la intención de esta pieza"}
+                  </small>
+                </span>
                 <ChevronDown />
               </summary>
               <div className="studio-step-body intent-step">
-                <textarea autoFocus value={intent} onChange={(event) => setIntent(event.target.value)} placeholder={examples[exampleIndex]} />
+                <textarea
+                  autoFocus
+                  value={intent}
+                  onChange={(event) => setIntent(event.target.value)}
+                  placeholder={examples[exampleIndex]}
+                />
                 <div className="proposal-controls">
                   <fieldset>
                     <legend>Cantidad de propuestas nuevas</legend>
-                    <div>{[1, 2, 3].map((count) => <button key={count} type="button" className={proposals === count ? "selected" : ""} onClick={() => setProposals(count)}>{count}</button>)}</div>
-                    <small>Son conceptos nuevos para explorar, no variaciones de un ganador.</small>
+                    <div>
+                      {[1, 2, 3].map((count) => (
+                        <button
+                          key={count}
+                          type="button"
+                          className={proposals === count ? "selected" : ""}
+                          onClick={() => setProposals(count)}
+                        >
+                          {count}
+                        </button>
+                      ))}
+                    </div>
+                    <small>
+                      Son conceptos nuevos para explorar, no variaciones de un
+                      ganador.
+                    </small>
                   </fieldset>
-                  <label>Calidad
-                    <select value={quality} onChange={(event) => setQuality(event.target.value === "high" ? "high" : "medium")}>
-                      <option value="high">Alta · recomendada{unlimitedCredits ? " · incluida" : ""}</option>
-                      <option value="medium">Estándar{unlimitedCredits ? " · incluida" : ""}</option>
+                  <label>
+                    Calidad
+                    <select
+                      value={quality}
+                      onChange={(event) =>
+                        setQuality(
+                          event.target.value === "high" ? "high" : "medium",
+                        )
+                      }
+                    >
+                      <option value="high">
+                        Alta · recomendada
+                        {unlimitedCredits ? " · incluida" : ""}
+                      </option>
+                      <option value="medium">
+                        Estándar{unlimitedCredits ? " · incluida" : ""}
+                      </option>
                     </select>
                   </label>
                 </div>
-                <button className="primary-action prepare-action studio-create-brief" type="submit" disabled={busy === "brief" || busy === "generate"}>
+                <button
+                  className="primary-action prepare-action studio-create-brief"
+                  type="submit"
+                  disabled={busy === "brief" || busy === "generate"}
+                >
                   {busy === "brief" ? <Loader2 className="spin" /> : <Pencil />}
-                  {busy === "brief" ? "Preparando dirección…" : unlimitedCredits ? "Crear ficha del anuncio · incluido" : "Crear ficha del anuncio · 15 cr"}
+                  {busy === "brief"
+                    ? "Preparando dirección…"
+                    : unlimitedCredits
+                      ? "Crear ficha del anuncio · incluido"
+                      : "Crear ficha del anuncio · 15 cr"}
                 </button>
               </div>
             </details>
 
-            {message && <p className="form-message studio-message" aria-live="polite">{message}</p>}
+            {message && (
+              <p className="form-message studio-message" aria-live="polite">
+                {message}
+              </p>
+            )}
           </form>
         </aside>
 
         <section className="creative-canvas" ref={stageRef}>
           <header className="creative-canvas-head">
-            <div><span className="eyebrow">Lienzo de producción</span><h2>{canvasTitle}</h2></div>
+            <div>
+              <span className="eyebrow">Lienzo de producción</span>
+              <h2>{canvasTitle}</h2>
+            </div>
             {selectedCreative ? (
               <div className="canvas-head-actions">
-                <span className="canvas-version">{selectedCreative.format} · versión {selectedCreative.version}</span>
-                <button type="button" onClick={resetPiece} disabled={busy !== null}><Plus size={16} /> Crear otra pieza</button>
+                <span className="canvas-version">
+                  {selectedCreative.format} · versión {selectedCreative.version}
+                </span>
+                <button
+                  type="button"
+                  onClick={resetPiece}
+                  disabled={busy !== null}
+                >
+                  <Plus size={16} /> Crear otra pieza
+                </button>
               </div>
             ) : (
               <span className="canvas-version">{format}</span>
@@ -521,38 +861,100 @@ export function StaticStudio({
           </header>
 
           {busy === "generate" ? (
-            <div className={`generation-stage ${formatClass(format)}`} aria-live="polite">
+            <div
+              className={`generation-stage ${formatClass(format)}`}
+              aria-live="polite"
+            >
               <div className="generation-pulse">
                 <WandSparkles />
-                <b>Construyendo {proposals === 1 ? "tu propuesta" : "la siguiente propuesta"}…</b>
-                <span>La imagen se guardará automáticamente en tu galería.</span>
-                <div className="generation-progress-steps"><i>Composición</i><i>Producto y copy</i><i>Revisión final</i></div>
+                <b>
+                  Construyendo{" "}
+                  {proposals === 1 ? "tu propuesta" : "la siguiente propuesta"}…
+                </b>
+                <span>
+                  La imagen se guardará automáticamente en tu galería.
+                </span>
+                <div className="generation-progress-steps">
+                  <i>Composición</i>
+                  <i>Producto y copy</i>
+                  <i>Revisión final</i>
+                </div>
               </div>
             </div>
           ) : selectedCreative && selectedUrl ? (
             <>
               <div className="canvas-viewer">
-                <div className={`canvas-image-shell ${formatClass(selectedCreative.format)}`}>
-                  <img src={selectedUrl} alt={`Anuncio generado para ${brandName}`} />
-                  <button type="button" className="expand-canvas" onClick={() => setFullScreen(true)}><Expand size={17} /> Ver pantalla completa</button>
+                <div
+                  className={`canvas-image-shell ${formatClass(selectedCreative.format)}`}
+                >
+                  <img
+                    src={selectedUrl}
+                    alt={`Anuncio generado para ${brandName}`}
+                  />
+                  <button
+                    type="button"
+                    className="expand-canvas"
+                    onClick={() => setFullScreen(true)}
+                  >
+                    <Expand size={17} /> Ver pantalla completa
+                  </button>
                 </div>
                 <div className="canvas-actions">
-                  <div><span>{selectedCreative.ficha?.arquetipo_label || "Anuncio estático"}</span><b>{selectedCreative.ficha?.texto_principal || "Propuesta generada"}</b></div>
+                  <div>
+                    <span>
+                      {selectedCreative.ficha?.arquetipo_label ||
+                        "Anuncio estático"}
+                    </span>
+                    <b>
+                      {selectedCreative.ficha?.texto_principal ||
+                        "Propuesta generada"}
+                    </b>
+                  </div>
                   <div className="canvas-primary-actions">
-                    {remainingProposals > 0 && <button type="button" onClick={handleGenerate} disabled={busy !== null}><WandSparkles size={16} /> Generar siguiente</button>}
-                    <a href={selectedUrl} onClick={() => trackDownload(selectedCreative)} download={downloadName(brandName, selectedCreative)}><Download size={17} /> Descargar en alta calidad</a>
+                    {remainingProposals > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleGenerate}
+                        disabled={busy !== null}
+                      >
+                        <WandSparkles size={16} /> Generar siguiente
+                      </button>
+                    )}
+                    <a
+                      href={selectedUrl}
+                      onClick={() => trackDownload(selectedCreative)}
+                      download={downloadName(brandName, selectedCreative)}
+                    >
+                      <Download size={17} /> Descargar en alta calidad
+                    </a>
                   </div>
                 </div>
               </div>
 
               {gallery.length > 1 && (
-                <div className="proposal-filmstrip" aria-label="Propuestas y versiones">
+                <div
+                  className="proposal-filmstrip"
+                  aria-label="Propuestas y versiones"
+                >
                   {gallery.slice(0, 8).map((item, index) => {
                     const url = creativeUrl(item);
                     return (
-                      <button type="button" key={item.id} className={selectedCreative.id === item.id ? "selected" : ""} onClick={() => viewCreative(item)}>
-                        {url && <img src={url} alt={`Propuesta ${index + 1}`} />}
-                        <span>{item.status === "edited" ? `Edición v${item.version}` : `Propuesta ${index + 1}`}</span>
+                      <button
+                        type="button"
+                        key={item.id}
+                        className={
+                          selectedCreative.id === item.id ? "selected" : ""
+                        }
+                        onClick={() => viewCreative(item)}
+                      >
+                        {url && (
+                          <img src={url} alt={`Propuesta ${index + 1}`} />
+                        )}
+                        <span>
+                          {item.status === "edited"
+                            ? `Edición v${item.version}`
+                            : `Propuesta ${index + 1}`}
+                        </span>
                       </button>
                     );
                   })}
@@ -560,36 +962,176 @@ export function StaticStudio({
               )}
 
               <div className="image-correction-bar">
-                <div><Pencil size={18} /><span><b>¿Quieres corregir algo?</b> Describe únicamente el cambio. La versión actual no se borrará.</span></div>
-                <textarea ref={correctionRef} value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder="Ej: Quita el botón de llamada a la acción y conserva todo lo demás exactamente igual." />
-                <button type="button" onClick={handleCorrection} disabled={busy === "edit"}>{busy === "edit" ? <Loader2 className="spin" /> : <RefreshCw />} {busy === "edit" ? "Corrigiendo…" : unlimitedCredits ? "Crear versión corregida · incluido" : "Crear versión corregida · 80 cr"}</button>
+                <div>
+                  <Pencil size={18} />
+                  <span>
+                    <b>¿Quieres corregir algo?</b> Describe únicamente el
+                    cambio. La versión actual no se borrará.
+                  </span>
+                </div>
+                <textarea
+                  ref={correctionRef}
+                  value={correction}
+                  onChange={(event) => setCorrection(event.target.value)}
+                  placeholder="Ej: Quita el botón de llamada a la acción y conserva todo lo demás exactamente igual."
+                />
+                <button
+                  type="button"
+                  onClick={handleCorrection}
+                  disabled={busy === "edit"}
+                >
+                  {busy === "edit" ? (
+                    <Loader2 className="spin" />
+                  ) : (
+                    <RefreshCw />
+                  )}{" "}
+                  {busy === "edit"
+                    ? "Corrigiendo…"
+                    : unlimitedCredits
+                      ? "Crear versión corregida · incluido"
+                      : "Crear versión corregida · 80 cr"}
+                </button>
               </div>
             </>
           ) : brief ? (
             <div className="canvas-brief-state brief-editor">
               <div className="canvas-brief-intro">
-                <div><span>{brief.arquetipo_label}</span><b>Aprobada · {brief.review_score}/100</b></div>
+                <div>
+                  <span>{brief.arquetipo_label}</span>
+                  <b>Aprobada · {brief.review_score}/100</b>
+                </div>
                 <p>{brief.review_summary}</p>
               </div>
-              <label>Concepto<textarea value={brief.concepto} onChange={(event) => updateBrief("concepto", event.target.value)} /></label>
+              <label>
+                Concepto
+                <textarea
+                  value={brief.concepto}
+                  onChange={(event) =>
+                    updateBrief("concepto", event.target.value)
+                  }
+                />
+              </label>
               <div className="copy-grid">
-                <label>Texto principal<input value={brief.texto_principal} onChange={(event) => updateBrief("texto_principal", event.target.value)} /></label>
-                <label>Texto secundario<input value={brief.texto_secundario} onChange={(event) => updateBrief("texto_secundario", event.target.value)} /></label>
-                <label>CTA<input value={brief.cta} disabled={brief.cta_usage === "none"} onChange={(event) => updateBrief("cta", event.target.value)} /></label>
+                <label>
+                  Texto principal
+                  <input
+                    value={brief.texto_principal}
+                    onChange={(event) =>
+                      updateBrief("texto_principal", event.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Texto secundario
+                  <input
+                    value={brief.texto_secundario}
+                    onChange={(event) =>
+                      updateBrief("texto_secundario", event.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  CTA
+                  <input
+                    value={brief.cta}
+                    disabled={brief.cta_usage === "none"}
+                    onChange={(event) => updateBrief("cta", event.target.value)}
+                  />
+                </label>
               </div>
               <div className="creative-usage-controls">
-                <label>Logotipo<select value={brief.logo_usage} onChange={(event) => updateBrief("logo_usage", event.target.value as StaticBrief["logo_usage"])}><option value="none">No usar</option><option value="subtle">Discreto</option><option value="prominent">Protagonista</option></select></label>
-                <label>Call to action<select value={brief.cta_usage} onChange={(event) => updateBrief("cta_usage", event.target.value as StaticBrief["cta_usage"])}><option value="none">Sin CTA</option><option value="text">Texto discreto</option><option value="button">Botón</option></select></label>
+                <label>
+                  Logotipo
+                  <select
+                    value={brief.logo_usage}
+                    onChange={(event) =>
+                      updateBrief(
+                        "logo_usage",
+                        event.target.value as StaticBrief["logo_usage"],
+                      )
+                    }
+                  >
+                    <option value="none">No usar</option>
+                    <option value="subtle">Discreto</option>
+                    <option value="prominent">Protagonista</option>
+                  </select>
+                </label>
+                <label>
+                  Call to action
+                  <select
+                    value={brief.cta_usage}
+                    onChange={(event) =>
+                      updateBrief(
+                        "cta_usage",
+                        event.target.value as StaticBrief["cta_usage"],
+                      )
+                    }
+                  >
+                    <option value="none">Sin CTA</option>
+                    <option value="text">Texto discreto</option>
+                    <option value="button">Botón</option>
+                  </select>
+                </label>
               </div>
-              <label>Disclaimer o texto legal<input value={brief.disclaimer || ""} onChange={(event) => updateBrief("disclaimer", event.target.value)} placeholder="Déjalo vacío si no aplica" /></label>
+              <label>
+                Disclaimer o texto legal
+                <input
+                  value={brief.disclaimer || ""}
+                  onChange={(event) =>
+                    updateBrief("disclaimer", event.target.value)
+                  }
+                  placeholder="Déjalo vacío si no aplica"
+                />
+              </label>
               <details className="art-direction-details">
                 <summary>Ver cómo se fotografiará y compondrá</summary>
                 <p>{brief.hook_visual}</p>
-                <div className="direction-zones"><span><b>Decisión visual</b>{brief.art_direction.decision_visual_fuerte}</span><span><b>Luz</b>{brief.art_direction.iluminacion}</span><span><b>Cámara</b>{brief.art_direction.camara_y_encuadre}</span><span><b>Entorno</b>{brief.art_direction.superficie_y_entorno}</span><span><b>Props</b>{brief.art_direction.props}</span><span><b>Color</b>{brief.art_direction.tratamiento_color}</span></div>
+                <div className="direction-zones">
+                  <span>
+                    <b>Decisión visual</b>
+                    {brief.art_direction.decision_visual_fuerte}
+                  </span>
+                  <span>
+                    <b>Luz</b>
+                    {brief.art_direction.iluminacion}
+                  </span>
+                  <span>
+                    <b>Cámara</b>
+                    {brief.art_direction.camara_y_encuadre}
+                  </span>
+                  <span>
+                    <b>Entorno</b>
+                    {brief.art_direction.superficie_y_entorno}
+                  </span>
+                  <span>
+                    <b>Props</b>
+                    {brief.art_direction.props}
+                  </span>
+                  <span>
+                    <b>Color</b>
+                    {brief.art_direction.tratamiento_color}
+                  </span>
+                </div>
               </details>
               <div className="brief-generate-row">
-                <div><span>{proposals} {proposals === 1 ? "propuesta" : "propuestas"} · {format}</span><small>{unlimitedCredits ? "Incluido en tu cuenta" : `${quality === "high" ? 250 : 120} créditos por propuesta`}</small></div>
-                <button type="button" onClick={handleGenerate} disabled={busy !== null}><WandSparkles /> Generar imagen</button>
+                <div>
+                  <span>
+                    {proposals} {proposals === 1 ? "propuesta" : "propuestas"} ·{" "}
+                    {format}
+                  </span>
+                  <small>
+                    {unlimitedCredits
+                      ? "Incluido en tu cuenta"
+                      : `${quality === "high" ? 250 : 120} créditos por propuesta`}
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={busy !== null}
+                >
+                  <WandSparkles /> Generar imagen
+                </button>
               </div>
             </div>
           ) : (
@@ -597,85 +1139,212 @@ export function StaticStudio({
               <div className={`blank-format-frame ${formatClass(format)}`}>
                 <ImageIcon size={34} />
                 <b>Aquí aparecerá tu próximo anuncio</b>
-                <p>{format} · cambia el formato y este lienzo se ajustará en vivo.</p>
+                <p>
+                  {format} · cambia el formato y este lienzo se ajustará en
+                  vivo.
+                </p>
               </div>
             </div>
           )}
 
           {!selectedCreative && !brief && busy === null && latestCreative && (
             <article className="last-creation-card">
-              {creativeUrl(latestCreative) && <img src={creativeUrl(latestCreative)} alt="Última creación" />}
-              <div><span>Tu última creación</span><b>{creativeTitle(latestCreative)}</b><small>{formatCreativeDate(latestCreative.created_at)}</small></div>
+              {creativeUrl(latestCreative) && (
+                <img src={creativeUrl(latestCreative)} alt="Última creación" />
+              )}
+              <div>
+                <span>Tu última creación</span>
+                <b>{creativeTitle(latestCreative)}</b>
+                <small>{formatCreativeDate(latestCreative.created_at)}</small>
+              </div>
               <div className="last-creation-actions">
-                <button type="button" onClick={() => viewCreative(latestCreative)}><Eye size={14} /> Ver</button>
-                <button type="button" onClick={() => editCreative(latestCreative)}><Pencil size={14} /> Editar</button>
-                <a href={creativeUrl(latestCreative)} onClick={() => trackDownload(latestCreative)} download={downloadName(brandName, latestCreative)} aria-label="Descargar última creación"><Download size={15} /></a>
+                <button
+                  type="button"
+                  onClick={() => viewCreative(latestCreative)}
+                >
+                  <Eye size={14} /> Ver
+                </button>
+                <button
+                  type="button"
+                  onClick={() => editCreative(latestCreative)}
+                >
+                  <Pencil size={14} /> Editar
+                </button>
+                <a
+                  href={creativeUrl(latestCreative)}
+                  onClick={() => trackDownload(latestCreative)}
+                  download={downloadName(brandName, latestCreative)}
+                  aria-label="Descargar última creación"
+                >
+                  <Download size={15} />
+                </a>
               </div>
             </article>
           )}
         </section>
       </div>
 
-      <section className="studio-gallery" aria-labelledby="studio-gallery-title">
+      <section
+        className="studio-gallery"
+        aria-labelledby="studio-gallery-title"
+      >
         <header>
-          <div><span className="eyebrow">Archivo creativo</span><h2 id="studio-gallery-title">Galería de {brandName}</h2><p>Cada pieza y cada corrección quedan disponibles para volver a abrirse.</p></div>
-          {gallery.length > 0 && <span className="gallery-count"><Images size={16} /> {gallery.length} {gallery.length === 1 ? "pieza" : "piezas"}</span>}
+          <div>
+            <span className="eyebrow">Archivo creativo</span>
+            <h2 id="studio-gallery-title">Galería de {brandName}</h2>
+            <p>
+              Cada pieza y cada corrección quedan disponibles para volver a
+              abrirse.
+            </p>
+          </div>
+          {gallery.length > 0 && (
+            <span className="gallery-count">
+              <Images size={16} /> {gallery.length}{" "}
+              {gallery.length === 1 ? "pieza" : "piezas"}
+            </span>
+          )}
         </header>
 
         {gallery.length === 0 ? (
-          <div className="studio-gallery-empty"><ImageIcon /><b>Tus piezas aparecerán aquí.</b><p>Crea la primera desde el flujo de arriba.</p><span>↑</span></div>
+          <div className="studio-gallery-empty">
+            <ImageIcon />
+            <b>Tus piezas aparecerán aquí.</b>
+            <p>Crea la primera desde el flujo de arriba.</p>
+            <span>↑</span>
+          </div>
         ) : (
           <>
             <div className="studio-gallery-grid">
               {visibleGallery.map((item) => {
                 const url = creativeUrl(item);
                 return (
-                  <article key={item.id} className={selectedCreative?.id === item.id ? "selected" : ""}>
-                    <button type="button" className="gallery-piece-preview" onClick={() => viewCreative(item)}>
-                      {url ? <img src={url} alt={creativeTitle(item)} /> : <ImageIcon />}
-                      <span>{item.ficha?.arquetipo_label || "Anuncio estático"}</span>
+                  <article
+                    key={item.id}
+                    className={
+                      selectedCreative?.id === item.id ? "selected" : ""
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="gallery-piece-preview"
+                      onClick={() => viewCreative(item)}
+                    >
+                      {url ? (
+                        <img src={url} alt={creativeTitle(item)} />
+                      ) : (
+                        <ImageIcon />
+                      )}
+                      <span>
+                        {item.ficha?.arquetipo_label || "Anuncio estático"}
+                      </span>
                     </button>
                     <div className="gallery-piece-meta">
                       <b>{creativeTitle(item)}</b>
-                      <span>{item.format} · v{item.version}</span>
+                      <span>
+                        {item.format} · v{item.version}
+                      </span>
                       <small>{formatCreativeDate(item.created_at)}</small>
                     </div>
                     <div className="gallery-piece-actions">
-                      <button type="button" onClick={() => viewCreative(item)}><Eye /> Ver</button>
-                      <button type="button" onClick={() => editCreative(item)}><Pencil /> Editar</button>
-                      <button type="button" onClick={() => editCreative(item, true)}><Copy /> Nueva versión</button>
-                      {url && <a href={url} onClick={() => trackDownload(item)} download={downloadName(brandName, item)}><Download /> Descargar</a>}
-                      <button type="button" onClick={() => deleteCreative(item)}><Trash2 /> Borrar</button>
+                      <button type="button" onClick={() => viewCreative(item)}>
+                        <Eye /> Ver
+                      </button>
+                      <button type="button" onClick={() => editCreative(item)}>
+                        <Pencil /> Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => editCreative(item, true)}
+                      >
+                        <Copy /> Nueva versión
+                      </button>
+                      {url && (
+                        <a
+                          href={url}
+                          onClick={() => trackDownload(item)}
+                          download={downloadName(brandName, item)}
+                        >
+                          <Download /> Descargar
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => deleteCreative(item)}
+                      >
+                        <Trash2 /> Borrar
+                      </button>
                     </div>
                   </article>
                 );
               })}
             </div>
-            {galleryVisible < gallery.length && <button type="button" className="gallery-load-more" onClick={() => setGalleryVisible((current) => current + 12)}>Cargar 12 piezas más</button>}
+            {galleryVisible < gallery.length && (
+              <button
+                type="button"
+                className="gallery-load-more"
+                onClick={() => setGalleryVisible((current) => current + 12)}
+              >
+                Cargar 12 piezas más
+              </button>
+            )}
           </>
         )}
       </section>
 
       {fullScreen && selectedCreative && selectedUrl && (
         <div className="canvas-lightbox" role="dialog" aria-modal="true">
-          <button type="button" onClick={() => setFullScreen(false)}><X /> Cerrar</button>
+          <button type="button" onClick={() => setFullScreen(false)}>
+            <X /> Cerrar
+          </button>
           <img src={selectedUrl} alt={`Vista completa de ${brandName}`} />
         </div>
       )}
 
       {referencePreview?.thumbnail_path && (
-        <div className="reference-lightbox" role="dialog" aria-modal="true" aria-label={`Referencia completa de ${referencePreview.label_visible}`} onClick={() => setReferencePreview(null)}>
-          <button type="button" className="reference-lightbox-close" onClick={() => setReferencePreview(null)}><X size={18} /> Cerrar</button>
-          <div className="reference-lightbox-image" onClick={(event) => event.stopPropagation()}>
-            <img src={referencePreview.thumbnail_path} alt={`Referencia completa: ${referencePreview.label_visible}`} />
+        <div
+          className="reference-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Referencia completa de ${referencePreview.label_visible}`}
+          onClick={() => setReferencePreview(null)}
+        >
+          <button
+            type="button"
+            className="reference-lightbox-close"
+            onClick={() => setReferencePreview(null)}
+          >
+            <X size={18} /> Cerrar
+          </button>
+          <div
+            className="reference-lightbox-image"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={referencePreview.thumbnail_path}
+              alt={`Referencia completa: ${referencePreview.label_visible}`}
+            />
           </div>
           <aside onClick={(event) => event.stopPropagation()}>
             <span className="eyebrow">Arquitectura visual</span>
             <h2>{referencePreview.label_visible}</h2>
             <p>{referencePreview.short_description}</p>
-            <div className="archetype-visual-keys">{referencePreview.visual_keys?.map((key) => <span key={key}>{key}</span>)}</div>
-            <small><b>Ideal para</b>{referencePreview.use_when}</small>
-            <div className="reference-identity-note"><Sparkles size={17} /><span>Se reutiliza la lógica de composición, nunca la marca, la categoría, la oferta, los colores ni el texto de esta referencia.</span></div>
+            <div className="archetype-visual-keys">
+              {referencePreview.visual_keys?.map((key) => (
+                <span key={key}>{key}</span>
+              ))}
+            </div>
+            <small>
+              <b>Ideal para</b>
+              {referencePreview.use_when}
+            </small>
+            <div className="reference-identity-note">
+              <Sparkles size={17} />
+              <span>
+                Se reutiliza la lógica de composición, nunca la marca, la
+                categoría, la oferta, los colores ni el texto de esta
+                referencia.
+              </span>
+            </div>
           </aside>
         </div>
       )}
@@ -684,17 +1353,31 @@ export function StaticStudio({
 }
 
 function StepNumber({ number, done }: { number: string; done?: boolean }) {
-  return <span className={done ? "step-number done" : "step-number"}>{done ? <Check size={14} /> : number}</span>;
+  return (
+    <span className={done ? "step-number done" : "step-number"}>
+      {done ? <Check size={14} /> : number}
+    </span>
+  );
 }
 
 function formatClass(value: string) {
-  return value.includes("9:16") ? "story" : value.includes("1:1") ? "square" : "portrait";
+  return value.includes("9:16")
+    ? "story"
+    : value.includes("1:1")
+      ? "square"
+      : "portrait";
 }
 
-function selectedProductLabel(assets: BrandAsset[], id: string, service: boolean) {
+function selectedProductLabel(
+  assets: BrandAsset[],
+  id: string,
+  service: boolean,
+) {
   if (service) return "Sin foto de producto";
   const index = assets.findIndex((item) => item.id === id);
-  return index >= 0 ? assetDisplayLabel(assets[index], index) : "Elige producto";
+  return index >= 0
+    ? assetDisplayLabel(assets[index], index)
+    : "Elige producto";
 }
 
 function assetDisplayLabel(asset: BrandAsset, index: number) {
@@ -706,15 +1389,27 @@ function creativeUrl(item: GeneratedStatic) {
 }
 
 function creativeTitle(item: GeneratedStatic) {
-  return item.ficha?.texto_principal?.trim() || item.ficha?.arquetipo_label || "Pieza sin título";
+  return (
+    item.ficha?.texto_principal?.trim() ||
+    item.ficha?.arquetipo_label ||
+    "Pieza sin título"
+  );
 }
 
 function formatCreativeDate(value?: string) {
   if (!value) return "Fecha no disponible";
-  return new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 function downloadName(brandName: string, item: GeneratedStatic) {
-  const brand = brandName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const brand = brandName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
   return `${brand || "marca"}_${formatClass(item.format)}_v${item.version}.png`;
 }

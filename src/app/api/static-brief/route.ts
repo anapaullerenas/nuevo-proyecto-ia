@@ -1,18 +1,54 @@
 import { NextRequest, NextResponse } from "next/server";
-import { STATIC_BRIEF_DIRECTOR_PROMPT, STATIC_BRIEF_REVIEWER_PROMPT } from "@/lib/ai/prompts";
-import { normalizeStaticBrief, STATIC_BRIEF_JSON_SCHEMA, StaticArchetype, StaticBrief, StaticBriefSchema } from "@/lib/ai/static-machine";
+import {
+  STATIC_BRIEF_DIRECTOR_PROMPT,
+  STATIC_BRIEF_REVIEWER_PROMPT,
+} from "@/lib/ai/prompts";
+import {
+  normalizeStaticBrief,
+  STATIC_BRIEF_JSON_SCHEMA,
+  StaticArchetype,
+  StaticBrief,
+  StaticBriefSchema,
+} from "@/lib/ai/static-machine";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { chargeCredits, CREDIT_COSTS, creditErrorStatus, refundCredits } from "@/lib/credits";
+import {
+  chargeCredits,
+  CREDIT_COSTS,
+  creditErrorStatus,
+  refundCredits,
+} from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
-import { CURATED_STATIC_FORMATS, getCuratedStaticFormat, staticFormatReferencePayload } from "@/lib/static-format-catalog";
+import {
+  CURATED_STATIC_FORMATS,
+  getCuratedStaticFormat,
+  staticFormatReferencePayload,
+} from "@/lib/static-format-catalog";
 
 export const maxDuration = 120;
 
 const externalReferencePatterns = {
   none: { regla: "Dirección original basada en la marca y el objetivo." },
-  product_context: { nombre: "Oferta en contexto", estructura: "Escena real con la oferta, el resultado o el activo principal como protagonista y anotaciones breves de beneficios verificables.", regla: "Usar sólo jerarquía y encuadre; nunca copiar categoría, identidad, oferta ni texto ajenos." },
-  creator_bundle: { nombre: "Creadora + oferta", estructura: "Presencia humana auténtica explicando, mostrando o demostrando la oferta con luz natural y prueba social.", regla: "Usar sólo estructura y naturalidad; conservar la identidad y los activos propios." },
-  aspirational_demo: { nombre: "Resultado aspiracional", estructura: "Resultado o transformación primero, oferta como respaldo y tipografía editorial con mucho aire.", regla: "Inspirarse en la lectura visual sin replicar categoría, identidad o claims ajenos." },
+  product_context: {
+    nombre: "Oferta en contexto",
+    estructura:
+      "Escena real con la oferta, el resultado o el activo principal como protagonista y anotaciones breves de beneficios verificables.",
+    regla:
+      "Usar sólo jerarquía y encuadre; nunca copiar categoría, identidad, oferta ni texto ajenos.",
+  },
+  creator_bundle: {
+    nombre: "Creadora + oferta",
+    estructura:
+      "Presencia humana auténtica explicando, mostrando o demostrando la oferta con luz natural y prueba social.",
+    regla:
+      "Usar sólo estructura y naturalidad; conservar la identidad y los activos propios.",
+  },
+  aspirational_demo: {
+    nombre: "Resultado aspiracional",
+    estructura:
+      "Resultado o transformación primero, oferta como respaldo y tipografía editorial con mucho aire.",
+    regla:
+      "Inspirarse en la lectura visual sin replicar categoría, identidad o claims ajenos.",
+  },
 } as const;
 
 type StaticBriefInput = {
@@ -25,13 +61,20 @@ type StaticBriefInput = {
   logoAssetId?: string;
   serviceNoProduct?: boolean;
   referenceAssetIds?: string[];
-  externalReference?: "none" | "product_context" | "creator_bundle" | "aspirational_demo";
+  externalReference?:
+    "none" | "product_context" | "creator_bundle" | "aspirational_demo";
 };
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    return NextResponse.json({ error: "Estamos ajustando la plataforma. Intenta de nuevo en unos minutos." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          "Estamos ajustando la plataforma. Intenta de nuevo en unos minutos.",
+      },
+      { status: 500 },
+    );
   }
 
   const {
@@ -39,25 +82,36 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Inicia sesión para crear fichas de estáticos." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Inicia sesión para crear fichas de estáticos." },
+      { status: 401 },
+    );
   }
 
   const body = (await request.json()) as StaticBriefInput;
   const intent = body.intent?.trim();
 
   if (!body.brandId || !intent || intent.length < 16) {
-    return NextResponse.json({ error: "Escribe qué quieres comunicar con un poco más de contexto." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Escribe qué quieres comunicar con un poco más de contexto." },
+      { status: 400 },
+    );
   }
 
   const { data: brand } = await supabase
     .from("brands")
-    .select("id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context")
+    .select(
+      "id,name,website,category,audience,offer,voice,content_owner,creative_goal,strategic_context",
+    )
     .eq("id", body.brandId)
     .eq("owner_id", user.id)
     .maybeSingle();
 
   if (!brand) {
-    return NextResponse.json({ error: "No encontré la marca activa." }, { status: 404 });
+    return NextResponse.json(
+      { error: "No encontré la marca activa." },
+      { status: 404 },
+    );
   }
 
   const { data: logoAsset } = await supabase
@@ -80,12 +134,20 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (!asset) {
-      return NextResponse.json({ error: "No encontré la foto de producto elegida." }, { status: 404 });
+      return NextResponse.json(
+        { error: "No encontré la foto de producto elegida." },
+        { status: 404 },
+      );
     }
     productAsset = asset || null;
   }
 
-  const [{ data: recipes }, { data: references }, { data: goldenBriefs }, { data: visualIdentity }] = await Promise.all([
+  const [
+    { data: recipes },
+    { data: references },
+    { data: goldenBriefs },
+    { data: visualIdentity },
+  ] = await Promise.all([
     supabase
       .from("brand_recipes")
       .select("rule")
@@ -99,16 +161,53 @@ export async function POST(request: NextRequest) {
       .eq("brand_id", brand.id)
       .eq("owner_id", user.id)
       .eq("kind", "style_reference")
-      .in("id", Array.isArray(body.referenceAssetIds) && body.referenceAssetIds.length ? body.referenceAssetIds.slice(0, 10) : ["00000000-0000-0000-0000-000000000000"]),
-    supabase.from("golden_briefs").select("archetype_id,scope,ficha").eq("active", true).or(`scope.eq.global,brand_id.eq.${brand.id}`).limit(12),
-    supabase.from("brand_visual_identity").select("colores_hex,tipografia_estilo,luz_y_foto,estilo_general").eq("brand_id", brand.id).maybeSingle(),
+      .in(
+        "id",
+        Array.isArray(body.referenceAssetIds) && body.referenceAssetIds.length
+          ? body.referenceAssetIds.slice(0, 10)
+          : ["00000000-0000-0000-0000-000000000000"],
+      ),
+    supabase
+      .from("golden_briefs")
+      .select("archetype_id,scope,ficha")
+      .eq("active", true)
+      .or(`scope.eq.global,brand_id.eq.${brand.id}`)
+      .limit(12),
+    supabase
+      .from("brand_visual_identity")
+      .select("colores_hex,tipografia_estilo,luz_y_foto,estilo_general")
+      .eq("brand_id", brand.id)
+      .maybeSingle(),
   ]);
 
   let creditCharge;
   try {
-    creditCharge = await chargeCredits({ userId: user.id, amount: CREDIT_COSTS.static_brief, reason: "static_brief", brandId: brand.id, provider: "openai", model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini", inputTokens: 3500, outputTokens: 2000, costUsd: estimateCostUsd({ provider: "openai", model: "gpt-4.1-mini", inputTokens: 3500, outputTokens: 2000 }) });
+    creditCharge = await chargeCredits({
+      userId: user.id,
+      amount: CREDIT_COSTS.static_brief,
+      reason: "static_brief",
+      brandId: brand.id,
+      provider: "openai",
+      model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini",
+      inputTokens: 3500,
+      outputTokens: 2000,
+      costUsd: estimateCostUsd({
+        provider: "openai",
+        model: "gpt-4.1-mini",
+        inputTokens: 3500,
+        outputTokens: 2000,
+      }),
+    });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "No pudimos validar tus créditos." }, { status: creditErrorStatus(error) });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "No pudimos validar tus créditos.",
+      },
+      { status: creditErrorStatus(error) },
+    );
   }
   try {
     const ficha = await createBriefWithOpenAI({
@@ -129,7 +228,19 @@ export async function POST(request: NextRequest) {
     });
 
     if (!visualIdentity) {
-      await supabase.from("brand_visual_identity").upsert({ brand_id: brand.id, owner_id: user.id, colores_hex: ficha.paleta, tipografia_estilo: typographyForArchetype(ficha.arquetipo), luz_y_foto: ficha.art_direction.iluminacion, estilo_general: ficha.art_direction.tratamiento_color }, { onConflict: "brand_id" });
+      await supabase
+        .from("brand_visual_identity")
+        .upsert(
+          {
+            brand_id: brand.id,
+            owner_id: user.id,
+            colores_hex: ficha.paleta,
+            tipografia_estilo: typographyForArchetype(ficha.arquetipo),
+            luz_y_foto: ficha.art_direction.iluminacion,
+            estilo_general: ficha.art_direction.tratamiento_color,
+          },
+          { onConflict: "brand_id" },
+        );
     }
 
     const { data: saved, error: saveError } = await supabase
@@ -146,7 +257,9 @@ export async function POST(request: NextRequest) {
           intent,
           product_asset_id: body.productAssetId || null,
           service_no_product: Boolean(body.serviceNoProduct || !productAsset),
-          reference_asset_ids: (references || []).map((reference) => reference.id),
+          reference_asset_ids: (references || []).map(
+            (reference) => reference.id,
+          ),
           external_reference: body.externalReference || "none",
           format_reference: staticFormatReferencePayload(ficha.arquetipo),
         },
@@ -157,18 +270,47 @@ export async function POST(request: NextRequest) {
 
     if (saveError) throw new Error(saveError.message);
 
-    return NextResponse.json({ creativeId: saved.id, ficha: saved.ficha, saved });
+    return NextResponse.json({
+      creativeId: saved.id,
+      ficha: saved.ficha,
+      saved,
+    });
   } catch (error) {
-    if (creditCharge.charged) await refundCredits(user.id, creditCharge.amount, "static_brief", brand.id);
+    const refunded =
+      !creditCharge.charged ||
+      (await refundCredits(
+        user.id,
+        creditCharge.amount,
+        "static_brief",
+        brand.id,
+        creditCharge.operationId,
+      ));
     console.error("static brief failed", error);
     return NextResponse.json(
-      { error: "No pudimos preparar la dirección del anuncio. Tus créditos fueron devueltos; intenta nuevamente." },
+      {
+        error: refunded
+          ? "No pudimos preparar la dirección del anuncio. Tus créditos fueron devueltos; intenta nuevamente."
+          : "No pudimos preparar la dirección ni confirmar la devolución automática. Escríbenos para revisarlo con el historial de tu cuenta.",
+      },
       { status: 500 },
     );
   }
 }
 
-function typographyForArchetype(archetype: string) { if (["post_its","anotaciones_manuscritas"].includes(archetype)) return "manuscrita"; if (["producto_heroe_editorial","diagrama_callouts","prueba_social_flotante"].includes(archetype)) return "serif_editorial"; if (archetype === "ticket_novedad") return "condensada"; return "sans_geometrica"; }
+function typographyForArchetype(archetype: string) {
+  if (["post_its", "anotaciones_manuscritas"].includes(archetype))
+    return "manuscrita";
+  if (
+    [
+      "producto_heroe_editorial",
+      "diagrama_callouts",
+      "prueba_social_flotante",
+    ].includes(archetype)
+  )
+    return "serif_editorial";
+  if (archetype === "ticket_novedad") return "condensada";
+  return "sans_geometrica";
+}
 
 async function createBriefWithOpenAI({
   brand,
@@ -196,7 +338,12 @@ async function createBriefWithOpenAI({
   serviceNoProduct: boolean;
   recipes: string[];
   archetypes: StaticArchetype[];
-  references: Array<{ id: string; file_name: string; label: string | null; metadata: unknown }>;
+  references: Array<{
+    id: string;
+    file_name: string;
+    label: string | null;
+    metadata: unknown;
+  }>;
   externalReference: keyof typeof externalReferencePatterns;
   goldenBriefs: Array<{ archetype_id: string; scope: string; ficha: unknown }>;
   visualIdentity: Record<string, unknown> | null;
@@ -218,13 +365,20 @@ async function createBriefWithOpenAI({
     referencias_visuales_analizadas: references.map((reference) => ({
       nombre: reference.file_name,
       analisis: reference.metadata,
-      regla: "Usar sólo estructura, jerarquía y tratamiento visual. No copiar identidad, producto ni texto.",
+      regla:
+        "Usar sólo estructura, jerarquía y tratamiento visual. No copiar identidad, producto ni texto.",
     })),
     estructura_externa_elegida: externalReferencePatterns[externalReference],
     identidad_visual_persistente: visualIdentity,
-    neutralidad_de_categoria: "Usa exclusivamente la categoría, oferta, audiencia, claims y objetos de la marca activa. Los ejemplos sólo calibran estructura y calidad.",
+    neutralidad_de_categoria:
+      "Usa exclusivamente la categoría, oferta, audiencia, claims y objetos de la marca activa. Los ejemplos sólo calibran estructura y calidad.",
     reglas_de_categoria: categoryRules(String(brand.category || "")),
-    ejemplos_de_ficha_excelente: goldenBriefs.filter((brief) => archetypeId === "automatico" || brief.archetype_id === archetypeId).slice(0, 3),
+    ejemplos_de_ficha_excelente: goldenBriefs
+      .filter(
+        (brief) =>
+          archetypeId === "automatico" || brief.archetype_id === archetypeId,
+      )
+      .slice(0, 3),
   };
 
   const draft = await requestStructuredBrief({
@@ -250,7 +404,10 @@ async function createBriefWithOpenAI({
     apiKey,
     stage: "reviewer",
     system: STATIC_BRIEF_REVIEWER_PROMPT,
-    user: JSON.stringify({ resumen_marca: brandSummary, ficha_borrador: draft }),
+    user: JSON.stringify({
+      resumen_marca: brandSummary,
+      ficha_borrador: draft,
+    }),
     maxTokens: 2000,
     temperature: 0.2,
     fallbackArchetype: archetypeId,
@@ -261,7 +418,12 @@ async function createBriefWithOpenAI({
       apiKey,
       stage: "reviewer-correction",
       system: STATIC_BRIEF_REVIEWER_PROMPT,
-      user: JSON.stringify({ resumen_marca: brandSummary, ficha_borrador: reviewed, instruccion: "Corrige la ficha hasta alcanzar al menos 85/100 sin inventar claims." }),
+      user: JSON.stringify({
+        resumen_marca: brandSummary,
+        ficha_borrador: reviewed,
+        instruccion:
+          "Corrige la ficha hasta alcanzar al menos 85/100 sin inventar claims.",
+      }),
       maxTokens: 2000,
       temperature: 0.15,
       fallbackArchetype: archetypeId,
@@ -274,7 +436,9 @@ async function createBriefWithOpenAI({
 
 function categoryRules(category: string) {
   const normalized = category.toLowerCase();
-  if (/(skin|piel|belleza|beauty|cosm[eé]tic|bienestar|salud)/i.test(normalized)) {
+  if (
+    /(skin|piel|belleza|beauty|cosm[eé]tic|bienestar|salud)/i.test(normalized)
+  ) {
     return [
       "Usa formulaciones prudentes como ayuda a o visiblemente.",
       "Evita absolutos como elimina, cura, borra o garantizado.",
@@ -287,7 +451,10 @@ function categoryRules(category: string) {
   ];
 }
 
-function lockRequestedArchetype(brief: StaticBrief, requestedArchetype: string) {
+function lockRequestedArchetype(
+  brief: StaticBrief,
+  requestedArchetype: string,
+) {
   const requested = getCuratedStaticFormat(requestedArchetype);
   if (!requested) return brief;
 
@@ -321,22 +488,42 @@ async function requestStructuredBrief({
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
         model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini",
         temperature,
         max_tokens: maxTokens,
-        response_format: { type: "json_schema", json_schema: { name: `static_brief_${stage.replace(/[^a-z0-9_]/gi, "_")}`, strict: true, schema: STATIC_BRIEF_JSON_SCHEMA } },
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: `static_brief_${stage.replace(/[^a-z0-9_]/gi, "_")}`,
+            strict: true,
+            schema: STATIC_BRIEF_JSON_SCHEMA,
+          },
+        },
         messages: [
           { role: "system", content: system },
-          { role: "user", content: attempt === 0 ? user : `${user}\n\nREINTENTO DE REPARACIÓN: ${previousError}. Devuelve la ficha completa. Texto anterior: ${previousText.slice(0, 6000)}` },
+          {
+            role: "user",
+            content:
+              attempt === 0
+                ? user
+                : `${user}\n\nREINTENTO DE REPARACIÓN: ${previousError}. Devuelve la ficha completa. Texto anterior: ${previousText.slice(0, 6000)}`,
+          },
         ],
       }),
     });
 
     if (!response.ok) {
       previousError = `respuesta ${response.status}`;
-      console.error(`static-brief ${stage} OpenAI error`, response.status, (await response.text()).slice(0, 500));
+      console.error(
+        `static-brief ${stage} OpenAI error`,
+        response.status,
+        (await response.text()).slice(0, 500),
+      );
       continue;
     }
 
@@ -344,12 +531,20 @@ async function requestStructuredBrief({
     previousText = data.choices?.[0]?.message?.content || "";
     try {
       const parsed = JSON.parse(previousText) as Partial<StaticBrief>;
-      return StaticBriefSchema.parse(normalizeStaticBrief(parsed, fallbackArchetype));
+      return StaticBriefSchema.parse(
+        normalizeStaticBrief(parsed, fallbackArchetype),
+      );
     } catch (error) {
       previousError = error instanceof Error ? error.message : "JSON inválido";
-      console.error(`static-brief ${stage} validation error`, previousError, previousText.slice(0, 500));
+      console.error(
+        `static-brief ${stage} validation error`,
+        previousError,
+        previousText.slice(0, 500),
+      );
     }
   }
 
-  throw new Error("No pude armar la ficha en este momento. Intenta de nuevo; no se descontaron créditos.");
+  throw new Error(
+    "No pude armar la ficha en este momento. Intenta de nuevo; no se descontaron créditos.",
+  );
 }
