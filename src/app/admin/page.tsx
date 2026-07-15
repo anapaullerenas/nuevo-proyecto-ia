@@ -383,6 +383,28 @@ export default async function AdminPage() {
           manual_access_emails y miembros_club.
         </small>
       </section>
+      <aside className="admin-floating-support">
+        <details open>
+          <summary>Soporte admin · usuarios</summary>
+          <form action="/api/admin" method="post">
+            <input type="hidden" name="action" value="add_access" />
+            <input type="email" name="email" placeholder="Correo nuevo usuario" required />
+            <button type="submit">Agregar usuario</button>
+          </form>
+          <form action="/api/admin" method="post">
+            <input type="hidden" name="action" value="repair_access" />
+            <input type="email" name="email" placeholder="Correo a reparar" required />
+            <button type="submit">Reparar acceso</button>
+          </form>
+          <form action="/api/admin" method="post">
+            <input type="hidden" name="action" value="grant" />
+            <input type="email" name="email" placeholder="Correo para saldo" required />
+            <input name="amount" inputMode="numeric" defaultValue="600" required />
+            <input type="hidden" name="reason" value="Abono manual desde panel flotante" />
+            <button type="submit">Abonar saldo</button>
+          </form>
+        </details>
+      </aside>
       <AdminConsole data={data} />
     </main>
   );
