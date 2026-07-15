@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { hasUnlimitedAccessEmail } from "@/lib/auth/access-exceptions";
+import { INITIAL_INCLUDED_CREDITS } from "@/lib/credit-catalog";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type WorkspaceBrand = {
@@ -72,7 +73,7 @@ function monthlyRemaining(wallet: { monthly_allowance?: number | null; allowance
   const reset = wallet.allowance_reset_at ? new Date(wallet.allowance_reset_at) : null;
   const now = new Date();
   const currentMonth = reset && reset.getUTCFullYear() === now.getUTCFullYear() && reset.getUTCMonth() === now.getUTCMonth();
-  return Math.max(0, Number(wallet.monthly_allowance || 5000) - (currentMonth ? Number(wallet.allowance_used || 0) : 0));
+  return Math.max(0, Number(wallet.monthly_allowance || INITIAL_INCLUDED_CREDITS) - (currentMonth ? Number(wallet.allowance_used || 0) : 0));
 }
 
 export function labelContentOwner(value: string | null) {

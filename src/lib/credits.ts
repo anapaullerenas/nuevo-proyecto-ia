@@ -1,21 +1,9 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hasUnlimitedAccessEmail } from "@/lib/auth/access-exceptions";
+import { CREDIT_COSTS, type CreditModule } from "@/lib/credit-catalog";
 
-export const CREDIT_COSTS = {
-  chat_message: 3,
-  voice_note: 2,
-  creative_analysis_image: 60,
-  creative_analysis_video: 120,
-  creative_analysis_script: 40,
-  meta_analysis: 120,
-  static_brief: 15,
-  static_generate_medium: 120,
-  static_generate_high: 250,
-  static_edit: 80,
-  reference_analysis: 20,
-} as const;
-
-export type CreditModule = keyof typeof CREDIT_COSTS;
+export { CREDIT_COSTS };
+export type { CreditModule };
 export class CreditError extends Error {
   constructor(
     public code:
@@ -47,10 +35,11 @@ type ChargeInput = {
 export async function chargeCredits(input: ChargeInput) {
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    console.error(
-      "SUPABASE_SERVICE_ROLE_KEY is missing; credit charging is temporarily bypassed to keep the creative workspace available.",
+    console.error("SUPABASE_SERVICE_ROLE_KEY is missing; credit charging is unavailable.");
+    throw new CreditError(
+      "configuration",
+      "No pudimos validar tus créditos. Intenta nuevamente en unos minutos.",
     );
-    return { charged: false, amount: 0, operationId: null };
   }
   if (await isUnlimited(admin, input.userId))
     return { charged: false, amount: 0, operationId: null };
@@ -59,10 +48,17 @@ export async function chargeCredits(input: ChargeInput) {
   const start = new Date();
   start.setUTCDate(1);
   start.setUTCHours(0, 0, 0, 0);
-  const { data: monthRows } = await admin
+  const { data: monthRows, error: monthError } = await admin
     .from("credit_ledger")
     .select("metadata")
     .gte("created_at", start.toISOString());
+  if (monthError) {
+    console.error("monthly credit cost check failed", monthError);
+    throw new CreditError(
+      "configuration",
+      "No pudimos validar el límite de uso. Intenta nuevamente en unos minutos.",
+    );
+  }
   const monthCost = (monthRows || []).reduce(
     (sum, row) =>
       sum +
@@ -198,16 +194,32 @@ async function enforceRequestLimit(
   };
   const rule = rules[route];
   if (!rule) return;
-  const { count } = await admin
+  const { count, error: countError } = await admin
     .from("request_events")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .eq("route", route)
     .gte("created_at", new Date(now - rule.ms).toISOString());
+  if (countError) {
+    console.error("request limit check failed", countError);
+    throw new CreditError(
+      "configuration",
+      "No pudimos validar el límite de uso. Intenta nuevamente en unos minutos.",
+    );
+  }
   if ((count || 0) >= rule.max)
     throw new CreditError(
       "rate_limit",
       "Llegaste al límite temporal de esta acción. Intenta nuevamente más tarde.",
     );
-  await admin.from("request_events").insert({ user_id: userId, route });
+  const { error: insertError } = await admin
+    .from("request_events")
+    .insert({ user_id: userId, route });
+  if (insertError) {
+    console.error("request event insert failed", insertError);
+    throw new CreditError(
+      "configuration",
+      "No pudimos registrar esta acción. Intenta nuevamente en unos minutos.",
+    );
+  }
 }

@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-
-const packages = { impulso: { name: "Impulso", amount: 10, credits: 2000 }, crecimiento: { name: "Crecimiento", amount: 25, credits: 6000 }, estudio: { name: "Estudio", amount: 50, credits: 14000 } } as const;
+import { RECHARGE_PACKAGES, type RechargePackageId } from "@/lib/recharge-packages";
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient(); const admin = createSupabaseAdminClient();
   if (!supabase || !admin) return NextResponse.json({ error: "Las recargas están temporalmente en mantenimiento." }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Inicia sesión para solicitar una recarga." }, { status: 401 });
-  const { package: packageId } = (await request.json()) as { package?: keyof typeof packages };
-  const selected = packageId ? packages[packageId] : null;
+  const { package: packageId } = (await request.json()) as { package?: RechargePackageId };
+  const selected = packageId ? RECHARGE_PACKAGES[packageId] : null;
   if (!selected || !packageId) return NextResponse.json({ error: "Elige un paquete válido." }, { status: 400 });
   await admin.from("recharge_requests").update({ status: "expirada", resolved_at: new Date().toISOString() }).eq("user_id", user.id).eq("status", "pendiente").lt("created_at", new Date(Date.now() - 72 * 3600_000).toISOString());
   const { data: pending } = await admin.from("recharge_requests").select("folio").eq("user_id", user.id).eq("status", "pendiente").maybeSingle();
