@@ -123,6 +123,25 @@ export async function POST(request: NextRequest) {
         .select("id")
         .maybeSingle();
       if (error || !data) throw new Error("La solicitud ya fue resuelta.");
+    } else if ((body.action === "grant" || body.action === "deduct") && !body.userId && body.email && Number(body.amount) > 0 && body.reason?.trim()) {
+      const email = normalizeEmail(body.email);
+      if (!email) return NextResponse.json({ error: "Correo no válido." }, { status: 400 });
+      const targetUserId = await ensureUserForEmail(email, body.fullName);
+      const amount = Math.min(100_000, Math.round(Number(body.amount)));
+      const signedAmount = body.action === "deduct" ? -amount : amount;
+      const { error } = await admin.rpc("admin_adjust_credits", {
+        p_user_id: targetUserId,
+        p_amount: signedAmount,
+        p_reason: body.action === "deduct" ? "admin_manual_deduct" : "admin_manual_grant",
+        p_admin_id: user.id,
+        p_metadata: {
+          reason: body.reason.trim(),
+          adjusted_by: user.id,
+          adjusted_email: email,
+          note: body.note?.trim() || null,
+        },
+      });
+      if (error) throw error;
     } else if (body.action === "grant" && body.userId && Number(body.amount) > 0 && body.reason?.trim()) {
       const amount = Math.min(100_000, Math.round(Number(body.amount)));
       const { error } = await admin.rpc("admin_adjust_credits", {
@@ -172,36 +191,7 @@ export async function POST(request: NextRequest) {
       );
       if (accessError) throw accessError;
 
-      let authUserId = await findAuthUserIdByEmail(email);
-      if (!authUserId) {
-        const { data: created, error: createError } = await admin.auth.admin.createUser({
-          email,
-          email_confirm: true,
-          user_metadata: body.fullName?.trim()
-            ? { full_name: body.fullName.trim() }
-            : undefined,
-        });
-        if (createError && !createError.message.toLowerCase().includes("already")) throw createError;
-        authUserId = created.user?.id || (await findAuthUserIdByEmail(email));
-      }
-
-      if (authUserId) {
-        const { error: profileError } = await admin.from("profiles").upsert({
-          id: authUserId,
-          email,
-          full_name: body.fullName?.trim() || null,
-          skool_status: "active",
-        });
-        if (profileError) throw profileError;
-
-        const { error: walletError } = await admin.from("credit_wallets").upsert({
-          user_id: authUserId,
-          balance: 0,
-          monthly_allowance: 600,
-          allowance_used: 0,
-        }, { onConflict: "user_id", ignoreDuplicates: true });
-        if (walletError) throw walletError;
-      }
+      await ensureUserForEmail(email, body.fullName);
     } else if (body.action === "access_status" && body.email && ["active", "inactive"].includes(body.status || "")) {
       const email = normalizeEmail(body.email);
       if (!email) return NextResponse.json({ error: "Correo no válido." }, { status: 400 });
@@ -223,6 +213,41 @@ export async function POST(request: NextRequest) {
     const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
     if (error) throw error;
     return data.users.find((item) => item.email?.toLowerCase() === email)?.id || null;
+  }
+
+  async function ensureUserForEmail(email: string, fullName?: string) {
+    let authUserId = await findAuthUserIdByEmail(email);
+    if (!authUserId) {
+      const { data: created, error: createError } = await admin.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        user_metadata: fullName?.trim() ? { full_name: fullName.trim() } : undefined,
+      });
+      if (createError && !createError.message.toLowerCase().includes("already")) throw createError;
+      authUserId = created.user?.id || (await findAuthUserIdByEmail(email));
+    }
+    if (!authUserId) throw new Error("No pudimos crear o localizar a la usuaria.");
+
+    const { error: profileError } = await admin.from("profiles").upsert({
+      id: authUserId,
+      email,
+      full_name: fullName?.trim() || null,
+      skool_status: "active",
+    });
+    if (profileError) throw profileError;
+
+    const { error: walletError } = await admin.from("credit_wallets").upsert(
+      {
+        user_id: authUserId,
+        balance: 0,
+        monthly_allowance: 600,
+        allowance_used: 0,
+      },
+      { onConflict: "user_id", ignoreDuplicates: true },
+    );
+    if (walletError) throw walletError;
+
+    return authUserId;
   }
 }
 

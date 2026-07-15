@@ -156,6 +156,9 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
   const [newAccessEmail, setNewAccessEmail] = useState("");
   const [newAccessName, setNewAccessName] = useState("");
   const [newAccessNote, setNewAccessNote] = useState("");
+  const [creditEmail, setCreditEmail] = useState("");
+  const [creditAmount, setCreditAmount] = useState("600");
+  const [manualCreditReason, setManualCreditReason] = useState("Ajuste manual de soporte");
   const [providers, setProviders] = useState<ProviderHealth[]>([]);
   const [providerBusy, setProviderBusy] = useState(true);
   const [providerError, setProviderError] = useState("");
@@ -576,6 +579,92 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
             </button>
           </div>
         </header>
+        <div className="admin-visible-controls">
+          <article>
+            <span className="eyebrow">Alta rápida</span>
+            <h3>Agregar usuario y dar acceso</h3>
+            <p>Escribe el correo y queda autorizado aunque no esté en la tabla del club.</p>
+            <div>
+              <input
+                type="email"
+                placeholder="correo@ejemplo.com"
+                value={newAccessEmail}
+                onChange={(event) => setNewAccessEmail(event.target.value)}
+              />
+              <input
+                placeholder="Nombre opcional"
+                value={newAccessName}
+                onChange={(event) => setNewAccessName(event.target.value)}
+              />
+              <button
+                disabled={busy === "add_access" || !newAccessEmail.trim()}
+                onClick={() =>
+                  action({
+                    action: "add_access",
+                    email: newAccessEmail,
+                    fullName: newAccessName,
+                    note: newAccessNote || "Alta rápida desde admin",
+                  })
+                }
+              >
+                <UserPlus />
+                Agregar usuario
+              </button>
+            </div>
+          </article>
+          <article>
+            <span className="eyebrow">Saldo manual</span>
+            <h3>Abonar o restar créditos</h3>
+            <p>No cuenta como ingreso; sí cuenta como saldo y movimiento de historial.</p>
+            <div>
+              <input
+                type="email"
+                placeholder="correo@ejemplo.com"
+                value={creditEmail}
+                onChange={(event) => setCreditEmail(event.target.value)}
+              />
+              <input
+                inputMode="numeric"
+                placeholder="Créditos"
+                value={creditAmount}
+                onChange={(event) => setCreditAmount(event.target.value)}
+              />
+              <input
+                placeholder="Motivo"
+                value={manualCreditReason}
+                onChange={(event) => setManualCreditReason(event.target.value)}
+              />
+              <button
+                disabled={busy === "grant" || !creditEmail.trim()}
+                onClick={() =>
+                  action({
+                    action: "grant",
+                    email: creditEmail,
+                    amount: Number(creditAmount),
+                    reason: manualCreditReason,
+                  })
+                }
+              >
+                <PlusCircle />
+                Abonar
+              </button>
+              <button
+                disabled={busy === "deduct" || !creditEmail.trim()}
+                onClick={() =>
+                  action({
+                    action: "deduct",
+                    email: creditEmail,
+                    amount: Number(creditAmount),
+                    reason: manualCreditReason,
+                  })
+                }
+              >
+                <MinusCircle />
+                Restar
+              </button>
+            </div>
+          </article>
+        </div>
         <div className="admin-table-wrap">
           <table>
             <thead>
