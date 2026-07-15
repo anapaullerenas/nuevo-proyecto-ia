@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { ChangeEvent, useState } from "react";
-import { Check, ImageIcon, Loader2, UploadCloud } from "lucide-react";
+import { Bookmark, Check, ImageIcon, Loader2, UploadCloud } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export type StyleReference = {
@@ -12,7 +12,17 @@ export type StyleReference = {
   storage_path: string;
   bucket_id: string;
   signed_url?: string | null;
-  metadata?: { analysis_status?: string } | null;
+  metadata?: {
+    analysis_status?: string;
+    saved_as_style?: boolean;
+    custom_style_name?: string;
+    analysis?: {
+      matched_archetype_id?: string | null;
+      matched_archetype_label?: string | null;
+      match_confidence?: number;
+      recipe_mode?: "catalog" | "custom";
+    };
+  } | null;
 };
 
 type ReferenceItem = StyleReference & {
@@ -43,6 +53,18 @@ export function ReferenceUploader({
     })),
   );
   const [isUploading, setIsUploading] = useState(false);
+
+  async function saveAsStyle(item: ReferenceItem) {
+    const response = await fetch("/api/static-reference-style", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ assetId: item.id, name: item.metadata?.analysis?.matched_archetype_label || item.file_name }),
+    });
+    if (!response.ok) return;
+    setItems((current) => current.map((reference) => reference.id === item.id
+      ? { ...reference, metadata: { ...reference.metadata, saved_as_style: true }, message: "Guardado en Mis estilos" }
+      : reference));
+  }
 
   function toggleReference(id: string) {
     onSelectionChange(selectedIds.includes(id) ? selectedIds.filter((item) => item !== id) : [...selectedIds, id].slice(-10));
@@ -123,7 +145,14 @@ export function ReferenceUploader({
             ? {
                 ...reference,
                 status: analysisResponse.ok ? "lista" : "error",
-                message: analysisResponse.ok ? "Estilo analizado" : analysis.error || "No se pudo analizar",
+                metadata: analysisResponse.ok
+                  ? { ...reference.metadata, analysis_status: "ready", analysis: analysis.analysis }
+                  : reference.metadata,
+                message: analysisResponse.ok
+                  ? analysis.analysis?.matched_archetype_label
+                    ? `Coincide con ${analysis.analysis.matched_archetype_label}`
+                    : "Receta propia detectada"
+                  : analysis.error || "No se pudo analizar",
               }
             : reference,
         ),
@@ -148,18 +177,24 @@ export function ReferenceUploader({
       {items.length > 0 && (
         <div className="reference-thumbnails">
           {items.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              className={selectionEnabled && selectedIds.includes(item.id) ? "selected" : ""}
-              onClick={() => selectionEnabled && toggleReference(item.id)}
-              disabled={item.status === "analizando"}
-              aria-disabled={!selectionEnabled}
-            >
-              {item.signed_url ? <img src={item.signed_url} alt={item.file_name} /> : <ImageIcon size={22} />}
-              <span>{item.status === "analizando" ? <Loader2 className="spin" size={14} /> : <Check size={14} />}</span>
-              <small>{item.message}</small>
-            </button>
+            <div className="reference-thumbnail-item" key={item.id}>
+              <button
+                type="button"
+                className={selectionEnabled && selectedIds.includes(item.id) ? "selected" : ""}
+                onClick={() => selectionEnabled && toggleReference(item.id)}
+                disabled={item.status === "analizando"}
+                aria-disabled={!selectionEnabled}
+              >
+                {item.signed_url ? <img src={item.signed_url} alt={item.file_name} /> : <ImageIcon size={22} />}
+                <span>{item.status === "analizando" ? <Loader2 className="spin" size={14} /> : <Check size={14} />}</span>
+                <small>{item.message}</small>
+              </button>
+              {item.status === "lista" && (
+                <button className="save-reference-style" type="button" onClick={() => saveAsStyle(item)} disabled={item.metadata?.saved_as_style}>
+                  <Bookmark size={13} /> {item.metadata?.saved_as_style ? "Guardado" : "Guardar estilo"}
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}

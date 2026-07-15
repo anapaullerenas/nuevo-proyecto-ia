@@ -46,6 +46,7 @@ type StaticGenerateInput = {
   logoAssetId?: string;
   serviceNoProduct?: boolean;
   referenceAssetIds?: string[];
+  useRawStyleReferences?: boolean;
   variantOffset?: number;
 };
 
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
     .limit(6);
 
   let styleReferences: ImageAsset[] = [];
-  if (Array.isArray(body.referenceAssetIds) && body.referenceAssetIds.length) {
+  if (body.useRawStyleReferences && Array.isArray(body.referenceAssetIds) && body.referenceAssetIds.length) {
     const { data } = await supabase
       .from("brand_assets")
       .select("id,bucket_id,storage_path,file_name,mime_type,kind")
@@ -225,10 +226,11 @@ export async function POST(request: NextRequest) {
           variationIndex % Math.max(candidateArchetypes.length, 1)
         ] ||
         (archetype as StaticArchetype | null);
-      const variantFicha =
+      const variantFichaBase =
         variationIndex === 0
           ? ficha
           : adaptBriefToArchetype(ficha, variantArchetype);
+      const variantFicha = enforceRecipeCopyLimits(variantFichaBase, variantArchetype);
       const prompt = compileDesignPrompt({
         brandName: brand.name,
         brandVoice: brand.voice,
@@ -266,10 +268,12 @@ export async function POST(request: NextRequest) {
         textVerification: composition.verification,
         composeError: composition.composeError,
       });
-      if (qa.veredicto === "regenerar") {
+      let generationAttempts = 1;
+      while (qa.veredicto === "regenerar" && generationAttempts < 3) {
+        generationAttempts += 1;
         generatedImage = await generateImage({
           supabase,
-          prompt: `${prompt}\n\nREGENERACIÓN OBLIGATORIA TRAS QA: ${qa.razon}. Corrige exactamente este problema sin cambiar el producto ni el mensaje.`,
+          prompt: `${prompt}\n\nREGENERACIÓN ${generationAttempts - 1} DE 2 OBLIGATORIA TRAS QA: ${qa.razon}. Corrige exactamente este problema sin cambiar el producto ni el mensaje.`,
           format: body.format,
           quality,
           productAsset,
@@ -325,9 +329,8 @@ export async function POST(request: NextRequest) {
             product_asset_id: productAsset?.id || null,
             service_no_product: Boolean(body.serviceNoProduct || !productAsset),
             variant: index + 1,
-            reference_asset_ids: styleReferences.map(
-              (reference) => reference.id,
-            ),
+            reference_asset_ids: (body.referenceAssetIds || []).slice(0, 10),
+            reference_mode: body.referenceAssetIds?.length ? "recipe_only" : "none",
             format_reference: staticFormatReferencePayload(
               variantFicha.arquetipo,
             ),
@@ -340,11 +343,13 @@ export async function POST(request: NextRequest) {
             format_reference: staticFormatReferencePayload(
               variantFicha.arquetipo,
             ),
+            generation_attempts: generationAttempts,
+            qa_failure_reason: qa.veredicto === "regenerar" ? qa.razon : null,
           },
-          status: "generated",
+          status: qa.veredicto === "regenerar" ? "needs_review" : "generated",
         })
         .select(
-          "id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,status,created_at",
+          "id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,status,qa_report,created_at",
         )
         .single();
 
@@ -379,6 +384,27 @@ export async function POST(request: NextRequest) {
       { status: failure.status },
     );
   }
+}
+
+function enforceRecipeCopyLimits(ficha: StaticBrief, archetype: StaticArchetype | null): StaticBrief {
+  const recipe = archetype as StaticArchetype & {
+    copy_limits?: { headline_max_characters: number; support_max_characters: number; cta_max_characters: number };
+  };
+  if (!recipe?.copy_limits) return ficha;
+  return {
+    ...ficha,
+    texto_principal: clampCharacters(ficha.texto_principal, recipe.copy_limits.headline_max_characters),
+    texto_secundario: clampCharacters(ficha.texto_secundario, recipe.copy_limits.support_max_characters),
+    cta: clampCharacters(ficha.cta, recipe.copy_limits.cta_max_characters),
+  };
+}
+
+function clampCharacters(value: string, maximum: number) {
+  const text = String(value || "").trim();
+  if (text.length <= maximum) return text;
+  const clipped = text.slice(0, maximum + 1);
+  const boundary = clipped.lastIndexOf(" ");
+  return `${clipped.slice(0, boundary > maximum * 0.55 ? boundary : maximum).trim()}…`;
 }
 
 function adaptBriefToArchetype(

@@ -144,14 +144,24 @@ const variationMoves = [
   "Lidera con prueba social humana, concreta y creíble.",
 ];
 
-function formatArchetypeRecipe(archetype?: StaticArchetype | null) {
+function formatArchetypeRecipe(archetype: StaticArchetype | null | undefined, format: string) {
   if (!archetype?.structure) return "- Sigue la composición por zonas de la ficha y mantén una sola idea dominante.";
   const structure = archetype.structure;
   const blueprint = (structure.reference_blueprint || {}) as Record<string, unknown>;
   const zones = (structure.estructura || structure.zones || {}) as Record<string, unknown>;
   const rules = Array.isArray(structure.rules) ? structure.rules : [];
   const hierarchy = Array.isArray(blueprint.hierarchy) ? blueprint.hierarchy.join(" → ") : "headline → visual principal → apoyo";
+  const enriched = archetype as StaticArchetype & {
+    version?: string;
+    prompt_template_ref?: string;
+    layouts?: Record<string, { composition: string; safe_zone: string; visual_scale: string }>;
+    copy_limits?: Record<string, number>;
+  };
+  const ratio = format.includes("9:16") ? "9:16" : format.includes("1:1") ? "1:1" : "4:5";
+  const layout = enriched.layouts?.[ratio];
   const lines = [
+    `- Versión de receta: ${enriched.version || "legacy"}; template: ${enriched.prompt_template_ref || archetype.id}.`,
+    ...(layout ? [`- Layout ${ratio}: ${layout.composition} ${layout.safe_zone} ${layout.visual_scale}`] : []),
     `- Arquitectura: ${String(blueprint.layout || "Composición clara basada en el arquetipo elegido.")}`,
     `- Jerarquía exacta: ${hierarchy}.`,
     `- Tratamiento de la oferta: ${String(blueprint.product_treatment || "Oferta, resultado o activo principal reconocible y protagonista.")}`,
@@ -160,6 +170,7 @@ function formatArchetypeRecipe(archetype?: StaticArchetype | null) {
     `- Comportamiento del CTA: ${String(blueprint.cta_behavior || "Sólo cuando ayude a completar la acción.")}`,
     ...Object.entries(zones).map(([zone, value]) => `- ${zone.replaceAll("_", " ")}: ${String(value)}`),
     ...rules.map((rule) => `- ${String(rule)}`),
+    ...(enriched.copy_limits ? [`- Límites de copy por caracteres: ${JSON.stringify(enriched.copy_limits)}.`] : []),
   ];
   return lines.join("\n");
 }
@@ -232,7 +243,7 @@ VOZ DE MARCA: ${brandVoice || "clara, específica y coherente con la identidad d
 ARQUETIPO: ${ficha.arquetipo_label || archetype?.label_visible || "Automático"}
 MECÁNICA DEL ARQUETIPO: ${archetype?.prompt_fragment || "Jerarquía clara, oferta o resultado protagonista y CTA sólo cuando aporte."}
 RECETA VISUAL DE LA REFERENCIA ELEGIDA:
-${formatArchetypeRecipe(archetype)}
+${formatArchetypeRecipe(archetype, format)}
 - La referencia define arquitectura, ritmo y jerarquía. Está terminantemente prohibido copiar su categoría, marca, oferta, texto, colores, claims o identidad.
 VARIANTE: ${variantIndex || 1}
 MOVIMIENTO CREATIVO OBLIGATORIO: ${variationMoves[((variantIndex || 1) - 1) % variationMoves.length]}

@@ -1,11 +1,32 @@
 import type { StaticArchetype } from "@/lib/ai/static-machine";
 
 export type CuratedStaticFormat = StaticArchetype & {
+  version: string;
   thumbnail_path: string;
   short_description: string;
   use_when: string;
   visual_keys: string[];
+  objectives: string[];
+  required_evidence: StaticEvidence[];
+  unlock_message?: string;
+  prompt_template_ref: string;
+  layouts: Record<StaticAspectRatio, StaticLayoutRecipe>;
+  copy_limits: {
+    headline_max_characters: number;
+    support_max_characters: number;
+    cta_max_characters: number;
+  };
 };
+
+export type StaticAspectRatio = "1:1" | "4:5" | "9:16";
+export type StaticEvidence = "testimonial" | "verified_numbers" | "before_after" | "price_comparison";
+export type StaticLayoutRecipe = {
+  composition: string;
+  safe_zone: string;
+  visual_scale: string;
+};
+
+export type BrandEvidence = Record<StaticEvidence, boolean>;
 
 const sharedRules = [
   "Tomar la arquitectura visual de la referencia, nunca su categoría, marca, oferta, texto, colores o claims.",
@@ -13,7 +34,7 @@ const sharedRules = [
   "Usar únicamente activos, beneficios y pruebas verdaderas de la marca activa.",
 ];
 
-export const CURATED_STATIC_FORMATS: CuratedStaticFormat[] = [
+const BASE_CURATED_STATIC_FORMATS = [
   {
     id: "oferta_directa",
     name: "oferta_protagonista",
@@ -346,6 +367,117 @@ export const CURATED_STATIC_FORMATS: CuratedStaticFormat[] = [
     },
   },
 ];
+
+const DEFAULT_LAYOUTS: Record<StaticAspectRatio, StaticLayoutRecipe> = {
+  "1:1": {
+    composition: "Jerarquía compacta y centrada; máximo tres niveles de lectura.",
+    safe_zone: "8% libre en los cuatro bordes.",
+    visual_scale: "El protagonista ocupa 42-56% del lienzo.",
+  },
+  "4:5": {
+    composition: "Lectura vertical: hook, protagonista y cierre; aire entre niveles.",
+    safe_zone: "8% lateral, 7% superior y 9% inferior.",
+    visual_scale: "El protagonista ocupa 45-60% del lienzo.",
+  },
+  "9:16": {
+    composition: "Composición en la franja central, sin información crítica en extremos.",
+    safe_zone: "14% superior, 20% inferior y 7% lateral completamente libres.",
+    visual_scale: "El protagonista ocupa 38-52% de la zona segura.",
+  },
+};
+
+const FORMAT_RULES: Record<string, Partial<CuratedStaticFormat>> = {
+  oferta_directa: { objectives: ["Conversión", "Retargeting"], required_evidence: [] },
+  beneficios_apilados: { objectives: ["Consideración", "Conversión"], required_evidence: [] },
+  antes_despues_sutil: {
+    objectives: ["Consideración", "Retargeting"],
+    required_evidence: ["before_after"],
+    unlock_message: "Agrega un caso real de antes y después para desbloquear este estilo.",
+  },
+  problema_solucion: { objectives: ["Descubrimiento", "Consideración"], required_evidence: [] },
+  comparacion_ancla: {
+    objectives: ["Conversión", "Retargeting"],
+    required_evidence: ["price_comparison"],
+    unlock_message: "Agrega un precio o comparación verificable para desbloquear este estilo.",
+  },
+  prueba_social_flotante: {
+    objectives: ["Consideración", "Retargeting"],
+    required_evidence: ["testimonial"],
+    unlock_message: "Agrega un testimonio real a la memoria de marca para desbloquear este estilo.",
+  },
+  ugc_casual: { objectives: ["Descubrimiento", "Consideración"], required_evidence: [] },
+  busqueda_solucion: { objectives: ["Descubrimiento", "Consideración"], required_evidence: [] },
+  producto_heroe_editorial: { objectives: ["Descubrimiento", "Consideración"], required_evidence: [] },
+  post_its: { objectives: ["Conversión", "Retargeting"], required_evidence: [] },
+};
+
+export const CURATED_STATIC_FORMATS: CuratedStaticFormat[] = BASE_CURATED_STATIC_FORMATS.map((format) => ({
+  ...format,
+  version: "1.0.0",
+  objectives: FORMAT_RULES[format.id]?.objectives || [format.stage],
+  required_evidence: FORMAT_RULES[format.id]?.required_evidence || [],
+  unlock_message: FORMAT_RULES[format.id]?.unlock_message,
+  prompt_template_ref: `static/${format.id}/v1`,
+  layouts: DEFAULT_LAYOUTS,
+  copy_limits: {
+    headline_max_characters: format.id === "prueba_social_flotante" ? 74 : 46,
+    support_max_characters: 76,
+    cta_max_characters: 20,
+  },
+}));
+
+export function detectBrandEvidence(brand: {
+  offer?: string | null;
+  strategic_context?: Record<string, unknown> | null;
+}): BrandEvidence {
+  const source = `${brand.offer || ""} ${JSON.stringify(brand.strategic_context || {})}`.toLowerCase();
+  return {
+    testimonial: /(testimonio|reseña|review|cliente dijo|caso de cliente|quote)/i.test(source),
+    verified_numbers: /(\d+[.,]?\d*\s?%|métrica|dato verificado|resultados?)/i.test(source),
+    before_after: /(antes y después|antes\/después|transformación|caso de éxito)/i.test(source),
+    price_comparison: /(precio|cuesta|ahorra|ahorro|comparado con|vs\.?|alternativa)/i.test(source),
+  };
+}
+
+export function isStaticFormatUnlocked(format: CuratedStaticFormat, evidence: BrandEvidence) {
+  return format.required_evidence.every((requirement) => evidence[requirement]);
+}
+
+export function selectAutomaticStaticFormat({
+  stage,
+  intent,
+  evidence,
+  recentArchetypes = [],
+  performance = {},
+}: {
+  stage: string;
+  intent: string;
+  evidence: BrandEvidence;
+  recentArchetypes?: string[];
+  performance?: Record<string, number>;
+}) {
+  const eligible = CURATED_STATIC_FORMATS.filter((format) => isStaticFormatUnlocked(format, evidence));
+  const coldStartDefaults: Record<string, string> = {
+    Descubrimiento: "problema_solucion",
+    Consideración: "beneficios_apilados",
+    Conversión: "oferta_directa",
+    Retargeting: evidence.testimonial ? "prueba_social_flotante" : "post_its",
+  };
+  const normalizedIntent = intent.toLowerCase();
+  const scored = eligible.map((format) => {
+    let score = format.objectives.includes(stage) ? 40 : 0;
+    if (format.id === coldStartDefaults[stage]) score += 12;
+    if (/testimonio|reseña|confianza/.test(normalizedIntent) && format.id === "prueba_social_flotante") score += 28;
+    if (/precio|oferta|promoción|descuento|venta/.test(normalizedIntent) && ["oferta_directa", "comparacion_ancla", "post_its"].includes(format.id)) score += 18;
+    if (/problema|solución|dolor|frustr/.test(normalizedIntent) && format.id === "problema_solucion") score += 20;
+    if (/beneficio|explicar|ventaja/.test(normalizedIntent) && format.id === "beneficios_apilados") score += 18;
+    score += Math.max(-20, Math.min(20, performance[format.id] || 0));
+    score -= recentArchetypes.slice(0, 5).filter((id) => id === format.id).length * 15;
+    return { format, score };
+  });
+  scored.sort((a, b) => b.score - a.score || a.format.id.localeCompare(b.format.id));
+  return scored[0]?.format || CURATED_STATIC_FORMATS[0];
+}
 
 export function getCuratedStaticFormat(id?: string | null) {
   return CURATED_STATIC_FORMATS.find((format) => format.id === id) || null;

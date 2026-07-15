@@ -18,6 +18,8 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   WandSparkles,
   X,
@@ -27,6 +29,7 @@ import {
   type StyleReference,
 } from "@/components/ReferenceUploader";
 import { CREDIT_COSTS } from "@/lib/credit-catalog";
+import type { BrandEvidence, StaticEvidence } from "@/lib/static-format-catalog";
 
 type BrandAsset = {
   id: string;
@@ -48,6 +51,10 @@ type StaticArchetype = {
   short_description?: string;
   use_when?: string;
   visual_keys?: string[];
+  version?: string;
+  required_evidence?: StaticEvidence[];
+  unlock_message?: string;
+  objectives?: string[];
 };
 
 type StaticBrief = {
@@ -100,10 +107,12 @@ type GeneratedStatic = {
   version: number;
   parent_id?: string | null;
   status: string;
+  qa_report?: { razon?: string; veredicto?: "aprobada" | "regenerar" } | null;
   created_at?: string;
 };
 
 type OpenStep = "setup" | "style" | "intent";
+type DirectionMode = "automatic" | "catalog" | "reference";
 type StudioMemory = {
   assetId?: string;
   format?: string;
@@ -127,6 +136,7 @@ export function StaticStudio({
   initialGallery,
   initialReferences,
   unlimitedCredits = false,
+  brandEvidence,
 }: {
   brandId: string;
   brandName: string;
@@ -136,6 +146,7 @@ export function StaticStudio({
   initialGallery: GeneratedStatic[];
   initialReferences: StyleReference[];
   unlimitedCredits?: boolean;
+  brandEvidence: BrandEvidence;
 }) {
   const [selectedAssetId, setSelectedAssetId] = useState(
     initialAssets[0]?.id || "",
@@ -146,6 +157,7 @@ export function StaticStudio({
   const [format, setFormat] = useState("4:5 Feed");
   const [stage, setStage] = useState("Conversión");
   const [archetypeId, setArchetypeId] = useState("automatico");
+  const [directionMode, setDirectionMode] = useState<DirectionMode>("automatic");
   const [intent, setIntent] = useState("");
   const [proposals, setProposals] = useState(1);
   const [quality, setQuality] = useState<"medium" | "high">("high");
@@ -162,8 +174,8 @@ export function StaticStudio({
   const [fullScreen, setFullScreen] = useState(false);
   const [referencePreview, setReferencePreview] =
     useState<StaticArchetype | null>(null);
-  const [selectedReferenceIds, setSelectedReferenceIds] = useState(
-    initialReferences.slice(0, 10).map((item) => item.id),
+  const [selectedReferenceIds, setSelectedReferenceIds] = useState<string[]>(
+    [],
   );
   const [referenceCount, setReferenceCount] = useState(
     initialReferences.length,
@@ -172,6 +184,7 @@ export function StaticStudio({
   const [variantOffset, setVariantOffset] = useState(0);
   const [galleryVisible, setGalleryVisible] = useState(12);
   const [memoryReady, setMemoryReady] = useState(false);
+  const [feedback, setFeedback] = useState<Record<string, -1 | 1>>({});
   const stageRef = useRef<HTMLElement>(null);
   const correctionRef = useRef<HTMLTextAreaElement>(null);
 
@@ -233,6 +246,15 @@ export function StaticStudio({
   const visibleGallery = gallery.slice(0, galleryVisible);
   const selectedArchetype =
     archetypes.find((item) => item.id === archetypeId) || null;
+  const selectedReference = initialReferences.find((item) => selectedReferenceIds.includes(item.id));
+  const selectedReferenceMatch = selectedReference?.metadata?.analysis?.matched_archetype_id;
+  const estimatedCredits = CREDIT_COSTS.static_brief + (quality === "high"
+    ? CREDIT_COSTS.static_generate_high
+    : CREDIT_COSTS.static_generate_medium);
+
+  function isLocked(item: StaticArchetype) {
+    return (item.required_evidence || []).some((requirement) => !brandEvidence[requirement]);
+  }
 
   async function handleCreateBrief(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -254,11 +276,15 @@ export function StaticStudio({
           intent,
           format,
           funnelStage: stage,
-          archetypeId,
+          archetypeId: directionMode === "automatic"
+            ? "automatico"
+            : directionMode === "reference"
+              ? selectedReferenceMatch || "automatico"
+              : archetypeId,
           productAssetId: serviceNoProduct ? undefined : selectedAssetId,
           serviceNoProduct,
           logoAssetId: initialLogos[0]?.id,
-          referenceAssetIds: selectedReferenceIds,
+          referenceAssetIds: directionMode === "reference" ? selectedReferenceIds : [],
         }),
       });
       const data = await response.json();
@@ -269,7 +295,9 @@ export function StaticStudio({
       setRemainingProposals(0);
       setVariantOffset(0);
       setMessage(
-        "Dirección lista. Revisa el texto en el lienzo y genera la imagen.",
+        data.automaticSelection
+          ? `Dirección lista: ${data.automaticSelection.label}. ${data.automaticSelection.reason}`
+          : "Dirección lista. Revisa el texto en el lienzo y genera la imagen.",
       );
     } catch (error) {
       setMessage(
@@ -303,7 +331,8 @@ export function StaticStudio({
           productAssetId: serviceNoProduct ? undefined : selectedAssetId,
           serviceNoProduct,
           logoAssetId: initialLogos[0]?.id,
-          referenceAssetIds: selectedReferenceIds,
+          referenceAssetIds: directionMode === "reference" ? selectedReferenceIds : [],
+          useRawStyleReferences: false,
         }),
       });
       const data = await response.json();
@@ -319,7 +348,9 @@ export function StaticStudio({
       setRemainingProposals(pending);
       setVariantOffset((current) => current + 1);
       setMessage(
-        pending > 0
+        created[0]?.status === "needs_review"
+          ? `La pieza quedó visible, pero el control de calidad detectó: ${created[0]?.qa_report?.razon || "un problema que requiere revisión"}.`
+          : pending > 0
           ? `Propuesta creada y guardada. Revísala antes de generar ${pending === 1 ? "la siguiente" : `las ${pending} restantes`}.`
           : "Propuesta creada y guardada en la galería.",
       );
@@ -449,6 +480,23 @@ export function StaticStudio({
     void fetch(`/api/static-download/${item.id}`, { method: "POST" });
   }
 
+  async function rateCreative(item: GeneratedStatic, rating: -1 | 1) {
+    setFeedback((current) => ({ ...current, [item.id]: rating }));
+    const response = await fetch("/api/static-feedback", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ staticId: item.id, rating }),
+    });
+    if (!response.ok) {
+      setFeedback((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+      setMessage("No pudimos guardar tu valoración; intenta nuevamente.");
+    }
+  }
+
   const canvasTitle = selectedCreative
     ? "Tu pieza, en tamaño real"
     : brief
@@ -484,7 +532,119 @@ export function StaticStudio({
             </Link>
           </div>
 
-          <form className="studio-steps" onSubmit={handleCreateBrief}>
+          <form className="static-simple-builder" onSubmit={handleCreateBrief}>
+            <div className="static-builder-main">
+              <label className="static-intent-box">
+                <Sparkles size={20} />
+                <textarea
+                  value={intent}
+                  onChange={(event) => setIntent(event.target.value)}
+                  placeholder="Cuéntame qué quieres comunicar o provocar con esta imagen"
+                  maxLength={320}
+                />
+                <small>{intent.length}/320</small>
+              </label>
+
+              <div className="static-direction-heading">
+                <div>
+                  <span className="eyebrow">Dirección visual</span>
+                  <h3>Elige cuánto control quieres.</h3>
+                </div>
+                <p>Usamos la estructura; el contenido siempre sale de la memoria de {brandName}.</p>
+              </div>
+
+              <div className="static-direction-tabs" role="tablist" aria-label="Modo de dirección visual">
+                <button type="button" className={directionMode === "automatic" ? "selected" : ""} onClick={() => { setDirectionMode("automatic"); setArchetypeId("automatico"); }}>
+                  <Sparkles size={17} /> Automático <small>Recomendado</small>
+                </button>
+                <button type="button" className={directionMode === "catalog" ? "selected" : ""} onClick={() => { setDirectionMode("catalog"); if (archetypeId === "automatico") setArchetypeId("oferta_directa"); }}>
+                  <WandSparkles size={17} /> Estilos Anapau
+                </button>
+                <button type="button" className={directionMode === "reference" ? "selected" : ""} onClick={() => setDirectionMode("reference")}>
+                  <ImageIcon size={17} /> Mi referencia
+                </button>
+              </div>
+
+              {directionMode === "automatic" && (
+                <div className="automatic-explainer">
+                  <span><Sparkles size={20} /></span>
+                  <div><b>La plataforma decide con reglas claras.</b><p>Primero descarta estilos sin evidencia, después prioriza tu objetivo y los resultados anteriores, y por último evita repetir las últimas composiciones.</p></div>
+                </div>
+              )}
+
+              {directionMode === "catalog" && (
+                <div className="static-pattern-grid">
+                  {archetypes.map((item) => {
+                    const locked = isLocked(item);
+                    return (
+                      <article key={item.id} className={`${archetypeId === item.id ? "selected" : ""} ${locked ? "locked" : ""}`}>
+                        <button type="button" disabled={locked} onClick={() => setArchetypeId(item.id)}>
+                          <span className="pattern-wireframe" data-pattern={item.id} aria-hidden="true"><i /><i /><i /><i /></span>
+                          <b>{item.label_visible}</b>
+                          <small>{item.visual_keys?.slice(0, 2).join(" · ")}</small>
+                          {!locked && archetypeId === item.id && <Check className="pattern-check" size={16} />}
+                        </button>
+                        {locked && <Link href={`/marcas/${brandId}/editar`}><span>Bloqueado</span>{item.unlock_message}</Link>}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+
+              {directionMode === "reference" && (
+                <section className="simple-reference-zone">
+                  <div><b>Sube una referencia</b><p>La convertimos en una receta de jerarquía, densidad y composición. La imagen ajena no pasa al generador.</p></div>
+                  <ReferenceUploader
+                    brandId={brandId}
+                    initialReferences={initialReferences}
+                    selectedIds={selectedReferenceIds}
+                    onSelectionChange={(ids) => setSelectedReferenceIds(ids.slice(-1))}
+                    onItemsChange={(ids) => setReferenceCount(ids.length)}
+                  />
+                  <small>{unlimitedCredits ? "Análisis incluido." : `Las primeras 6 referencias por marca están incluidas; después, ${CREDIT_COSTS.reference_analysis} créditos por análisis.`}</small>
+                </section>
+              )}
+            </div>
+
+            <aside className="static-builder-summary">
+              <span className="eyebrow">Resumen</span>
+              <section>
+                <b>Producto</b>
+                <div className="summary-product">
+                  {!serviceNoProduct && initialAssets.find((asset) => asset.id === selectedAssetId)?.signed_url
+                    ? <img src={initialAssets.find((asset) => asset.id === selectedAssetId)?.signed_url || ""} alt="" />
+                    : <ImageIcon size={24} />}
+                  <span>{selectedProductLabel(initialAssets, selectedAssetId, serviceNoProduct)}</span>
+                </div>
+                <select value={serviceNoProduct ? "service" : selectedAssetId} onChange={(event) => { setServiceNoProduct(event.target.value === "service"); if (event.target.value !== "service") setSelectedAssetId(event.target.value); }}>
+                  {initialAssets.map((asset, index) => <option value={asset.id} key={asset.id}>{assetDisplayLabel(asset, index)}</option>)}
+                  <option value="service">Sin foto de producto</option>
+                </select>
+              </section>
+              <section>
+                <b>Formato</b>
+                <div className="summary-format-options">{formats.map((item) => <button type="button" key={item} className={format === item ? "selected" : ""} onClick={() => setFormat(item)}><span className={`format-icon ${formatClass(item)}`} />{item.split(" ")[0]}</button>)}</div>
+              </section>
+              <section>
+                <b>Objetivo</b>
+                <select value={stage} onChange={(event) => setStage(event.target.value)}>{stages.map((item) => <option value={item} key={item}>{item}</option>)}</select>
+              </section>
+              <section>
+                <b>Dirección</b>
+                <p>{directionMode === "automatic" ? "Automática" : directionMode === "reference" ? selectedReferenceMatch ? `Referencia → ${archetypes.find((item) => item.id === selectedReferenceMatch)?.label_visible}` : "Referencia propia" : selectedArchetype?.label_visible}</p>
+              </section>
+              <label>Calidad<select value={quality} onChange={(event) => setQuality(event.target.value === "high" ? "high" : "medium")}><option value="high">Alta · recomendada</option><option value="medium">Estándar</option></select></label>
+              <div className="summary-cost"><small>Costo estimado total</small><b>{unlimitedCredits ? "Incluido" : `${estimatedCredits} créditos`}</b><span>Ficha + 1 imagen</span></div>
+              <button className="primary-action studio-create-brief" type="submit" disabled={busy === "brief" || busy === "generate" || (directionMode === "reference" && selectedReferenceIds.length === 0)}>
+                {busy === "brief" ? <Loader2 className="spin" /> : <Sparkles />}
+                {busy === "brief" ? "Preparando dirección…" : `Crear ficha · ${unlimitedCredits ? "incluido" : `${CREDIT_COSTS.static_brief} cr`}`}
+              </button>
+              <small className="credit-lock-note">Los créditos de imagen se descuentan sólo cuando decidas generarla.</small>
+            </aside>
+            {message && <p className="form-message studio-message" aria-live="polite">{message}</p>}
+          </form>
+
+          <form className="studio-steps legacy-studio-steps" onSubmit={handleCreateBrief}>
             <details
               open={openStep === "setup"}
               onToggle={(event) =>
@@ -885,6 +1045,9 @@ export function StaticStudio({
           ) : selectedCreative && selectedUrl ? (
             <>
               <div className="canvas-viewer">
+                {selectedCreative.status === "needs_review" && (
+                  <div className="qa-warning"><b>Esta pieza necesita revisión.</b><span>El control de calidad hizo dos correcciones automáticas y todavía detectó: {selectedCreative.qa_report?.razon || "un problema visual"}. Puedes verla, pero te recomendamos crear una versión corregida antes de descargar.</span></div>
+                )}
                 <div
                   className={`canvas-image-shell ${formatClass(selectedCreative.format)}`}
                 >
@@ -912,6 +1075,11 @@ export function StaticStudio({
                     </b>
                   </div>
                   <div className="canvas-primary-actions">
+                    <div className="creative-feedback" aria-label="Valorar resultado">
+                      <span>¿Te sirvió?</span>
+                      <button type="button" className={feedback[selectedCreative.id] === 1 ? "selected" : ""} onClick={() => rateCreative(selectedCreative, 1)} aria-label="Buen resultado"><ThumbsUp size={15} /></button>
+                      <button type="button" className={feedback[selectedCreative.id] === -1 ? "selected" : ""} onClick={() => rateCreative(selectedCreative, -1)} aria-label="Mal resultado"><ThumbsDown size={15} /></button>
+                    </div>
                     {remainingProposals > 0 && (
                       <button
                         type="button"

@@ -20,7 +20,9 @@ import {
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 import {
   CURATED_STATIC_FORMATS,
+  detectBrandEvidence,
   getCuratedStaticFormat,
+  selectAutomaticStaticFormat,
   staticFormatReferencePayload,
 } from "@/lib/static-format-catalog";
 
@@ -147,6 +149,8 @@ export async function POST(request: NextRequest) {
     { data: references },
     { data: goldenBriefs },
     { data: visualIdentity },
+    { data: recentCreatives },
+    { data: feedbackRows },
   ] = await Promise.all([
     supabase
       .from("brand_recipes")
@@ -178,7 +182,57 @@ export async function POST(request: NextRequest) {
       .select("colores_hex,tipografia_estilo,luz_y_foto,estilo_general")
       .eq("brand_id", brand.id)
       .maybeSingle(),
+    supabase
+      .from("static_creatives")
+      .select("archetype")
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .in("status", ["generated", "edited", "needs_review"])
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("static_creative_feedback")
+      .select("archetype_id,rating")
+      .eq("brand_id", brand.id)
+      .eq("owner_id", user.id)
+      .limit(100),
   ]);
+
+  const evidence = detectBrandEvidence(brand);
+  const performance = (feedbackRows || []).reduce<Record<string, number>>((scores, row) => {
+    scores[row.archetype_id] = (scores[row.archetype_id] || 0) + Number(row.rating || 0) * 4;
+    return scores;
+  }, {});
+  const automaticFormat = selectAutomaticStaticFormat({
+    stage: body.funnelStage,
+    intent,
+    evidence,
+    recentArchetypes: (recentCreatives || []).map((item) => item.archetype).filter(Boolean) as string[],
+    performance,
+  });
+  const referenceMatchId = (references?.[0]?.metadata as {
+    analysis?: { matched_archetype_id?: string | null };
+  } | null)?.analysis?.matched_archetype_id;
+  const referenceMatchedFormat = getCuratedStaticFormat(referenceMatchId);
+  const usableReferenceMatch = referenceMatchedFormat &&
+    referenceMatchedFormat.required_evidence.every((requirement) => evidence[requirement])
+    ? referenceMatchedFormat
+    : null;
+  const requestedArchetypeId = body.archetypeId === "automatico" || !body.archetypeId
+    ? usableReferenceMatch?.id || automaticFormat.id
+    : body.archetypeId;
+  const requestedFormat = getCuratedStaticFormat(requestedArchetypeId);
+  const missingEvidence = requestedFormat?.required_evidence.filter((requirement) => !evidence[requirement]) || [];
+  if (missingEvidence.length) {
+    return NextResponse.json(
+      {
+        error: requestedFormat?.unlock_message || "Este estilo necesita evidencia real guardada en la memoria de marca.",
+        code: "missing_brand_evidence",
+        missingEvidence,
+      },
+      { status: 409 },
+    );
+  }
 
   let creditCharge;
   try {
@@ -215,7 +269,7 @@ export async function POST(request: NextRequest) {
       intent,
       format: body.format,
       funnelStage: body.funnelStage,
-      archetypeId: body.archetypeId || "automatico",
+      archetypeId: requestedArchetypeId,
       productAsset,
       logoAsset: logoAsset || null,
       serviceNoProduct: Boolean(body.serviceNoProduct || !productAsset),
@@ -274,6 +328,15 @@ export async function POST(request: NextRequest) {
       creativeId: saved.id,
       ficha: saved.ficha,
       saved,
+      automaticSelection: body.archetypeId === "automatico" || !body.archetypeId
+        ? {
+            id: usableReferenceMatch?.id || automaticFormat.id,
+            label: usableReferenceMatch?.label_visible || automaticFormat.label_visible,
+            reason: usableReferenceMatch
+              ? "La referencia coincidió con una receta compatible del catálogo."
+              : "Compatibilidad, objetivo, resultados y diversidad reciente.",
+          }
+        : null,
     });
   } catch (error) {
     const refunded =

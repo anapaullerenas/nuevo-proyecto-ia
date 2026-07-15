@@ -1,6 +1,6 @@
 import { AppFrame, SetupState } from "@/components/AppFrame";
 import { StaticStudio } from "@/components/StaticStudio";
-import { CURATED_STATIC_FORMATS } from "@/lib/static-format-catalog";
+import { CURATED_STATIC_FORMATS, detectBrandEvidence } from "@/lib/static-format-catalog";
 import { getWorkspace } from "@/lib/workspace";
 
 export default async function CrearEstaticosPage() {
@@ -24,10 +24,10 @@ export default async function CrearEstaticosPage() {
       .order("created_at", { ascending: false }),
     workspace.supabase
       .from("static_creatives")
-      .select("id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,parent_id,status,created_at")
+      .select("id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,parent_id,status,qa_report,created_at")
       .eq("brand_id", workspace.activeBrand.id)
       .eq("owner_id", workspace.user.id)
-      .in("status", ["generated", "edited"])
+      .in("status", ["generated", "edited", "needs_review"])
       .order("created_at", { ascending: false })
       .limit(30),
     workspace.supabase
@@ -104,6 +104,7 @@ export default async function CrearEstaticosPage() {
             initialGallery={gallery}
             initialReferences={references}
             unlimitedCredits={workspace.isUnlimited}
+            brandEvidence={detectBrandEvidence(workspace.activeBrand)}
           />
         </div>
       </section>

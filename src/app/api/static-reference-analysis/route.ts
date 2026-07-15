@@ -7,6 +7,7 @@ import {
   refundCredits,
 } from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
+import { CURATED_STATIC_FORMATS, getCuratedStaticFormat } from "@/lib/static-format-catalog";
 
 export const maxDuration = 120;
 
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: "system",
-            content: `Analiza una referencia de anuncio para una directora creativa. Extrae principios reutilizables, nunca identidad ajena. Devuelve JSON con: layout, jerarquia, densidad, tratamiento_fotografico, tratamiento_producto, estilo_tipografico, paleta_mood, patron_copy, elementos_reutilizables, elementos_no_copiar. Sé concreto. No inventes texto ilegible.`,
+            content: `Analiza una referencia de anuncio para una directora creativa. Extrae principios reutilizables, nunca identidad ajena. Primero clasifica la estructura contra este catálogo: ${JSON.stringify(CURATED_STATIC_FORMATS.map((format) => ({ id: format.id, nombre: format.label_visible, descripcion: format.short_description })))}. Devuelve JSON con: matched_archetype_id (id exacto o null), match_confidence (0 a 1), classification_reason, layout, jerarquia, densidad, tratamiento_fotografico, tratamiento_producto, estilo_tipografico, paleta_mood, patron_copy, elementos_reutilizables, elementos_no_copiar y custom_recipe (sólo si match_confidence es menor a 0.72). Sé concreto. No inventes texto ilegible.`,
           },
           {
             role: "user",
@@ -151,7 +152,16 @@ export async function POST(request: NextRequest) {
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error("La IA no devolvió el análisis visual.");
 
-    const analysis = JSON.parse(content) as Record<string, unknown>;
+    const rawAnalysis = JSON.parse(content) as Record<string, unknown>;
+    const matched = getCuratedStaticFormat(String(rawAnalysis.matched_archetype_id || ""));
+    const confidence = Math.max(0, Math.min(1, Number(rawAnalysis.match_confidence) || 0));
+    const analysis = {
+      ...rawAnalysis,
+      matched_archetype_id: matched && confidence >= 0.72 ? matched.id : null,
+      matched_archetype_label: matched && confidence >= 0.72 ? matched.label_visible : null,
+      match_confidence: confidence,
+      recipe_mode: matched && confidence >= 0.72 ? "catalog" : "custom",
+    };
     const metadata = {
       ...((asset.metadata as Record<string, unknown> | null) || {}),
       analysis,
