@@ -353,7 +353,6 @@ async function askAnthropic(
     body: JSON.stringify({
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
       max_tokens: 1400,
-      temperature: 0.65,
       system: `${CHAT_STRATEGIST_PROMPT}\n\n${brandContext}`,
       messages: [...history, { role: "user", content: userMessage }],
     }),

@@ -1,16 +1,46 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
   BarChart3,
   Check,
+  CircleDollarSign,
   Coins,
   Download,
   Gauge,
+  KeyRound,
+  RefreshCw,
   Search,
+  ShieldCheck,
   UsersRound,
   X,
 } from "lucide-react";
+
+type ProviderStatus =
+  | "operational"
+  | "quota_exhausted"
+  | "rate_limited"
+  | "invalid_key"
+  | "degraded"
+  | "unconfigured";
+type ProviderHealth = {
+  id: "openai" | "anthropic";
+  label: string;
+  status: ProviderStatus;
+  message: string;
+  keyFingerprint: string | null;
+  expectedFingerprint: string | null;
+  keyMatchesExpected: boolean | null;
+  model: string;
+  checkedAt: string;
+  latencyMs: number;
+  officialMonthSpendUsd: number | null;
+  configuredCreditUsd: number | null;
+  estimatedBalanceUsd: number | null;
+  adminReportingEnabled: boolean;
+  consoleUrl: string;
+};
 
 type LedgerRow = {
   amount: number;
@@ -93,6 +123,37 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<UserRow | null>(null);
   const [busy, setBusy] = useState("");
+  const [providers, setProviders] = useState<ProviderHealth[]>([]);
+  const [providerBusy, setProviderBusy] = useState(true);
+  const [providerError, setProviderError] = useState("");
+  const refreshProviders = useCallback(async () => {
+    setProviderBusy(true);
+    setProviderError("");
+    try {
+      const response = await fetch("/api/admin/provider-health", {
+        cache: "no-store",
+      });
+      const result = (await response.json()) as {
+        providers?: ProviderHealth[];
+        error?: string;
+      };
+      if (!response.ok || !result.providers)
+        throw new Error(result.error || "No pudimos comprobar los proveedores.");
+      setProviders(result.providers);
+    } catch (error) {
+      setProviderError(
+        error instanceof Error
+          ? error.message
+          : "No pudimos comprobar los proveedores.",
+      );
+    } finally {
+      setProviderBusy(false);
+    }
+  }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refreshProviders(), 0);
+    return () => window.clearTimeout(timer);
+  }, [refreshProviders]);
   const users = useMemo(
     () =>
       data.users
@@ -238,6 +299,16 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
           </b>
         </span>
       </div>
+      <ProviderPulse
+        providers={providers}
+        loading={providerBusy}
+        error={providerError}
+        internalCosts={{
+          openai: data.metrics.openaiCost,
+          anthropic: data.metrics.anthropicCost,
+        }}
+        onRefresh={refreshProviders}
+      />
       {data.recharges.length > 0 && (
         <section className="admin-recharge-queue">
           <header>
@@ -508,6 +579,146 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
       )}
     </section>
   );
+}
+
+function ProviderPulse({
+  providers,
+  loading,
+  error,
+  internalCosts,
+  onRefresh,
+}: {
+  providers: ProviderHealth[];
+  loading: boolean;
+  error: string;
+  internalCosts: { openai: number; anthropic: number };
+  onRefresh: () => Promise<void>;
+}) {
+  const hasIncident = providers.some(
+    (provider) => provider.status !== "operational",
+  );
+  return (
+    <section className={`provider-pulse ${hasIncident ? "has-incident" : ""}`}>
+      <header>
+        <div>
+          <span className="eyebrow">Pulso de proveedores</span>
+          <h2>La IA, vigilada antes de que falle.</h2>
+          <p>
+            Comprueba cuota utilizable, modelo, llave conectada y gasto oficial.
+          </p>
+        </div>
+        <button disabled={loading} onClick={() => void onRefresh()}>
+          <RefreshCw className={loading ? "spinning" : ""} />
+          {loading ? "Comprobando" : "Comprobar ahora"}
+        </button>
+      </header>
+      {error && <div className="provider-pulse-error">{error}</div>}
+      {loading && providers.length === 0 ? (
+        <div className="provider-pulse-loading">
+          <Activity />
+          Consultando OpenAI y Anthropic con una prueba mínima…
+        </div>
+      ) : (
+        <div className="provider-health-grid">
+          {providers.map((provider) => {
+            const internalCost = internalCosts[provider.id];
+            return (
+              <article
+                key={provider.id}
+                className={`provider-health-card ${provider.status}`}
+              >
+                <div className="provider-health-head">
+                  <span className="provider-health-orbit">
+                    <i />
+                    {provider.id === "openai" ? <Activity /> : <ShieldCheck />}
+                  </span>
+                  <div>
+                    <small>{provider.label}</small>
+                    <h3>{statusLabel(provider.status)}</h3>
+                  </div>
+                  <em>{provider.latencyMs} ms</em>
+                </div>
+                <p>{provider.message}</p>
+                <dl>
+                  <div>
+                    <dt>
+                      <KeyRound /> Llave conectada
+                    </dt>
+                    <dd>{provider.keyFingerprint || "Sin configurar"}</dd>
+                    <small className={keyMatchClass(provider)}>
+                      {keyMatchLabel(provider)}
+                    </small>
+                  </div>
+                  <div>
+                    <dt>
+                      <CircleDollarSign /> Saldo visible
+                    </dt>
+                    <dd>
+                      {provider.estimatedBalanceUsd !== null
+                        ? `$${provider.estimatedBalanceUsd.toFixed(2)}`
+                        : "No expuesto por API"}
+                    </dd>
+                    <small>
+                      {provider.officialMonthSpendUsd !== null
+                        ? `$${provider.officialMonthSpendUsd.toFixed(2)} de gasto oficial este mes`
+                        : `$${internalCost.toFixed(3)} estimado por Anapau este mes`}
+                    </small>
+                  </div>
+                </dl>
+                <footer>
+                  <span>{provider.model}</span>
+                  <time>
+                    {new Date(provider.checkedAt).toLocaleTimeString("es-MX", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
+                  </time>
+                  <a href={provider.consoleUrl} target="_blank" rel="noreferrer">
+                    Abrir facturación
+                  </a>
+                </footer>
+                {!provider.adminReportingEnabled && (
+                  <div className="provider-admin-key-note">
+                    Agrega la llave administrativa para ver gasto oficial. El
+                    saldo exacto permanece en la consola del proveedor.
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+      <small className="provider-pulse-footnote">
+        Cada comprobación hace una respuesta mínima de un token. Si la cuota se
+        agota o la llave cambia, este semáforo se pondrá rojo y mostrará el motivo.
+      </small>
+    </section>
+  );
+}
+
+function statusLabel(status: ProviderStatus) {
+  const labels: Record<ProviderStatus, string> = {
+    operational: "Operativo",
+    quota_exhausted: "Sin cuota",
+    rate_limited: "Límite temporal",
+    invalid_key: "Llave rechazada",
+    degraded: "Requiere atención",
+    unconfigured: "Sin configurar",
+  };
+  return labels[status];
+}
+
+function keyMatchLabel(provider: ProviderHealth) {
+  if (!provider.expectedFingerprint) return "Sin huella esperada configurada";
+  return provider.keyMatchesExpected
+    ? `Coincide con ${provider.expectedFingerprint}`
+    : `No coincide con ${provider.expectedFingerprint}`;
+}
+
+function keyMatchClass(provider: ProviderHealth) {
+  if (provider.keyMatchesExpected === null) return "";
+  return provider.keyMatchesExpected ? "key-match" : "key-mismatch";
 }
 
 function creditReason(reason: string, module: string | null) {

@@ -3665,6 +3665,300 @@ svg {
   font-size: clamp(34px, 5vw, 64px);
 }
 
+.provider-pulse {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(99, 46, 89, .13);
+  border-radius: 22px;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 88% -15%, rgba(202, 231, 218, .9), transparent 35%),
+    linear-gradient(125deg, #fffaf7, #f5f4fb 58%, #f0f7f3);
+}
+
+.provider-pulse.has-incident {
+  background:
+    radial-gradient(circle at 88% -15%, rgba(255, 211, 207, .82), transparent 38%),
+    linear-gradient(125deg, #fffaf7, #f7f1f5 58%, #fff4ef);
+}
+
+.provider-pulse > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.provider-pulse h2 {
+  margin: 5px 0 3px;
+  color: #632e59;
+  font-size: clamp(23px, 2.4vw, 34px);
+  line-height: 1.02;
+}
+
+.provider-pulse header p {
+  margin: 0;
+  color: rgba(99, 46, 89, .64);
+  font-size: 12px;
+}
+
+.provider-pulse > header button {
+  min-height: 42px;
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 999px;
+  padding: 0 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #632e59;
+  background: rgba(255, 255, 255, .8);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.provider-pulse > header button svg {
+  width: 16px;
+}
+
+.provider-pulse > header button:disabled {
+  cursor: wait;
+  opacity: .62;
+}
+
+.spinning {
+  animation: provider-spin .8s linear infinite;
+}
+
+@keyframes provider-spin {
+  to { transform: rotate(360deg); }
+}
+
+.provider-health-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.provider-health-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(99, 46, 89, .12);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(255, 255, 255, .82);
+}
+
+.provider-health-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #c44f57;
+}
+
+.provider-health-card.operational::before {
+  background: #2f8a59;
+}
+
+.provider-health-card.rate_limited::before {
+  background: #c18b2d;
+}
+
+.provider-health-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 11px;
+}
+
+.provider-health-head small {
+  color: rgba(99, 46, 89, .58);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.provider-health-head h3 {
+  margin: 2px 0 0;
+  color: #632e59;
+  font-size: 21px;
+}
+
+.provider-health-head em {
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: rgba(99, 46, 89, .62);
+  background: #f7f1f5;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.provider-health-orbit {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(99, 46, 89, .13);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #9b424a;
+  background: #fff;
+}
+
+.provider-health-card.operational .provider-health-orbit {
+  color: #267149;
+}
+
+.provider-health-orbit svg {
+  width: 19px;
+}
+
+.provider-health-orbit i {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #c44f57;
+  box-shadow: 0 0 0 4px rgba(196, 79, 87, .12);
+}
+
+.provider-health-card.operational .provider-health-orbit i {
+  background: #2f8a59;
+  box-shadow: 0 0 0 4px rgba(47, 138, 89, .12);
+}
+
+.provider-health-card > p {
+  min-height: 35px;
+  margin: 13px 0;
+  color: rgba(66, 45, 64, .73);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.provider-health-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.provider-health-card dl > div {
+  min-width: 0;
+  border-radius: 13px;
+  padding: 11px;
+  background: rgba(247, 241, 245, .78);
+}
+
+.provider-health-card dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(99, 46, 89, .58);
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.provider-health-card dt svg {
+  width: 13px;
+}
+
+.provider-health-card dd {
+  margin: 8px 0 3px;
+  overflow: hidden;
+  color: #422d40;
+  font-size: 15px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-health-card dl small {
+  color: rgba(99, 46, 89, .55);
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.provider-health-card dl small.key-match {
+  color: #267149;
+}
+
+.provider-health-card dl small.key-mismatch {
+  color: #a43d45;
+  font-weight: 900;
+}
+
+.provider-health-card footer {
+  margin-top: 12px;
+  border-top: 1px solid rgba(99, 46, 89, .09);
+  padding-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  color: rgba(99, 46, 89, .58);
+  font-size: 9px;
+}
+
+.provider-health-card footer span {
+  overflow: hidden;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-health-card footer a {
+  color: #632e59;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.provider-admin-key-note {
+  margin-top: 9px;
+  border-radius: 9px;
+  padding: 8px 10px;
+  color: rgba(99, 46, 89, .64);
+  background: rgba(255, 247, 220, .7);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.provider-pulse-loading,
+.provider-pulse-error {
+  margin-top: 16px;
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #632e59;
+  background: rgba(255, 255, 255, .74);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.provider-pulse-error {
+  color: #943b43;
+  background: rgba(255, 226, 226, .7);
+}
+
+.provider-pulse-loading svg {
+  width: 18px;
+}
+
+.provider-pulse-footnote {
+  margin-top: 12px;
+  display: block;
+  color: rgba(99, 46, 89, .55);
+  font-size: 9px;
+}
+
 @media (max-width: 980px) {
   .landing-hero,
   .auth-page,
@@ -3689,11 +3983,21 @@ svg {
   .credit-packages,
   .admin-metrics,
   .admin-grid,
+  .provider-health-grid,
   .scenario-table,
   .creative-signal-grid,
   .creative-deep-grid,
   .metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .provider-pulse > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .provider-pulse > header button {
+    justify-content: center;
   }
 
   .creative-result-head {
