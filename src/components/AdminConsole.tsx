@@ -7,7 +7,6 @@ import {
   Check,
   CircleDollarSign,
   Coins,
-  Database,
   Download,
   Gauge,
   KeyRound,
@@ -155,7 +154,6 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
   const [busy, setBusy] = useState("");
   const [newAccessEmail, setNewAccessEmail] = useState("");
   const [newAccessName, setNewAccessName] = useState("");
-  const [newAccessNote, setNewAccessNote] = useState("");
   const [creditEmail, setCreditEmail] = useState("");
   const [creditAmount, setCreditAmount] = useState("600");
   const [manualCreditReason, setManualCreditReason] = useState("Ajuste manual de soporte");
@@ -279,43 +277,8 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
     100,
     (data.metrics.apiCost / data.metrics.limit) * 100,
   );
-  const addUserFromPrompt = () => {
-    const email = prompt("Correo del nuevo usuario");
-    if (!email) return;
-    const fullName = prompt("Nombre opcional") || "";
-    action({
-      action: "add_access",
-      email,
-      fullName,
-      note: "Alta manual desde botón superior",
-    });
-  };
-  const repairAccessFromPrompt = () => {
-    const email = prompt("Correo de la usuaria a reparar");
-    if (!email) return;
-    action({
-      action: "repair_access",
-      email,
-      note: "Reparación manual desde botón superior",
-    });
-  };
   return (
     <section className="admin-shell admin-operations">
-      <div className="admin-top-actions">
-        <button type="button" onClick={addUserFromPrompt}>
-          <UserPlus />
-          Agregar nuevo usuario
-        </button>
-        <button type="button" onClick={repairAccessFromPrompt}>
-          <ShieldCheck />
-          Reparar acceso por correo
-        </button>
-        <span>
-          Admin soporte v2 · Si alguien no puede entrar, usa “Reparar acceso”: activa perfil,
-          wallet de 600 créditos y lista manual. Base: Auth Supabase, profiles,
-          credit_wallets y manual_access_emails.
-        </span>
-      </div>
       <div className="panel-heading split">
         <div>
           <span className="eyebrow">Panel madre · este mes</span>
@@ -390,90 +353,6 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
         }}
         onRefresh={refreshProviders}
       />
-      <section className="admin-control-grid">
-        <article className="admin-manual-access">
-          <header>
-            <UserPlus />
-            <div>
-              <span className="eyebrow">Acceso manual</span>
-              <h2>Agregar usuaria por correo</h2>
-              <p>
-                Autoriza el correo, crea/activa su perfil si ya existe y deja la
-                cuenta lista para entrar por login directo.
-              </p>
-            </div>
-          </header>
-          <div className="admin-access-form">
-            <input
-              type="email"
-              placeholder="correo@ejemplo.com"
-              value={newAccessEmail}
-              onChange={(event) => setNewAccessEmail(event.target.value)}
-            />
-            <input
-              placeholder="Nombre opcional"
-              value={newAccessName}
-              onChange={(event) => setNewAccessName(event.target.value)}
-            />
-            <input
-              placeholder="Nota interna opcional"
-              value={newAccessNote}
-              onChange={(event) => setNewAccessNote(event.target.value)}
-            />
-            <button
-              disabled={busy === "add_access" || !newAccessEmail.trim()}
-              onClick={() =>
-                action({
-                  action: "add_access",
-                  email: newAccessEmail,
-                  fullName: newAccessName,
-                  note: newAccessNote,
-                })
-              }
-            >
-              <Check />
-              Dar acceso
-            </button>
-          </div>
-        </article>
-        <article className="admin-database-map">
-          <header>
-            <Database />
-            <div>
-              <span className="eyebrow">Base de datos</span>
-              <h2>Fuentes que está usando la plataforma</h2>
-            </div>
-          </header>
-          <div>
-            <span>
-              Auth Supabase <b>{data.databaseOverview.authUsers}</b>
-              <small>Usuarios que pueden iniciar sesión</small>
-            </span>
-            <span>
-              {data.databaseOverview.profileTable}{" "}
-              <b>{data.databaseOverview.profiles}</b>
-              <small>Perfiles registrados dentro de la app</small>
-            </span>
-            <span>
-              {data.databaseOverview.walletTable}{" "}
-              <b>{data.databaseOverview.wallets}</b>
-              <small>Wallets/créditos vinculados</small>
-            </span>
-            <span>
-              {data.databaseOverview.accessTable}{" "}
-              <b>
-                {data.databaseOverview.manualActive}/
-                {data.databaseOverview.manualAccess}
-              </b>
-              <small>Accesos manuales activos/totales</small>
-            </span>
-            <span>
-              {data.databaseOverview.clubTable}
-              <small>Lista externa que sigue validando suscripciones</small>
-            </span>
-          </div>
-        </article>
-      </section>
       {data.manualAccess.length > 0 && (
         <section className="admin-pricing">
           <header>
@@ -616,9 +495,9 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
         </header>
         <div className="admin-visible-controls">
           <article>
-            <span className="eyebrow">Alta rápida</span>
-            <h3>Agregar usuario y dar acceso</h3>
-            <p>Escribe el correo y queda autorizado aunque no esté en la tabla del club.</p>
+            <span className="eyebrow">Acceso</span>
+            <h3>Dar o reparar acceso</h3>
+            <p>Sirve para usuaria nueva o para alguien que no puede entrar.</p>
             <div>
               <input
                 type="email"
@@ -632,18 +511,18 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
                 onChange={(event) => setNewAccessName(event.target.value)}
               />
               <button
-                disabled={busy === "add_access" || !newAccessEmail.trim()}
+                disabled={busy === "repair_access" || !newAccessEmail.trim()}
                 onClick={() =>
                   action({
-                    action: "add_access",
+                    action: "repair_access",
                     email: newAccessEmail,
                     fullName: newAccessName,
-                    note: newAccessNote || "Alta rápida desde admin",
+                    note: "Dar o reparar acceso desde admin",
                   })
                 }
               >
                 <UserPlus />
-                Agregar usuario
+                Dar/Reparar acceso
               </button>
             </div>
           </article>
@@ -700,6 +579,13 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
             </div>
           </article>
         </div>
+        <p className="admin-db-note">
+          Base real: Auth Supabase {data.databaseOverview.authUsers} · profiles{" "}
+          {data.databaseOverview.profiles} · wallets {data.databaseOverview.wallets} ·
+          accesos manuales {data.databaseOverview.manualActive}/
+          {data.databaseOverview.manualAccess}. “Pending” significa perfil no
+          activado; usa “Dar/Reparar acceso” para resolverlo.
+        </p>
         <div className="admin-table-wrap">
           <table>
             <thead>

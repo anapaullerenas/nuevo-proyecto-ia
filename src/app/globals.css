@@ -3998,129 +3998,14 @@ svg {
   font-size: 12px;
 }
 
-.admin-server-controls {
-  border: 2px solid rgba(99, 46, 89, .18);
-  border-radius: 28px;
-  padding: 22px;
-  display: grid;
-  gap: 16px;
-  color: #422d40;
-  background: linear-gradient(135deg, #fff, #fff6fb);
-  box-shadow: 0 18px 45px rgba(99, 46, 89, .11);
-}
-
-.admin-server-controls h1 {
-  margin: 4px 0;
-  color: #632e59;
-  font-size: clamp(28px, 4vw, 52px);
-}
-
-.admin-server-controls p {
-  margin: 0;
-  color: rgba(99, 46, 89, .68);
-}
-
-.admin-server-controls > div {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.admin-server-controls form {
-  border: 1px solid rgba(99, 46, 89, .12);
-  border-radius: 18px;
-  padding: 14px;
-  display: grid;
-  gap: 10px;
-  background: white;
-}
-
-.admin-server-controls label {
-  display: grid;
-  gap: 5px;
-  color: #632e59;
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.admin-server-controls input {
-  height: 40px;
-  border: 1px solid rgba(99, 46, 89, .16);
-  border-radius: 11px;
-  padding: 0 11px;
-  color: #422d40;
-  font-size: 14px;
-  text-transform: none;
-}
-
-.admin-server-controls button {
-  border: 0;
-  border-radius: 12px;
-  padding: 12px 14px;
-  color: white;
-  background: #632e59;
-  font-weight: 950;
-}
-
-.admin-server-controls small {
-  color: rgba(99, 46, 89, .58);
-}
-
-.admin-floating-support {
-  position: fixed;
-  z-index: 120;
-  right: 18px;
-  bottom: 18px;
-  width: min(360px, calc(100vw - 36px));
-  color: #422d40;
-}
-
-.admin-floating-support details {
-  border: 2px solid rgba(99, 46, 89, .2);
-  border-radius: 20px;
-  padding: 13px;
-  background: rgba(255, 255, 255, .96);
-  box-shadow: 0 18px 55px rgba(50, 24, 45, .24);
-  backdrop-filter: blur(14px);
-}
-
-.admin-floating-support summary {
-  cursor: pointer;
-  color: #632e59;
-  font-size: 15px;
-  font-weight: 950;
-}
-
-.admin-floating-support form {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 7px;
-}
-
-.admin-floating-support form:nth-of-type(3) {
-  grid-template-columns: 1fr 76px auto;
-}
-
-.admin-floating-support input {
-  min-width: 0;
-  height: 38px;
-  border: 1px solid rgba(99, 46, 89, .16);
-  border-radius: 10px;
-  padding: 0 10px;
-  outline: 0;
-}
-
-.admin-floating-support button {
-  border: 0;
-  border-radius: 10px;
-  padding: 0 11px;
-  color: white;
-  background: #632e59;
+.admin-db-note {
+  margin: 0 18px 18px;
+  border: 1px solid rgba(99, 46, 89, .1);
+  border-radius: 13px;
+  padding: 10px 12px;
+  color: rgba(99, 46, 89, .64);
+  background: #faf7f9;
   font-size: 12px;
-  font-weight: 950;
-  white-space: nowrap;
 }
 
 @media (max-width: 980px) {
