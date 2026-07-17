@@ -18,7 +18,7 @@ export function BrandSwitcher({
   return (
     <div className="brand-switcher">
       <label>
-        <span>Usar marca</span>
+        <span>Marca</span>
         <select
           value={activeBrandId}
           disabled={!hasMultipleBrands}
@@ -34,7 +34,7 @@ export function BrandSwitcher({
           ))}
         </select>
       </label>
-      <Link href="/marcas">{hasMultipleBrands ? "Cambiar memoria" : "Agregar marca"}</Link>
+      <Link href="/marcas">{hasMultipleBrands ? "Cambiar" : "+ marca"}</Link>
     </div>
   );
 }
