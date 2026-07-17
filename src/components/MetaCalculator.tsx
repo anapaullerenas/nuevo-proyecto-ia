@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Loader2,
-  MessageCircle,
   Package,
   Plus,
   Save,
@@ -73,32 +72,11 @@ const MODE_OPTIONS: Array<{
   icon: typeof Package;
 }> = [
   {
-    id: "products",
-    eyebrow: "Modo 1",
-    title: "Vendo productos",
-    description: "Para tiendas en línea que cobran cada compra directamente.",
-    icon: Package,
-  },
-  {
-    id: "services",
-    eyebrow: "Modo 2",
-    title: "Vendo por mensajes o citas",
-    description: "Para servicios, consultoras y marcas personales que primero conversan.",
-    icon: MessageCircle,
-  },
-  {
     id: "seasonal",
-    eyebrow: "Modo 3",
-    title: "Campaña de temporada",
-    description: "Para promos con meta, días definidos, descuentos y presupuesto cerrado.",
+    eyebrow: "Calculadora principal",
+    title: "Campaña de temporada o promoción",
+    description: "Usa las métricas comunes de negocio: meta, ticket, presupuesto, costos, utilidad y CPA seguro.",
     icon: CalendarCheck2,
-  },
-  {
-    id: "plan",
-    eyebrow: "Modo 4",
-    title: "Quiero planear una campaña",
-    description: "Empieza por tu meta y descubre el presupuesto que necesitarías.",
-    icon: Target,
   },
 ];
 
@@ -322,7 +300,7 @@ function savedExtras(value: unknown): ExtraCost[] {
 }
 
 export function MetaCalculator({ brandId, brandName }: { brandId: string; brandName: string }) {
-  const [mode, setMode] = useState<CalculatorMode>("products");
+  const [mode, setMode] = useState<CalculatorMode>("seasonal");
   const [products, setProducts] = useState<ProductInputs>(DEFAULT_PRODUCTS);
   const [services, setServices] = useState<ServiceInputs>(DEFAULT_SERVICES);
   const [seasonal, setSeasonal] = useState<SeasonalCampaignInputs>(DEFAULT_SEASONAL);
@@ -361,7 +339,7 @@ export function MetaCalculator({ brandId, brandName }: { brandId: string; brandN
 
       const assumptions = asRecord(data.assumptions);
       const savedMode = assumptions?.mode;
-      if (savedMode === "products" || savedMode === "services" || savedMode === "seasonal" || savedMode === "plan") {
+      if (savedMode === "seasonal") {
         setMode(savedMode);
       }
 
@@ -506,9 +484,9 @@ export function MetaCalculator({ brandId, brandName }: { brandId: string; brandN
     <section className="calculator-card deep-calculator cost-calculator">
       <div className="calculator-intro cost-calculator-intro">
         <div>
-          <span className="eyebrow">Primero: ¿cómo vendes?</span>
-          <h2>Elige la calculadora que habla como tu negocio.</h2>
-          <p>No necesitas saber de finanzas. Completa tus números reales y te diremos qué significan.</p>
+          <span className="eyebrow">Campaña de temporada</span>
+          <h2>Calcula tu campaña con métricas comunes, sin tecnicismos.</h2>
+          <p>Completa la meta, el ticket, el presupuesto, los costos y la utilidad mínima. La plataforma calcula el CPA seguro y el presupuesto necesario.</p>
         </div>
         {savedDateLabel && (
           <span className="saved-economics-badge">
@@ -517,30 +495,32 @@ export function MetaCalculator({ brandId, brandName }: { brandId: string; brandN
         )}
       </div>
 
-      <div className="calculator-mode-grid" role="group" aria-label="Forma de vender">
-        {MODE_OPTIONS.map((option) => {
-          const Icon = option.icon;
-          const selected = mode === option.id;
-          return (
-            <button
-              type="button"
-              className={selected ? "selected" : ""}
-              aria-pressed={selected}
-              key={option.id}
-              onClick={() => {
-                setMode(option.id);
-                setSaveState("idle");
-              }}
-            >
-              <span className="mode-icon"><Icon size={23} /></span>
-              <small>{option.eyebrow}</small>
-              <b>{option.title}</b>
-              <p>{option.description}</p>
-              <i>{selected ? "Elegido" : "Elegir"}</i>
-            </button>
-          );
-        })}
-      </div>
+      {MODE_OPTIONS.length > 1 && (
+        <div className="calculator-mode-grid" role="group" aria-label="Forma de vender">
+          {MODE_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const selected = mode === option.id;
+            return (
+              <button
+                type="button"
+                className={selected ? "selected" : ""}
+                aria-pressed={selected}
+                key={option.id}
+                onClick={() => {
+                  setMode(option.id);
+                  setSaveState("idle");
+                }}
+              >
+                <span className="mode-icon"><Icon size={23} /></span>
+                <small>{option.eyebrow}</small>
+                <b>{option.title}</b>
+                <p>{option.description}</p>
+                <i>{selected ? "Elegido" : "Elegir"}</i>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {mode === "products" && (
         <div className="calculator-mode-content">
