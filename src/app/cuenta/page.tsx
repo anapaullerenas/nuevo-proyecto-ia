@@ -8,7 +8,6 @@ import {
   CREDIT_CATALOG,
   CREDIT_LABELS,
   TRIAL_REAL_COST_LIMIT_USD,
-  creditPriceUsd,
   INITIAL_INCLUDED_CREDITS,
 } from "@/lib/credit-catalog";
 
@@ -121,7 +120,7 @@ export default async function CuentaPage() {
           <section className="usage-table account-cost-table">
             <header>
               <b>Costos por acción</b>
-              <small>1 crédito = $0.01 de saldo</small>
+              <small>El valor en dólares depende del paquete de recarga elegido.</small>
             </header>
             <div>
               {CREDIT_CATALOG.map((item) => (
@@ -129,7 +128,6 @@ export default async function CuentaPage() {
                   <span>{item.label}</span>
                   <small>{item.description}</small>
                   <b>{item.credits} cr</b>
-                  <em>${creditPriceUsd(item.credits).toFixed(2)}</em>
                 </article>
               ))}
             </div>

@@ -72,22 +72,32 @@ Esto permite que la usuaria pruebe varias partes de la plataforma, no solo una i
 
 | Paquete | Precio | Créditos recibidos | Para qué sirve |
 | --- | ---: | ---: | --- |
-| Impulso | $10 | 1,000 créditos | Seguir creando después de la prueba. |
-| Crecimiento | $25 | 2,700 créditos | Usar la plataforma varias veces por semana. |
-| Estudio | $50 | 5,800 créditos | Producción creativa más constante. |
+| Impulso | $10 | 500 créditos | Seguir creando después de la prueba. |
+| Crecimiento | $25 | 1,500 créditos | Usar la plataforma varias veces por semana. |
+| Estudio | $50 | 3,500 créditos | Producción creativa más constante. |
 
 Las recargas se solicitan por WhatsApp y se aprueban manualmente desde el panel de administración.
 
 ## Margen esperado
 
-La meta recomendada es mantener un margen general de 60% a 70%, favoreciendo el uso de la plataforma.
+La meta recomendada es mantener un margen general de 60% a 75%, favoreciendo el uso de la plataforma y evitando que una usuaria muy intensiva en imágenes consuma el margen completo.
+
+Para planear conservadoramente, se reserva hasta $0.005 USD de costo de IA por crédito usado. Esto equivale al candado de $3.00 USD por 600 créditos incluidos. El costo real observado puede ser menor si la usuaria usa más chat, guiones y análisis que generación de imágenes.
+
+| Paquete | Ingreso | Créditos | Valor efectivo por crédito | Reserva API conservadora | Utilidad bruta estimada | Margen estimado |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Impulso | $10.00 | 500 | $0.0200 | $2.50 | $7.50 | 75% |
+| Crecimiento | $25.00 | 1,500 | $0.0167 | $7.50 | $17.50 | 70% |
+| Estudio | $50.00 | 3,500 | $0.0143 | $17.50 | $32.50 | 65% |
+
+Lectura rápida: el paquete de $10 deja más margen porque da menos créditos por dólar; el paquete de $50 premia más uso y baja el margen a 65%, que sigue dentro de un rango sano.
 
 | Tipo de uso | Ingreso | Costo estimado de IA | Margen aproximado |
 | --- | ---: | ---: | ---: |
-| Uso balanceado | $10.00 | $3.00 a $4.00 | 60% a 70% |
-| Mucho chat y análisis | $10.00 | $1.50 a $3.00 | 70% a 85% |
-| Muchas imágenes estándar | $10.00 | $3.00 a $4.50 | 55% a 70% |
-| Muchas imágenes altas | $10.00 | $4.00 a $5.50 | 45% a 60% |
+| Uso balanceado | $10.00 | $1.50 a $2.50 | 75% a 85% |
+| Mucho chat y análisis | $10.00 | $0.75 a $1.50 | 85% a 93% |
+| Muchas imágenes estándar | $10.00 | $1.00 a $2.50 | 75% a 90% |
+| Muchas imágenes altas | $10.00 | $1.20 a $2.80 | 72% a 88% |
 
 La imagen alta puede tener menos margen, pero genera más valor percibido. El margen global se sostiene porque chat, guiones, análisis y fichas usan modelos más baratos.
 
