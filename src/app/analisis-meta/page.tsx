@@ -3,6 +3,8 @@ import { AppFrame, SetupState } from "@/components/AppFrame";
 import { MetaImportUploader } from "@/components/MetaImportUploader";
 import { getWorkspace } from "@/lib/workspace";
 
+export const dynamic = "force-dynamic";
+
 export default async function AnalisisMetaPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
@@ -24,7 +26,7 @@ export default async function AnalisisMetaPage() {
   }));
 
   return (
-    <AppFrame active="/analisis-meta" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
+    <AppFrame active="/analisis-meta" brand={workspace.activeBrand} brandList={workspace.brandList} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page">
         <div className="studio-panel">
           <div className="panel-heading split">
@@ -40,6 +42,18 @@ export default async function AnalisisMetaPage() {
               <b>Estado</b>
               <span className="status-ok">Subida activa</span>
             </div>
+          </div>
+
+          <div className="download-instructions">
+            <span className="eyebrow">Instrucciones para descargar tu archivo</span>
+            <h2>Antes de subirlo aquí, expórtalo así desde Meta Ads.</h2>
+            <ol>
+              <li>Entra a Meta Ads Manager y abre Campañas, Conjuntos o Anuncios.</li>
+              <li>Elige el rango de fechas que quieres analizar.</li>
+              <li>Activa las columnas de rendimiento: gasto, impresiones, alcance, CTR, CPC, CPM, resultados y costo por resultado.</li>
+              <li>Da clic en Exportar y descarga el archivo en CSV o XLSX.</li>
+              <li>Regresa a esta pantalla y súbelo para generar el diagnóstico.</li>
+            </ol>
           </div>
 
           <div className="export-guide">

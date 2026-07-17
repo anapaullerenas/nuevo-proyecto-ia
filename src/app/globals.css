@@ -509,6 +509,30 @@ svg {
   font-weight: 900;
 }
 
+.brand-switcher {
+  min-width: 190px;
+  display: grid;
+  gap: 4px;
+  color: rgba(99, 46, 89, .68);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.brand-switcher select {
+  min-height: 40px;
+  border: 1px solid rgba(99, 46, 89, .14);
+  border-radius: 999px;
+  padding: 0 36px 0 13px;
+  color: #632e59;
+  background: rgba(255, 255, 255, .82);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .real-dashboard {
   width: min(1280px, calc(100% - 32px));
   margin: 16px auto 0;
@@ -2420,11 +2444,31 @@ svg {
   resize: vertical;
 }
 
-.copy-grid,
+.copy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
 .zone-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 9px;
+}
+
+.copy-grid label:first-child {
+  grid-column: 1 / -1;
+}
+
+.copy-grid textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.copy-grid label:first-child textarea {
+  min-height: 120px;
+  font-size: 14px;
 }
 
 .why-card {
@@ -2530,6 +2574,7 @@ svg {
   padding: 20px;
 }
 
+.download-instructions,
 .export-guide,
 .calculator-card,
 .usage-table {
@@ -2540,6 +2585,7 @@ svg {
   background: rgba(255, 255, 255, .62);
 }
 
+.download-instructions h2,
 .export-guide h2,
 .calculator-card h2 {
   margin: 8px 0;
@@ -2547,6 +2593,26 @@ svg {
   font-family: var(--font-display), sans-serif;
   font-size: clamp(26px, 3vw, 38px);
   line-height: 1;
+}
+
+.download-instructions {
+  background:
+    linear-gradient(135deg, rgba(215, 220, 240, .48), rgba(255, 246, 240, .74)),
+    rgba(255, 255, 255, .66);
+}
+
+.download-instructions ol {
+  margin: 14px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  color: rgba(37, 23, 42, .72);
+  line-height: 1.45;
+}
+
+.download-instructions li::marker {
+  color: #4f62a7;
+  font-weight: 900;
 }
 
 .export-guide > div {
@@ -2828,7 +2894,7 @@ svg {
 .calculator-mode-grid {
   margin: 22px 0 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -3027,6 +3093,98 @@ svg {
   background: transparent;
   font-size: 15px;
   font-weight: 900;
+}
+
+.seasonal-calculator-board {
+  display: grid;
+  grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+  gap: 16px;
+}
+
+.seasonal-input-card,
+.seasonal-results-card {
+  border: 1px solid var(--calc-line);
+  border-radius: 24px;
+  padding: 20px;
+  background: rgba(255, 255, 255, .66);
+}
+
+.seasonal-input-card header,
+.seasonal-results-card header {
+  margin-bottom: 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.seasonal-input-card header span,
+.seasonal-results-card header span {
+  color: var(--calc-blue);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.seasonal-input-card header b,
+.seasonal-results-card header b {
+  color: var(--calc-plum);
+  font: 900 24px/1 var(--font-display), sans-serif;
+}
+
+.seasonal-text-field {
+  margin-bottom: 12px;
+  display: grid;
+  gap: 7px;
+  color: var(--calc-plum);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.seasonal-text-field input {
+  min-height: 46px;
+  border: 1px solid rgba(99, 46, 89, .16);
+  border-radius: 14px;
+  padding: 0 14px;
+  color: var(--calc-ink);
+  background: white;
+  font-weight: 800;
+}
+
+.seasonal-field-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.seasonal-result-table {
+  display: grid;
+  gap: 8px;
+}
+
+.seasonal-result-table article {
+  border: 1px solid rgba(99, 46, 89, .1);
+  border-radius: 15px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  background: rgba(255, 246, 240, .48);
+}
+
+.seasonal-result-table b {
+  color: var(--calc-ink);
+  font-size: 13px;
+}
+
+.seasonal-result-table strong {
+  color: var(--calc-blue);
+  font-size: 16px;
+  text-align: right;
+}
+
+.seasonal-result-table small {
+  grid-column: 1 / -1;
+  color: rgba(37, 23, 42, .58);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .extra-costs-editor {
@@ -3389,6 +3547,10 @@ svg {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .seasonal-calculator-board {
+    grid-template-columns: 1fr;
+  }
+
   .cost-result-grid,
   .cost-result-grid.service-results {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3426,6 +3588,7 @@ svg {
   }
 
   .plan-goal-panel,
+  .copy-grid,
   .cost-calculator-save {
     grid-template-columns: 1fr;
   }
@@ -3445,6 +3608,7 @@ svg {
   }
 
   .cost-field-grid,
+  .seasonal-field-grid,
   .cost-result-grid,
   .cost-result-grid.service-results,
   .cost-projection-flow {

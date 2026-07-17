@@ -1230,7 +1230,8 @@ export function StaticStudio({
               <div className="copy-grid">
                 <label>
                   Texto principal
-                  <input
+                  <textarea
+                    rows={3}
                     value={brief.texto_principal}
                     onChange={(event) =>
                       updateBrief("texto_principal", event.target.value)
@@ -1239,7 +1240,8 @@ export function StaticStudio({
                 </label>
                 <label>
                   Texto secundario
-                  <input
+                  <textarea
+                    rows={3}
                     value={brief.texto_secundario}
                     onChange={(event) =>
                       updateBrief("texto_secundario", event.target.value)

@@ -3,12 +3,14 @@ import { Plus } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
 import { getWorkspace, labelContentOwner } from "@/lib/workspace";
 
+export const dynamic = "force-dynamic";
+
 export default async function MarcasPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
 
   return (
-    <AppFrame active="/marcas" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
+    <AppFrame active="/marcas" brand={workspace.activeBrand} brandList={workspace.brandList} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page">
         <div className="studio-panel">
           <div className="panel-heading split">

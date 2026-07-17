@@ -11,6 +11,8 @@ import {
   INITIAL_INCLUDED_CREDITS,
 } from "@/lib/credit-catalog";
 
+export const dynamic = "force-dynamic";
+
 export default async function CuentaPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
@@ -48,6 +50,7 @@ export default async function CuentaPage() {
     <AppFrame
       active="/cuenta"
       brand={workspace.activeBrand}
+      brandList={workspace.brandList}
       credits={workspace.walletBalance}
       unlimited={workspace.isUnlimited}
     >

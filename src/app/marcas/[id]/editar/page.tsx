@@ -35,7 +35,7 @@ export default async function EditarMarcaPage({
   const references = visualAssets.filter((asset) => asset.kind === "style_reference");
 
   return (
-    <AppFrame active="/marcas" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
+    <AppFrame active="/marcas" brand={workspace.activeBrand} brandList={workspace.brandList} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page">
         <div className="studio-panel">
           <div className="panel-heading split">

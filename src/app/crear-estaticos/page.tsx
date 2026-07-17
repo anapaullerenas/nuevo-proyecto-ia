@@ -3,6 +3,8 @@ import { StaticStudio } from "@/components/StaticStudio";
 import { CURATED_STATIC_FORMATS, detectBrandEvidence } from "@/lib/static-format-catalog";
 import { getWorkspace } from "@/lib/workspace";
 
+export const dynamic = "force-dynamic";
+
 export default async function CrearEstaticosPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
@@ -78,7 +80,7 @@ export default async function CrearEstaticosPage() {
   );
 
   return (
-    <AppFrame active="/crear-estaticos" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
+    <AppFrame active="/crear-estaticos" brand={workspace.activeBrand} brandList={workspace.brandList} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page static-studio">
         <div className="studio-panel">
           <div className="panel-heading split static-studio-head">

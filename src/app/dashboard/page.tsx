@@ -2,6 +2,8 @@ import { AppFrame, SetupState } from "@/components/AppFrame";
 import { ChatWorkspace, type ChatConversation, type ChatMessage } from "@/components/ChatWorkspace";
 import { getWorkspace } from "@/lib/workspace";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
@@ -34,7 +36,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <AppFrame active="/dashboard" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
+    <AppFrame active="/dashboard" brand={workspace.activeBrand} brandList={workspace.brandList} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <ChatWorkspace
         brandName={workspace.activeBrand.name}
         initialConversations={conversations}

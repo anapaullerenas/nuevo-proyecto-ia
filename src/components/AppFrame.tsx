@@ -2,6 +2,7 @@ import Link from "next/link";
 import { WalletCards } from "lucide-react";
 import type { ReactNode } from "react";
 import { BrandMark } from "@/components/BrandIdentity";
+import { BrandSwitcher } from "@/components/BrandSwitcher";
 import type { WorkspaceBrand } from "@/lib/workspace";
 
 const navItems = [
@@ -17,12 +18,14 @@ const navItems = [
 export function AppFrame({
   active,
   brand,
+  brandList = [],
   credits,
   unlimited = false,
   children,
 }: {
   active: string;
   brand: WorkspaceBrand;
+  brandList?: WorkspaceBrand[];
   credits: number;
   unlimited?: boolean;
   children: ReactNode;
@@ -38,6 +41,7 @@ export function AppFrame({
             </Link>
           ))}
         </nav>
+        <BrandSwitcher activeBrandId={brand.id} brandList={brandList} />
         <Link href="/cuenta" className="credit-pill">
           <WalletCards size={16} />
           <span>{unlimited ? "Créditos ilimitados" : `${credits} créditos`}</span>

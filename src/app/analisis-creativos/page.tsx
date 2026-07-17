@@ -3,6 +3,8 @@ import { CreativeAnalysisWorkspace } from "@/components/CreativeAnalysisWorkspac
 import { ScriptAnalysis } from "@/lib/ai/script-analysis";
 import { getWorkspace } from "@/lib/workspace";
 
+export const dynamic = "force-dynamic";
+
 export default async function AnalisisCreativosPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
@@ -56,7 +58,7 @@ export default async function AnalisisCreativosPage() {
   });
 
   return (
-    <AppFrame active="/analisis-creativos" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
+    <AppFrame active="/analisis-creativos" brand={workspace.activeBrand} brandList={workspace.brandList} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page creative-analysis">
         <div className="studio-panel">
           <div className="panel-heading">

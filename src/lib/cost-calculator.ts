@@ -1,4 +1,4 @@
-export type CalculatorMode = "products" | "services" | "plan";
+export type CalculatorMode = "products" | "services" | "seasonal" | "plan";
 export type PlanGoal = "sales" | "messages";
 
 export type ExtraCost = {
@@ -36,6 +36,18 @@ export type ServiceInputs = {
 export type PlanInputs = {
   goal: PlanGoal;
   quantity: number;
+};
+
+export type SeasonalCampaignInputs = {
+  productOrPromo: string;
+  revenueGoal: number;
+  durationDays: number;
+  availableBudget: number;
+  discountPerSale: number;
+  seasonalTicket: number;
+  variableCosts: number;
+  minimumProfitPerSale: number;
+  fixedCostContributionPerSale: number;
 };
 
 const nonNegative = (value: number) => (Number.isFinite(value) ? Math.max(value, 0) : 0);
@@ -139,6 +151,50 @@ export function calculateServices(input: ServiceInputs) {
     expectedMessageCost,
     expectedAppointmentCost,
     expectedClientCost,
+  };
+}
+
+export function calculateSeasonalCampaign(input: SeasonalCampaignInputs) {
+  const revenueGoal = nonNegative(input.revenueGoal);
+  const durationDays = Math.max(nonNegative(input.durationDays), 1);
+  const availableBudget = nonNegative(input.availableBudget);
+  const ticket = nonNegative(input.seasonalTicket);
+  const discount = nonNegative(input.discountPerSale);
+  const variableCosts = nonNegative(input.variableCosts);
+  const minimumProfit = nonNegative(input.minimumProfitPerSale);
+  const fixedContribution = nonNegative(input.fixedCostContributionPerSale);
+  const marginGrossPerSale = Math.max(ticket - discount - variableCosts, 0);
+  const targetCpa = Math.max(marginGrossPerSale - fixedContribution - minimumProfit, 0);
+  const requiredSalesTotal = ticket > 0 ? revenueGoal / ticket : 0;
+  const requiredSalesPerDay = requiredSalesTotal / durationDays;
+  const requiredBudgetTotal = requiredSalesTotal * targetCpa;
+  const requiredBudgetDaily = requiredBudgetTotal / durationDays;
+  const possibleSales = targetCpa > 0 ? availableBudget / targetCpa : 0;
+  const estimatedProfit = possibleSales * marginGrossPerSale - availableBudget;
+  const budgetCoverage = requiredBudgetTotal > 0 ? availableBudget / requiredBudgetTotal : 0;
+  const diagnosis =
+    marginGrossPerSale <= 0
+      ? "El ticket no cubre descuento y costos variables. Hay que subir precio o bajar costos antes de pautar."
+      : targetCpa <= 0
+        ? "La utilidad mínima y costos fijos consumen todo el margen. Ajusta la meta de utilidad o la oferta."
+        : availableBudget >= requiredBudgetTotal
+          ? "La campaña tiene presupuesto suficiente para perseguir la meta completa."
+          : budgetCoverage >= 0.6
+            ? "La campaña puede correr, pero conviene priorizar los anuncios con mejor CPA y revisar a mitad del periodo."
+            : "El presupuesto disponible se queda corto para la meta. Reduce meta, aumenta presupuesto o mejora ticket/margen.";
+
+  return {
+    marginGrossPerSale,
+    fixedCostContributionPerSale: fixedContribution,
+    targetCpa,
+    requiredSalesTotal,
+    requiredSalesPerDay,
+    requiredBudgetTotal,
+    requiredBudgetDaily,
+    estimatedProfit,
+    possibleSales,
+    budgetCoverage,
+    diagnosis,
   };
 }
 

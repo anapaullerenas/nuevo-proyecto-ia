@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { hasUnlimitedAccessEmail } from "@/lib/auth/access-exceptions";
 import { INITIAL_INCLUDED_CREDITS } from "@/lib/credit-catalog";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -41,7 +42,9 @@ export async function getWorkspace() {
   ]);
 
   const brandList = (brands || []) as WorkspaceBrand[];
-  const activeBrand = brandList[0];
+  const cookieStore = await cookies();
+  const preferredBrandId = cookieStore.get("active_brand_id")?.value;
+  const activeBrand = brandList.find((brand) => brand.id === preferredBrandId) || brandList[0];
 
   if (!activeBrand) {
     redirect("/onboarding");

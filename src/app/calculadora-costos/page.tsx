@@ -3,12 +3,14 @@ import { AppFrame, SetupState } from "@/components/AppFrame";
 import { MetaCalculator } from "@/components/MetaCalculator";
 import { getWorkspace } from "@/lib/workspace";
 
+export const dynamic = "force-dynamic";
+
 export default async function CalculadoraCostosPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
 
   return (
-    <AppFrame active="/calculadora-costos" brand={workspace.activeBrand} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
+    <AppFrame active="/calculadora-costos" brand={workspace.activeBrand} brandList={workspace.brandList} credits={workspace.walletBalance} unlimited={workspace.isUnlimited}>
       <section className="work-page calculator-page">
         <div className="panel-heading split calculator-hero">
           <div>

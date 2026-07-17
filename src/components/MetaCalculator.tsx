@@ -17,11 +17,13 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   calculatePlan,
   calculateProducts,
+  calculateSeasonalCampaign,
   calculateServices,
   type CalculatorMode,
   type ExtraCost,
   type PlanGoal,
   type ProductInputs,
+  type SeasonalCampaignInputs,
   type ServiceInputs,
 } from "@/lib/cost-calculator";
 
@@ -51,6 +53,18 @@ const DEFAULT_SERVICES: ServiceInputs = {
   ctr: 1.5,
 };
 
+const DEFAULT_SEASONAL: SeasonalCampaignInputs = {
+  productOrPromo: "",
+  revenueGoal: 100000,
+  durationDays: 7,
+  availableBudget: 12000,
+  discountPerSale: 0,
+  seasonalTicket: 1200,
+  variableCosts: 420,
+  minimumProfitPerSale: 180,
+  fixedCostContributionPerSale: 80,
+};
+
 const MODE_OPTIONS: Array<{
   id: CalculatorMode;
   eyebrow: string;
@@ -73,8 +87,15 @@ const MODE_OPTIONS: Array<{
     icon: MessageCircle,
   },
   {
-    id: "plan",
+    id: "seasonal",
     eyebrow: "Modo 3",
+    title: "Campaña de temporada",
+    description: "Para promos con meta, días definidos, descuentos y presupuesto cerrado.",
+    icon: CalendarCheck2,
+  },
+  {
+    id: "plan",
+    eyebrow: "Modo 4",
     title: "Quiero planear una campaña",
     description: "Empieza por tu meta y descubre el presupuesto que necesitarías.",
     icon: Target,
@@ -304,6 +325,7 @@ export function MetaCalculator({ brandId, brandName }: { brandId: string; brandN
   const [mode, setMode] = useState<CalculatorMode>("products");
   const [products, setProducts] = useState<ProductInputs>(DEFAULT_PRODUCTS);
   const [services, setServices] = useState<ServiceInputs>(DEFAULT_SERVICES);
+  const [seasonal, setSeasonal] = useState<SeasonalCampaignInputs>(DEFAULT_SEASONAL);
   const [planGoal, setPlanGoal] = useState<PlanGoal>("sales");
   const [planQuantity, setPlanQuantity] = useState(20);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -312,6 +334,7 @@ export function MetaCalculator({ brandId, brandName }: { brandId: string; brandN
 
   const productResult = useMemo(() => calculateProducts(products), [products]);
   const serviceResult = useMemo(() => calculateServices(services), [services]);
+  const seasonalResult = useMemo(() => calculateSeasonalCampaign(seasonal), [seasonal]);
   const planResult = useMemo(
     () => calculatePlan(
       { goal: planGoal, quantity: planQuantity },
@@ -338,7 +361,7 @@ export function MetaCalculator({ brandId, brandName }: { brandId: string; brandN
 
       const assumptions = asRecord(data.assumptions);
       const savedMode = assumptions?.mode;
-      if (savedMode === "products" || savedMode === "services" || savedMode === "plan") {
+      if (savedMode === "products" || savedMode === "services" || savedMode === "seasonal" || savedMode === "plan") {
         setMode(savedMode);
       }
 
@@ -377,6 +400,20 @@ export function MetaCalculator({ brandId, brandName }: { brandId: string; brandN
       const goal = planData?.goal;
       if (goal === "sales" || goal === "messages") setPlanGoal(goal);
       setPlanQuantity(savedNumber(planData, "quantity", 20));
+
+      const seasonalData = asRecord(assumptions?.seasonal);
+      setSeasonal((current) => ({
+        ...current,
+        productOrPromo: typeof seasonalData?.productOrPromo === "string" ? seasonalData.productOrPromo : current.productOrPromo,
+        revenueGoal: savedNumber(seasonalData, "revenueGoal", current.revenueGoal),
+        durationDays: savedNumber(seasonalData, "durationDays", current.durationDays),
+        availableBudget: savedNumber(seasonalData, "availableBudget", current.availableBudget),
+        discountPerSale: savedNumber(seasonalData, "discountPerSale", current.discountPerSale),
+        seasonalTicket: savedNumber(seasonalData, "seasonalTicket", current.seasonalTicket),
+        variableCosts: savedNumber(seasonalData, "variableCosts", current.variableCosts),
+        minimumProfitPerSale: savedNumber(seasonalData, "minimumProfitPerSale", current.minimumProfitPerSale),
+        fixedCostContributionPerSale: savedNumber(seasonalData, "fixedCostContributionPerSale", current.fixedCostContributionPerSale),
+      }));
       if (typeof data.updated_at === "string") setSavedAt(data.updated_at);
     }
 
@@ -396,6 +433,11 @@ export function MetaCalculator({ brandId, brandName }: { brandId: string; brandN
     setSaveState("idle");
   }
 
+  function updateSeasonal<K extends keyof SeasonalCampaignInputs>(key: K, value: SeasonalCampaignInputs[K]) {
+    setSeasonal((current) => ({ ...current, [key]: value }));
+    setSaveState("idle");
+  }
+
   async function saveEconomics() {
     setSaveState("loading");
     setSaveMessage("");
@@ -411,28 +453,32 @@ export function MetaCalculator({ brandId, brandName }: { brandId: string; brandN
       return;
     }
 
+    const usesSeasonal = mode === "seasonal";
     const usesServices = mode === "services" || (mode === "plan" && planGoal === "messages");
     const activeResult = usesServices ? serviceResult : productResult;
-    const activeTicket = usesServices ? services.price : products.ticket;
-    const activeMargin = usesServices ? services.targetNetMargin : products.targetNetMargin;
+    const activeTicket = usesSeasonal ? seasonal.seasonalTicket : usesServices ? services.price : products.ticket;
+    const activeMargin = usesSeasonal && activeTicket > 0
+      ? (seasonalResult.marginGrossPerSale / activeTicket) * 100
+      : usesServices ? services.targetNetMargin : products.targetNetMargin;
 
     const { error } = await supabase.from("brand_economics").upsert({
       brand_id: brandId,
       owner_id: user.id,
       ticket: activeTicket,
-      variable_cost: activeResult.variableCost,
-      contribution: activeResult.contribution,
-      contribution_margin: activeResult.contributionMargin,
+      variable_cost: usesSeasonal ? seasonal.variableCosts + seasonal.discountPerSale : activeResult.variableCost,
+      contribution: usesSeasonal ? seasonalResult.marginGrossPerSale : activeResult.contribution,
+      contribution_margin: usesSeasonal && activeTicket > 0 ? seasonalResult.marginGrossPerSale / activeTicket : activeResult.contributionMargin,
       target_net_margin: activeMargin,
-      target_cpa: activeResult.targetCpa,
-      break_even_roas: activeResult.breakEvenRoas,
-      target_roas: activeResult.targetRoas,
-      max_cpl: activeResult.maxCpl,
+      target_cpa: usesSeasonal ? seasonalResult.targetCpa : activeResult.targetCpa,
+      break_even_roas: usesSeasonal && seasonalResult.marginGrossPerSale > 0 ? activeTicket / seasonalResult.marginGrossPerSale : activeResult.breakEvenRoas,
+      target_roas: usesSeasonal && seasonalResult.targetCpa > 0 ? activeTicket / seasonalResult.targetCpa : activeResult.targetRoas,
+      max_cpl: usesSeasonal ? 0 : activeResult.maxCpl,
       assumptions: {
-        calculatorVersion: 2,
+        calculatorVersion: 3,
         mode,
         products,
         services,
+        seasonal,
         plan: { goal: planGoal, quantity: planQuantity },
       },
     });
@@ -637,6 +683,76 @@ export function MetaCalculator({ brandId, brandName }: { brandId: string; brandN
                   ? `Con tu cierre actual de ${services.closeRatePerTen} de cada 10 citas, el problema principal no es el anuncio: conviene mejorar precio u oferta de cierre.`
                   : "Conviene revisar el precio, el costo de entrega o cuántas conversaciones llegan a cita."}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {mode === "seasonal" && (
+        <div className="calculator-mode-content seasonal-mode-content">
+          <div className="calculator-mode-heading">
+            <span>Campaña de temporada · día 6</span>
+            <h3>Llena los datos como en tu hoja y revisa si el presupuesto alcanza.</h3>
+            <p>Ideal para Buen Fin, San Valentín, Hot Sale, lanzamientos o promos donde ya tienes una meta, días activos y descuento definido.</p>
+          </div>
+
+          <div className="seasonal-calculator-board">
+            <section className="seasonal-input-card">
+              <header>
+                <span>Datos que tú llenas</span>
+                <b>Campaña</b>
+              </header>
+              <label className="seasonal-text-field">
+                Producto o promoción de temporada
+                <input
+                  value={seasonal.productOrPromo}
+                  maxLength={120}
+                  onChange={(event) => updateSeasonal("productOrPromo", event.target.value)}
+                  placeholder="Ej. Kit San Valentín, descuento 15% por Buen Fin"
+                />
+              </label>
+              <div className="calc-grid cost-field-grid seasonal-field-grid">
+                <NumberField label="Meta total de facturación" value={seasonal.revenueGoal} onChange={(value) => updateSeasonal("revenueGoal", value)} prefix="$" help="Cuánto quieres vender en toda la campaña." min={1} />
+                <NumberField label="Duración de la campaña" value={seasonal.durationDays} onChange={(value) => updateSeasonal("durationDays", value)} suffix="días" help="Cuántos días reales estará activa." min={1} />
+                <NumberField label="Presupuesto disponible" value={seasonal.availableBudget} onChange={(value) => updateSeasonal("availableBudget", value)} prefix="$" help="Lo que sí estás dispuesta a invertir." />
+                <NumberField label="Descuento por venta" value={seasonal.discountPerSale} onChange={(value) => updateSeasonal("discountPerSale", value)} prefix="$" help="Si no hay descuento, pon 0." />
+                <NumberField label="Ticket promedio de temporada" value={seasonal.seasonalTicket} onChange={(value) => updateSeasonal("seasonalTicket", value)} prefix="$" help="Precio real considerando descuento o promoción." min={1} />
+                <NumberField label="Costos variables adicionales" value={seasonal.variableCosts} onChange={(value) => updateSeasonal("variableCosts", value)} prefix="$" help="Empaque, regalo, costo extra de producción." />
+                <NumberField label="Utilidad mínima por venta" value={seasonal.minimumProfitPerSale} onChange={(value) => updateSeasonal("minimumProfitPerSale", value)} prefix="$" help="Lo que quieres que quede después de ads y costos." />
+                <NumberField label="Aportación a costos fijos" value={seasonal.fixedCostContributionPerSale} onChange={(value) => updateSeasonal("fixedCostContributionPerSale", value)} prefix="$" help="Porción por venta para cubrir operación fija." />
+              </div>
+            </section>
+
+            <section className="seasonal-results-card">
+              <header>
+                <span>Resultados automáticos</span>
+                <b>Lectura financiera</b>
+              </header>
+              <div className="seasonal-result-table">
+                {[
+                  ["Margen bruto de temporada por venta", money.format(seasonalResult.marginGrossPerSale), "Ticket de temporada - descuento - costos variables"],
+                  ["Aportación a costos fijos por venta", money.format(seasonalResult.fixedCostContributionPerSale), "El monto que decidiste reservar por venta"],
+                  ["CPA objetivo seguro de temporada", money.format(seasonalResult.targetCpa), "Margen bruto - aportación CF - utilidad mínima"],
+                  ["Ventas necesarias totales", number.format(Math.ceil(seasonalResult.requiredSalesTotal)), "Meta total ÷ ticket promedio de temporada"],
+                  ["Ventas necesarias por día", number.format(seasonalResult.requiredSalesPerDay), "Ventas necesarias totales ÷ días de campaña"],
+                  ["Presupuesto total necesario", money.format(seasonalResult.requiredBudgetTotal), "Ventas necesarias × CPA objetivo seguro"],
+                  ["Presupuesto diario necesario", money.format(seasonalResult.requiredBudgetDaily), "Presupuesto total necesario ÷ días de campaña"],
+                  ["Utilidad estimada con presupuesto disponible", money.format(seasonalResult.estimatedProfit), "Ventas posibles × margen bruto - presupuesto"],
+                ].map(([label, value, formula]) => (
+                  <article key={label}>
+                    <b>{label}</b>
+                    <strong>{value}</strong>
+                    <small>{formula}</small>
+                  </article>
+                ))}
+              </div>
+              <div className={`calculator-signal ${seasonalResult.budgetCoverage >= 0.6 ? "positive" : "warning"}`}>
+                <CalendarCheck2 size={21} />
+                <div>
+                  <b>Diagnóstico de temporada</b>
+                  <p>{seasonalResult.diagnosis}</p>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       )}
