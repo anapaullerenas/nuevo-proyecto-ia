@@ -123,7 +123,7 @@ export default async function CuentaPage() {
           <section className="usage-table account-cost-table">
             <header>
               <b>Costos por acción</b>
-              <small>El valor en dólares depende del paquete de recarga elegido.</small>
+              <small>Los créditos indican el saldo que usa cada acción dentro de la plataforma.</small>
             </header>
             <div>
               {CREDIT_CATALOG.map((item) => (

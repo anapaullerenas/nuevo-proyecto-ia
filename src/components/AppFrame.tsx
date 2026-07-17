@@ -34,6 +34,7 @@ export function AppFrame({
     <main className="app-page">
       <header className="app-topbar">
         <BrandMark href="/dashboard" subtitle={brand.name} />
+        <BrandSwitcher activeBrandId={brand.id} brandList={brandList} />
         <nav aria-label="Navegacion principal">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href} className={active === item.href ? "is-active" : ""}>
@@ -41,7 +42,6 @@ export function AppFrame({
             </Link>
           ))}
         </nav>
-        <BrandSwitcher activeBrandId={brand.id} brandList={brandList} />
         <Link href="/cuenta" className="credit-pill">
           <WalletCards size={16} />
           <span>{unlimited ? "Créditos ilimitados" : `${credits} créditos`}</span>

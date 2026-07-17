@@ -7,9 +7,6 @@ import {
   CREDIT_CATALOG,
   INITIAL_INCLUDED_CREDITS,
   TRIAL_REAL_COST_LIMIT_USD,
-  creditPriceUsd,
-  estimatedGrossMargin,
-  estimatedGrossProfitUsd,
 } from "@/lib/credit-catalog";
 
 export const dynamic = "force-dynamic";
@@ -303,8 +300,6 @@ export default async function AdminPage() {
             0,
           ) / rows.length
         : 0;
-      const observedCost = average || catalog.estimatedCostUsd;
-      const price = creditPriceUsd(catalog.credits);
       return {
         module: catalog.module,
         label: catalog.label,
@@ -312,10 +307,6 @@ export default async function AdminPage() {
         credits: catalog.credits,
         estimated: catalog.estimatedCostUsd,
         average,
-        price,
-        profit: average ? Number((price - average).toFixed(3)) : estimatedGrossProfitUsd(catalog.credits, catalog.estimatedCostUsd),
-        marginPercent: average && price > 0 ? Math.round(((price - average) / price) * 100) : estimatedGrossMargin(catalog.credits, catalog.estimatedCostUsd),
-        margin: observedCost > 0 ? price / observedCost : 0,
       };
     }),
     trial: {

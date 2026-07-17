@@ -136,10 +136,6 @@ export type AdminDashboardData = {
     credits: number;
     estimated: number;
     average: number;
-    price: number;
-    profit: number;
-    marginPercent: number;
-    margin: number;
   }>;
   trial: {
     includedCredits: number;
@@ -652,8 +648,7 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
             <h2>Modelo financiero por acción</h2>
           </div>
           <small>
-            Precio para usuaria vs. costo estimado, costo real promedio y
-            ganancia bruta.
+            Créditos cobrados vs. costo estimado y costo real promedio de API.
           </small>
         </header>
         <div className="admin-table-wrap">
@@ -663,11 +658,8 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
                 <th>Acción</th>
                 <th>Qué cobra</th>
                 <th>Créditos</th>
-                <th>Paga usuaria</th>
                 <th>Costo API estimado</th>
                 <th>Costo real prom.</th>
-                <th>Ganancia bruta</th>
-                <th>Margen bruto</th>
               </tr>
             </thead>
             <tbody>
@@ -679,11 +671,8 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
                   </td>
                   <td>{p.description}</td>
                   <td>{p.credits}</td>
-                  <td>${p.price.toFixed(2)}</td>
                   <td>${p.estimated.toFixed(3)}</td>
                   <td>{p.average ? `$${p.average.toFixed(3)}` : "Sin uso aún"}</td>
-                  <td>${p.profit.toFixed(3)}</td>
-                  <td>{p.marginPercent}%</td>
                 </tr>
               ))}
             </tbody>
