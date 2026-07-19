@@ -3740,11 +3740,20 @@ svg {
   margin-top: 12px;
   border: 0;
   border-radius: 999px;
-  color: #632e59;
-  background: rgba(255, 255, 255, .7);
+  color: white;
+  background: #632e59;
   font-weight: 900;
-  opacity: .7;
+  cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease;
 }
+
+.credit-packages button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 9px 20px rgba(99, 46, 89, .18);
+}
+
+.credit-packages button:disabled { cursor: wait; opacity: .55; }
+.stripe-assurance { margin:16px 0 0;border:1px solid rgba(99,46,89,.12);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:9px;color:rgba(99,46,89,.72);background:#fff;font-size:12px;line-height:1.45 }.stripe-assurance svg{width:18px;flex:0 0 auto;color:#247348}.recharge-status{border:1px solid #e7ca78;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:9px;color:#7b5a17;background:#fff8dc}.recharge-status svg{width:18px;flex:0 0 auto}.recharge-status.success{border-color:#9bc9aa;color:#247348;background:#effaf2}.recharge-status.error{border-color:#e3a5aa;color:#9a363d;background:#fff0f1}
 
 .admin-page {
   min-height: 100vh;

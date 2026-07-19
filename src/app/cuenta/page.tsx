@@ -16,24 +16,14 @@ export const dynamic = "force-dynamic";
 export default async function CuentaPage() {
   const workspace = await getWorkspace();
   if (!workspace) return <SetupState />;
-  const [{ data: ledger }, { data: pendingRecharge }] = await Promise.all([
-    workspace.supabase
+  const { data: ledger } = await workspace.supabase
       .from("credit_ledger")
       .select(
         "id,amount,reason,metadata,created_at,balance_after,allowance_remaining_after",
       )
       .eq("user_id", workspace.user.id)
       .order("created_at", { ascending: false })
-      .limit(100),
-    workspace.supabase
-      .from("recharge_requests")
-      .select("folio,status,created_at")
-      .eq("user_id", workspace.user.id)
-      .eq("status", "pendiente")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+      .limit(100);
   const wallet = workspace.wallet;
   const allowance = Number(wallet?.monthly_allowance || INITIAL_INCLUDED_CREDITS);
   const allowanceRemaining = monthlyRemaining(wallet, workspace.user.created_at);
@@ -89,8 +79,8 @@ export default async function CuentaPage() {
               <WalletCards />
               <b>Recargas</b>
               <p>
-                Las recargas compradas no expiran y se confirman manualmente por
-                WhatsApp.
+                Las recargas compradas no expiran y se acreditan automáticamente
+                después del pago con Stripe.
               </p>
             </div>
           </div>
@@ -119,7 +109,7 @@ export default async function CuentaPage() {
               </small>
             </section>
           )}
-          <RechargePackages pendingFolio={pendingRecharge?.folio} />
+          <RechargePackages />
           <section className="usage-table account-cost-table">
             <header>
               <b>Costos por acción</b>
