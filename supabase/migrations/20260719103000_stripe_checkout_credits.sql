@@ -1,7 +1,7 @@
 create table if not exists public.stripe_checkout_sessions (
   id text primary key check (id like 'cs_%'),
   user_id uuid not null references auth.users(id) on delete cascade,
-  package_id text not null check (package_id in ('impulso', 'crecimiento', 'estudio')),
+  plan_key text not null check (plan_key in ('impulso', 'crecimiento', 'estudio')),
   price_id text not null check (price_id like 'price_%'),
   credits integer not null check (credits > 0),
   amount_total bigint not null check (amount_total > 0),
@@ -77,7 +77,7 @@ begin
       'stripe_event_id',p_stripe_event_id,
       'stripe_checkout_session_id',p_checkout_session_id,
       'stripe_price_id',p_price_id,
-      'package',checkout_row.package_id,
+      'package',checkout_row.plan_key,
       'amount_usd',p_amount_total::numeric / 100,
       'currency','usd',
       'counts_as_revenue',true,

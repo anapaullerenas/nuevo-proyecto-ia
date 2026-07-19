@@ -9,7 +9,7 @@ const EXPECTED = {
   projectId: "prj_djSrAgLAoFgYPOIvwvFc8vKxkndB",
   orgId: "team_e8Qmin1h2SiXcNaAnlyl8Ei0",
   projectName: "nuevo-proyecto-ia",
-  supabaseRef: "rjjrwthkyeuxzecomkga",
+  supabaseRef: "fulnksqxioiqgtfamfon",
 };
 
 const production = process.argv.includes("--production");

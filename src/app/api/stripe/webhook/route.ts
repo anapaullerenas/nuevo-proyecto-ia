@@ -41,7 +41,7 @@ async function creditPaidSession(event: Stripe.Event, session: Stripe.Checkout.S
   const priceId = lineItems.data[0].price?.id;
   if (!priceId) throw new Error("La sesión no contiene un Price ID.");
   const pack = packageForStripePrice(priceId);
-  if (!pack || pack.id !== session.metadata?.package_id) {
+  if (!pack || pack.id !== session.metadata?.plan_key) {
     throw new Error("El paquete pagado no coincide con el catálogo permitido.");
   }
   if (session.amount_total !== pack.amountCents) {

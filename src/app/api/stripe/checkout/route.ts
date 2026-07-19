@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       client_reference_id: user.id,
       customer_email: user.email || undefined,
       line_items: [{ price: pack.priceId, quantity: 1 }],
-      metadata: { user_id: user.id, package_id: pack.id },
+      metadata: { user_id: user.id, plan_key: pack.id },
       success_url: `${appUrl}/cuenta?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/cuenta?payment=cancelled`,
       locale: "es",
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     const { error } = await admin.from("stripe_checkout_sessions").upsert({
       id: checkout.id,
       user_id: user.id,
-      package_id: pack.id,
+      plan_key: pack.id,
       price_id: pack.priceId,
       credits: pack.credits,
       amount_total: pack.amountCents,
