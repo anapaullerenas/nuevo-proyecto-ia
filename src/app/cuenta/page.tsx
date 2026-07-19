@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { CreditCard, LogOut, ShieldCheck, WalletCards } from "lucide-react";
 import { AppFrame, SetupState } from "@/components/AppFrame";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getWorkspace } from "@/lib/workspace";
+import { getWorkspace, monthlyRemaining } from "@/lib/workspace";
 import { RechargePackages } from "@/components/RechargePackages";
 import {
   CREDIT_CATALOG,
@@ -36,8 +36,8 @@ export default async function CuentaPage() {
   ]);
   const wallet = workspace.wallet;
   const allowance = Number(wallet?.monthly_allowance || INITIAL_INCLUDED_CREDITS);
-  const allowanceUsed = Number(wallet?.allowance_used || 0);
-  const allowanceRemaining = Math.max(0, allowance - allowanceUsed);
+  const allowanceRemaining = monthlyRemaining(wallet, workspace.user.created_at);
+  const allowanceUsed = Math.max(0, allowance - allowanceRemaining);
 
   async function signOut() {
     "use server";

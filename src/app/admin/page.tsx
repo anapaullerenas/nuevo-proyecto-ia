@@ -3,6 +3,7 @@ import { BrandMark } from "@/components/BrandIdentity";
 import { AdminConsole, AdminDashboardData } from "@/components/AdminConsole";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { monthlyRemaining } from "@/lib/workspace";
 import {
   CREDIT_CATALOG,
   INITIAL_INCLUDED_CREDITS,
@@ -79,7 +80,7 @@ export default async function AdminPage() {
     admin
       .from("credit_wallets")
       .select(
-        "user_id,balance,monthly_allowance,allowance_used,lifetime_spent",
+        "user_id,balance,monthly_allowance,allowance_used,allowance_reset_at,lifetime_spent",
       ),
     admin
       .from("credit_ledger")
@@ -171,11 +172,7 @@ export default async function AdminPage() {
       manualAccess: manual?.status || null,
       balance:
         Number(wallet?.balance || 0) +
-        Math.max(
-          0,
-          Number(wallet?.monthly_allowance || INITIAL_INCLUDED_CREDITS) -
-            Number(wallet?.allowance_used || 0),
-        ),
+        monthlyRemaining(wallet ?? null, authUser?.created_at || profile?.created_at || manual?.created_at),
       spent: Number(wallet?.lifetime_spent || 0),
       apiCost,
       revenue,

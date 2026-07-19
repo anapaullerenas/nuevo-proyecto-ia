@@ -65,15 +65,36 @@ export async function getWorkspace() {
     user,
     brandList,
     activeBrand,
-    walletBalance: (wallet?.balance ?? 0) + monthlyRemaining(wallet),
+    walletBalance: (wallet?.balance ?? 0) + monthlyRemaining(wallet, user.created_at),
     wallet,
     isUnlimited,
   };
 }
 
-function monthlyRemaining(wallet: { monthly_allowance?: number | null; allowance_used?: number | null; allowance_reset_at?: string | null } | null) {
+export function monthlyRemaining(
+  wallet: { monthly_allowance?: number | null; allowance_used?: number | null; allowance_reset_at?: string | null } | null,
+  accountCreatedAt?: string | null,
+) {
   if (!wallet) return 0;
-  return Math.max(0, Number(wallet.monthly_allowance || INITIAL_INCLUDED_CREDITS) - Number(wallet.allowance_used || 0));
+  const allowance = Number(wallet.monthly_allowance || INITIAL_INCLUDED_CREDITS);
+  const currentPeriodStart = creditPeriodStart(accountCreatedAt);
+  const walletPeriodStart = wallet.allowance_reset_at ? new Date(`${wallet.allowance_reset_at}T00:00:00Z`) : null;
+  if (!walletPeriodStart || walletPeriodStart < currentPeriodStart) return allowance;
+  return Math.max(0, allowance - Number(wallet.allowance_used || 0));
+}
+
+export function creditPeriodStart(accountCreatedAt?: string | null) {
+  const now = new Date();
+  const anchor = accountCreatedAt ? new Date(accountCreatedAt) : now;
+  if (Number.isNaN(anchor.getTime())) {
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  }
+  let months =
+    (now.getUTCFullYear() - anchor.getUTCFullYear()) * 12 +
+    (now.getUTCMonth() - anchor.getUTCMonth());
+  if (now.getUTCDate() < anchor.getUTCDate()) months -= 1;
+  months = Math.max(0, months);
+  return new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + months, anchor.getUTCDate()));
 }
 
 export function labelContentOwner(value: string | null) {

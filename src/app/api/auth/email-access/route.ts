@@ -204,6 +204,7 @@ async function ensureManualWorkspace({
       balance: 0,
       monthly_allowance: 600,
       allowance_used: 0,
+      allowance_reset_at: new Date().toISOString().slice(0, 10),
     },
     { onConflict: "user_id", ignoreDuplicates: true },
   );

@@ -550,9 +550,9 @@ export function StaticStudio({
                   value={intent}
                   onChange={(event) => setIntent(event.target.value)}
                   placeholder="Cuéntame qué quieres comunicar o provocar con esta imagen"
-                  maxLength={320}
+                  maxLength={5000}
                 />
-                <small>{intent.length}/320</small>
+                <small>{intent.length}/5000</small>
               </label>
 
               <section className="creative-subject-picker">
