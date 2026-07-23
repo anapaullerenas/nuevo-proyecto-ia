@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import sharp from "sharp";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   chargeCredits,
@@ -8,6 +9,7 @@ import {
 } from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 import { CURATED_STATIC_FORMATS, getCuratedStaticFormat } from "@/lib/static-format-catalog";
+import { parseStructuredJson } from "@/lib/meta-ads";
 
 export const maxDuration = 120;
 
@@ -110,10 +112,14 @@ export async function POST(request: NextRequest) {
     if (downloadError || !blob)
       throw new Error(downloadError?.message || "No se pudo leer la imagen.");
 
-    const encoded = Buffer.from(await blob.arrayBuffer()).toString("base64");
-    const mime = asset.mime_type?.startsWith("image/")
-      ? asset.mime_type
-      : "image/png";
+    const source = Buffer.from(await blob.arrayBuffer());
+    const optimized = await sharp(source)
+      .rotate()
+      .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 82, mozjpeg: true })
+      .toBuffer();
+    const encoded = optimized.toString("base64");
+    const mime = "image/jpeg";
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -147,12 +153,23 @@ export async function POST(request: NextRequest) {
       }),
     });
 
-    if (!response.ok) throw new Error((await response.text()).slice(0, 220));
-    const data = await response.json();
+    const responseText = await response.text();
+    if (!response.ok)
+      throw new Error(
+        `El proveedor visual respondió ${response.status}: ${responseText.slice(0, 160)}`,
+      );
+    let data: {
+      choices?: Array<{ message?: { content?: string | Record<string, unknown> } }>;
+    };
+    try {
+      data = JSON.parse(responseText) as typeof data;
+    } catch {
+      throw new Error("El proveedor visual devolvió una respuesta incompleta.");
+    }
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error("La IA no devolvió el análisis visual.");
 
-    const rawAnalysis = JSON.parse(content) as Record<string, unknown>;
+    const rawAnalysis = parseStructuredJson(content) as Record<string, unknown>;
     const matched = getCuratedStaticFormat(String(rawAnalysis.matched_archetype_id || ""));
     const confidence = Math.max(0, Math.min(1, Number(rawAnalysis.match_confidence) || 0));
     const analysis = {

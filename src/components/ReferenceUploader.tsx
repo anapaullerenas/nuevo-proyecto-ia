@@ -3,7 +3,14 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { ChangeEvent, useState } from "react";
-import { Bookmark, Check, ImageIcon, Loader2, UploadCloud } from "lucide-react";
+import {
+  Bookmark,
+  Check,
+  ImageIcon,
+  Loader2,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export type StyleReference = {
@@ -53,6 +60,22 @@ export function ReferenceUploader({
     })),
   );
   const [isUploading, setIsUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
+  const [notice, setNotice] = useState("");
+
+  async function readResponse(response: Response) {
+    const text = await response.text();
+    if (!text.trim()) return {};
+    try {
+      return JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      throw new Error(
+        response.ok
+          ? "La respuesta llegó incompleta."
+          : "El servidor no pudo completar la solicitud.",
+      );
+    }
+  }
 
   async function saveAsStyle(item: ReferenceItem) {
     const response = await fetch("/api/static-reference-style", {
@@ -68,6 +91,45 @@ export function ReferenceUploader({
 
   function toggleReference(id: string) {
     onSelectionChange(selectedIds.includes(id) ? selectedIds.filter((item) => item !== id) : [...selectedIds, id].slice(-10));
+  }
+
+  async function deleteReference(item: ReferenceItem) {
+    if (
+      !window.confirm(
+        `¿Borrar “${item.file_name}”? Esta referencia dejará de aparecer en el kit de marca.`,
+      )
+    )
+      return;
+    setDeletingId(item.id);
+    setNotice("");
+    try {
+      const response = await fetch(`/api/brand-references/${item.id}`, {
+        method: "DELETE",
+      });
+      const data = await readResponse(response);
+      if (!response.ok)
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "No se pudo borrar la referencia.",
+        );
+      setItems((current) => {
+        const next = current.filter((reference) => reference.id !== item.id);
+        onItemsChange?.(next.map((reference) => reference.id));
+        return next;
+      });
+      if (selectedIds.includes(item.id))
+        onSelectionChange(selectedIds.filter((id) => id !== item.id));
+      setNotice("Referencia eliminada.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "No se pudo borrar la referencia.",
+      );
+    } finally {
+      setDeletingId("");
+    }
   }
 
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
@@ -138,21 +200,44 @@ export function ReferenceUploader({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ assetId: saved.id }),
       });
-      const analysis = await analysisResponse.json();
+      let analysis: Record<string, unknown> = {};
+      try {
+        analysis = await readResponse(analysisResponse);
+      } catch (error) {
+        analysis = {
+          error:
+            error instanceof Error
+              ? error.message
+              : "No se pudo leer la respuesta.",
+        };
+      }
+      const analysisPayload =
+        analysis.analysis && typeof analysis.analysis === "object"
+          ? (analysis.analysis as NonNullable<
+              StyleReference["metadata"]
+            >["analysis"])
+          : undefined;
+      const analysisSucceeded = analysisResponse.ok && Boolean(analysisPayload);
       setItems((current) =>
         current.map((reference) =>
           reference.id === saved.id
             ? {
                 ...reference,
-                status: analysisResponse.ok ? "lista" : "error",
-                metadata: analysisResponse.ok
-                  ? { ...reference.metadata, analysis_status: "ready", analysis: analysis.analysis }
+                status: analysisSucceeded ? "lista" : "error",
+                metadata: analysisSucceeded
+                  ? {
+                      ...reference.metadata,
+                      analysis_status: "ready",
+                      analysis: analysisPayload,
+                    }
                   : reference.metadata,
-                message: analysisResponse.ok
-                  ? analysis.analysis?.matched_archetype_label
-                    ? `Coincide con ${analysis.analysis.matched_archetype_label}`
+                message: analysisSucceeded
+                  ? analysisPayload?.matched_archetype_label
+                    ? `Coincide con ${analysisPayload.matched_archetype_label}`
                     : "Receta propia detectada"
-                  : analysis.error || "No se pudo analizar",
+                  : typeof analysis.error === "string"
+                    ? analysis.error
+                    : "No se pudo analizar",
               }
             : reference,
         ),
@@ -190,14 +275,25 @@ export function ReferenceUploader({
                 <small>{item.message}</small>
               </button>
               {item.status === "lista" && (
-                <button className="save-reference-style" type="button" onClick={() => saveAsStyle(item)} disabled={item.metadata?.saved_as_style}>
-                  <Bookmark size={13} /> {item.metadata?.saved_as_style ? "Guardado" : "Guardar estilo"}
+                <div className="reference-item-actions">
+                  <button className="save-reference-style" type="button" onClick={() => saveAsStyle(item)} disabled={item.metadata?.saved_as_style || deletingId === item.id}>
+                    <Bookmark size={13} /> {item.metadata?.saved_as_style ? "Guardado" : "Guardar estilo"}
+                  </button>
+                  <button className="delete-reference" type="button" onClick={() => deleteReference(item)} disabled={deletingId === item.id} aria-label={`Borrar ${item.file_name}`}>
+                    {deletingId === item.id ? <Loader2 className="spin" size={13} /> : <Trash2 size={13} />} Borrar
+                  </button>
+                </div>
+              )}
+              {item.status !== "lista" && (
+                <button className="delete-reference full" type="button" onClick={() => deleteReference(item)} disabled={deletingId === item.id}>
+                  {deletingId === item.id ? <Loader2 className="spin" size={13} /> : <Trash2 size={13} />} Borrar
                 </button>
               )}
             </div>
           ))}
         </div>
       )}
+      {notice && <p className="reference-notice" aria-live="polite">{notice}</p>}
     </div>
   );
 }

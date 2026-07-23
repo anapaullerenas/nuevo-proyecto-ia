@@ -8,6 +8,8 @@ import {
   CalendarDays,
   Check,
   ClipboardCopy,
+  Download,
+  ExternalLink,
   FileSpreadsheet,
   Loader2,
   Plus,
@@ -56,6 +58,24 @@ export type MetaAnalysis = {
   actions?: string[];
   next_briefs?: Array<{ title?: string; angle?: string; evidence?: string }>;
   data_quality?: string[];
+  dashboard_html?: string;
+  campaign_type?: string;
+  primary_kpi?: string;
+  currency?: string;
+  consolidated_creatives?: number;
+  ranking?: Array<{
+    name: string;
+    mps: number;
+    decision: "GANADOR" | "APAGAR";
+    performance: string;
+    spend: string;
+    results: string;
+    cost_per_result: string;
+    ctr: string;
+    frequency: string;
+    roas: string;
+    evidence: string;
+  }>;
 };
 
 export type MetaHistoryItem = {
@@ -89,6 +109,17 @@ function verdictFromDecision(decision = ""): CreativeVerdict {
 }
 
 function normalizeRanking(analysis: MetaAnalysis): RankedCreative[] {
+  if (analysis.ranking?.length) {
+    return analysis.ranking.map((item) => ({
+      name: item.name,
+      roas: item.roas,
+      sales: item.results,
+      spend: item.spend,
+      verdict: item.decision === "GANADOR" ? "winner" : "poor",
+      decision: item.decision,
+      reason: `${item.performance} · MPS ${item.mps}/100. ${item.evidence}`,
+    }));
+  }
   if (analysis.creative_ranking?.length) return analysis.creative_ranking;
   return (analysis.winners || []).map((item) => ({
     name: item.name || "Creativo sin nombre",
@@ -99,6 +130,20 @@ function normalizeRanking(analysis: MetaAnalysis): RankedCreative[] {
     decision: item.decision || "Revisar",
     reason: item.reason || item.metrics || "Revisa el volumen antes de tomar una decisión.",
   }));
+}
+
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
+  if (!text.trim()) return {};
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error(
+      response.ok
+        ? "La respuesta del análisis llegó incompleta."
+        : "El servidor no pudo completar el análisis en este momento.",
+    );
+  }
 }
 
 function formatDate(value?: string) {
@@ -198,14 +243,19 @@ export function MetaImportUploader({ brandId, initialHistory }: { brandId: strin
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ importId: item.importId }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo analizar el export.");
+      const data = await readJsonResponse(response);
+      if (!response.ok)
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "No se pudo analizar el export.",
+        );
 
       const saved: MetaHistoryItem = {
         id: item.importId,
         fileName: item.name,
         createdAt: new Date().toISOString(),
-        analysis: data.analysis,
+        analysis: data.analysis as MetaAnalysis,
       };
       setHistory((current) => [saved, ...current.filter((entry) => entry.id !== saved.id)]);
       setSelectedId(saved.id);
@@ -270,6 +320,8 @@ export function MetaImportUploader({ brandId, initialHistory }: { brandId: strin
 function MetaAnalysisDashboard({ entry }: { entry: MetaHistoryItem }) {
   const analysis = entry.analysis;
   const ranking = useMemo(() => normalizeRanking(analysis), [analysis]);
+  if (analysis.dashboard_html)
+    return <MetaHtmlDashboard entry={entry} html={analysis.dashboard_html} />;
   const winners = ranking.filter((item) => item.verdict === "winner");
   const poor = ranking.filter((item) => item.verdict === "poor");
   const totals = analysis.totals || {};
@@ -329,6 +381,82 @@ function MetaAnalysisDashboard({ entry }: { entry: MetaHistoryItem }) {
 
       {(analysis.data_quality || []).length > 0 && <aside className="data-quality-note"><AlertTriangle size={16} /><div><b>Calidad de datos</b><p>{analysis.data_quality?.join(" · ")}</p></div></aside>}
     </section>
+  );
+}
+
+function MetaHtmlDashboard({
+  entry,
+  html,
+}: {
+  entry: MetaHistoryItem;
+  html: string;
+}) {
+  function openHtml(download = false) {
+    const url = URL.createObjectURL(
+      new Blob([html], { type: "text/html;charset=utf-8" }),
+    );
+    if (download) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `dashboard-meta-${safeFileName(entry.fileName)}.html`;
+      link.click();
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
+  return (
+    <section className="meta-creative-results meta-html-result">
+      <header className="meta-creative-head">
+        <div>
+          <span className="eyebrow">Dashboard Ejecutivo · análisis guardado</span>
+          <h2>Análisis completo de Meta Ads</h2>
+          <p>
+            <CalendarDays size={15} /> Periodo analizado:{" "}
+            <b>{periodLabel(entry)}</b>
+          </p>
+        </div>
+        <div className="meta-html-actions">
+          <button
+            className="secondary-action"
+            type="button"
+            onClick={() => openHtml(false)}
+          >
+            <ExternalLink size={15} /> Abrir completo
+          </button>
+          <button
+            className="primary-action"
+            type="button"
+            onClick={() => openHtml(true)}
+          >
+            <Download size={15} /> Descargar HTML
+          </button>
+        </div>
+      </header>
+      <p className="meta-html-note">
+        Resumen exprés, ranking MPS, decisión Ganador/Apagar, embudo, fatiga,
+        hipótesis, recomendaciones, 8 respuestas y playbook en un solo archivo.
+      </p>
+      <iframe
+        className="meta-dashboard-frame"
+        title={`Dashboard Meta · ${entry.fileName}`}
+        sandbox=""
+        srcDoc={html}
+      />
+    </section>
+  );
+}
+
+function safeFileName(value: string) {
+  return (
+    value
+      .replace(/\.[^.]+$/, "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 70) || "reporte"
   );
 }
 

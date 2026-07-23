@@ -8,10 +8,16 @@ import {
   refundCredits,
 } from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
+import {
+  buildMetaDashboardHtml,
+  parseStructuredJson,
+  prepareMetaReport,
+  type MetaAgentAnalysis,
+  type MetaRow,
+  type PreparedMetaReport,
+} from "@/lib/meta-ads";
 
 export const maxDuration = 120;
-
-type MetaRow = Record<string, string | number | null>;
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
@@ -75,13 +81,13 @@ export async function POST(request: NextRequest) {
       brandId: metaImport.brand_id,
       provider: "openai",
       model: "gpt-4.1-mini",
-      inputTokens: 7000,
-      outputTokens: 2500,
+      inputTokens: 9000,
+      outputTokens: 6500,
       costUsd: estimateCostUsd({
         provider: "openai",
         model: "gpt-4.1-mini",
-        inputTokens: 7000,
-        outputTokens: 2500,
+        inputTokens: 9000,
+        outputTokens: 6500,
       }),
       route: "analysis",
     });
@@ -127,11 +133,16 @@ export async function POST(request: NextRequest) {
       .eq("owner_id", user.id)
       .maybeSingle();
 
-    const summary = await analyzeMetaRows(rows, brand || {});
+    const prepared = prepareMetaReport(rows);
+    const summary = await analyzeMetaRows(prepared, brand || {});
+    const dashboardHtml = buildMetaDashboardHtml(summary, prepared);
     const completedSummary = {
       ...summary,
+      dashboard_html: dashboardHtml,
       storage_path: storagePath,
       rows_analyzed: rows.length,
+      consolidated_creatives: prepared.consolidatedCreatives,
+      preparation_checks: prepared.checks,
     };
 
     const { error: updateError } = await supabase
@@ -248,23 +259,29 @@ function normalizeCell(value: unknown) {
 }
 
 async function analyzeMetaRows(
-  rows: MetaRow[],
+  prepared: PreparedMetaReport,
   brand: Record<string, unknown>,
-) {
+): Promise<MetaAgentAnalysis> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("El análisis IA aún no está activo.");
-
-  const compactRows = rows.slice(0, 300).map((row) => {
-    const entries = Object.entries(row)
-      .filter(([, value]) => value !== null && value !== "")
-      .slice(0, 24);
-    return Object.fromEntries(entries);
-  });
 
   const schema = {
     type: "object",
     additionalProperties: false,
     properties: {
+      client: { type: "string" },
+      campaign_type: {
+        type: "string",
+        enum: [
+          "Sitio Web (Compras)",
+          "WhatsApp / Mensajes",
+          "Generación de Leads",
+          "Reconocimiento / Comunidad",
+          "Campaña no identificada",
+        ],
+      },
+      primary_kpi: { type: "string" },
+      currency: { type: "string" },
       period: {
         type: "object",
         additionalProperties: false,
@@ -275,68 +292,119 @@ async function analyzeMetaRows(
         },
         required: ["start", "end", "label"],
       },
-      period_summary: { type: "string" },
-      creative_strategy_summary: { type: "string" },
-      winning_pattern: { type: "string" },
-      next_move: { type: "string" },
-      totals: {
+      express_summary: {
         type: "object",
         additionalProperties: false,
         properties: {
-          spend: { type: "string" },
-          results: { type: "string" },
-          sales: { type: "string" },
-          roas: { type: "string" },
-          cpa: { type: "string" },
+          key_sentence: { type: "string" },
+          what_worked: { type: "array", items: { type: "string" } },
+          what_failed: { type: "array", items: { type: "string" } },
+          next_week: {
+            type: "array",
+            minItems: 3,
+            maxItems: 3,
+            items: { type: "string" },
+          },
         },
-        required: ["spend", "results", "sales", "roas", "cpa"],
+        required: ["key_sentence", "what_worked", "what_failed", "next_week"],
       },
-      creative_ranking: {
+      executive_summary: { type: "string" },
+      ranking: {
         type: "array",
         items: {
           type: "object",
           additionalProperties: false,
           properties: {
             name: { type: "string" },
-            creative_id: { type: "string" },
-            roas: { type: "string" },
-            sales: { type: "string" },
+            mps: { type: "number", minimum: 0, maximum: 100 },
+            decision: { type: "string", enum: ["GANADOR", "APAGAR"] },
+            performance: { type: "string" },
             spend: { type: "string" },
-            verdict: {
-              type: "string",
-              enum: ["winner", "good", "acceptable", "poor"],
-            },
-            decision: {
-              type: "string",
-              enum: ["Escalar", "Mantener", "Mejorar", "Iterar", "Pausar"],
-            },
-            reason: { type: "string" },
+            results: { type: "string" },
+            cost_per_result: { type: "string" },
+            ctr: { type: "string" },
+            frequency: { type: "string" },
+            roas: { type: "string" },
+            evidence: { type: "string" },
           },
           required: [
             "name",
-            "creative_id",
-            "roas",
-            "sales",
-            "spend",
-            "verdict",
+            "mps",
             "decision",
-            "reason",
+            "performance",
+            "spend",
+            "results",
+            "cost_per_result",
+            "ctr",
+            "frequency",
+            "roas",
+            "evidence",
           ],
         },
       },
-      winners: {
+      top_3: {
+        type: "array",
+        maxItems: 3,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            name: { type: "string" },
+            why: { type: "string" },
+            metrics: { type: "string" },
+            next_action: { type: "string" },
+          },
+          required: ["name", "why", "metrics", "next_action"],
+        },
+      },
+      turn_off: {
         type: "array",
         items: {
           type: "object",
           additionalProperties: false,
           properties: {
             name: { type: "string" },
-            decision: { type: "string" },
             reason: { type: "string" },
-            metrics: { type: "string" },
+            evidence: { type: "string" },
           },
-          required: ["name", "decision", "reason", "metrics"],
+          required: ["name", "reason", "evidence"],
         },
+      },
+      patterns: { type: "array", items: { type: "string" } },
+      creative_hypotheses: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            hypothesis: { type: "string" },
+            evidence: { type: "string" },
+            confidence: { type: "string", enum: ["Alta", "Media", "Baja"] },
+          },
+          required: ["hypothesis", "evidence", "confidence"],
+        },
+      },
+      funnel: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          summary: { type: "string" },
+          missing_measurement: { type: "string" },
+          steps: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                name: { type: "string" },
+                value: { type: "string" },
+                rate_to_next: { type: "string" },
+              },
+              required: ["name", "value", "rate_to_next"],
+            },
+          },
+        },
+        required: ["summary", "missing_measurement", "steps"],
       },
       fatigue: {
         type: "array",
@@ -345,62 +413,90 @@ async function analyzeMetaRows(
           additionalProperties: false,
           properties: {
             name: { type: "string" },
-            signal: { type: "string" },
+            frequency: { type: "string" },
+            verdict: { type: "string" },
             action: { type: "string" },
           },
-          required: ["name", "signal", "action"],
+          required: ["name", "frequency", "verdict", "action"],
         },
       },
-      actions: { type: "array", items: { type: "string" } },
-      next_briefs: {
+      algorithm_learning: { type: "array", items: { type: "string" } },
+      recommendations: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          high: { type: "array", items: { type: "string" } },
+          medium: { type: "array", items: { type: "string" } },
+          low: { type: "array", items: { type: "string" } },
+        },
+        required: ["high", "medium", "low"],
+      },
+      required_answers: {
         type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            title: { type: "string" },
-            angle: { type: "string" },
-            evidence: { type: "string" },
-          },
-          required: ["title", "angle", "evidence"],
-        },
+        minItems: 8,
+        maxItems: 8,
+        items: { type: "string" },
       },
+      playbook: { type: "array", items: { type: "string" } },
       data_quality: { type: "array", items: { type: "string" } },
     },
     required: [
+      "client",
+      "campaign_type",
+      "primary_kpi",
+      "currency",
       "period",
-      "period_summary",
-      "creative_strategy_summary",
-      "winning_pattern",
-      "next_move",
-      "totals",
-      "creative_ranking",
-      "winners",
+      "express_summary",
+      "executive_summary",
+      "ranking",
+      "top_3",
+      "turn_off",
+      "patterns",
+      "creative_hypotheses",
+      "funnel",
       "fatigue",
-      "actions",
-      "next_briefs",
+      "algorithm_learning",
+      "recommendations",
+      "required_answers",
+      "playbook",
       "data_quality",
     ],
   };
 
-  const systemPrompt = `Eres directora de estrategia creativa con dominio de Meta Ads. Tu prioridad es explicar qué CREATIVOS funcionan y qué hacer con ellos, no escribir un reporte técnico para media buyers.
+  const systemPrompt = `Actúa como el Agente Analista de Meta Ads definido por el Documento Maestro de AnaPau iA. Aplica la metodología completa sin repetirla ni explicarla.
 
-REGLAS:
-- Usa únicamente datos presentes en el archivo. No inventes ROAS, ventas, gasto ni fechas.
-- Ordena creative_ranking del mejor al peor combinando rentabilidad, volumen y muestra.
-- winner: retorno y volumen suficientes para escalar; good: rentable y estable; acceptable: señales mixtas o muestra insuficiente; poor: gasta sin recuperar o convierte claramente peor.
-- No escales por ROAS con muestra mínima. Una frecuencia alta sólo es fatiga si coincide con deterioro.
-- Cada razón debe citar números reales del archivo, pero explicarse en lenguaje simple.
-- creative_strategy_summary, winning_pattern y next_move deben ser claros para una dueña de marca, no técnicos.
-- Si una métrica no existe, devuelve "No disponible". Si no detectas fecha, usa cadena vacía en start/end y "Periodo del export" en label.
-- Máximo 12 creativos en el ranking, 8 winners, 5 señales de fatiga, 5 acciones y 4 briefs.
-- No uses lenguaje de inseguridad corporal ni promesas médicas al sugerir próximos creativos.`;
+OBJETIVO
+Convierte el reporte en decisiones inequívocas sobre qué escalar, qué apagar y qué producir después. Interpreta como Media Buyer Senior; no te limites a describir métricas.
+
+PROCESO YA EJECUTADO POR EL SERVIDOR
+- El servidor detectó el tipo de campaña, consolidó duplicados por nombre, recalculó totales y tasas ponderadas, aplicó el filtro anti-ruido y calculó el MPS 0–100.
+- Conserva exactamente campaign_type, primary_kpi, currency, period, mps y decision recibidos. No vuelvas a inventar ni modificar esos cálculos.
+- La acción comunicada es SIEMPRE binaria: GANADOR o APAGAR. El matiz vive en performance y evidence.
+
+CRITERIOS
+- Compras web: prioriza ROAS y costo por compra. ROAS <1 pierde dinero; >3 es sólido; >10 con volumen permite escalamiento agresivo.
+- WhatsApp/Mensajes: prioriza costo por conversación. ≤25 MXN sano, 25–40 aceptable, >40 caro. Un CTR al enlace de 0.4–0.7% puede ser normal.
+- Leads: prioriza costo por lead. Reconocimiento: costo por interacción/seguidor.
+- No concluyas por CTR con menos de 200–300 impresiones ni por CPR/ROAS con 0–1 resultados. Distingue falta de datos de fracaso.
+- Fatiga: frecuencia <2 saludable, 2–3 normal, >3 probable; sólo afirma deterioro si los datos lo respaldan.
+- El algoritmo vota con el presupuesto: interpreta concentración, descarte rápido, dispersión y volumen de señal.
+- Las inferencias sobre hook, edición, mensaje, dolor, oferta o destino son HIPÓTESIS y deben identificarse como tales.
+- Si falta el cierre final de WhatsApp o cualquier paso del embudo, señálalo como medición faltante. Nunca inventes.
+
+ENTREGA MODO 1
+Produce todo lo necesario para un Dashboard Ejecutivo completo: resumen exprés, exactamente 3 acciones de la próxima semana, resumen a fondo, ranking MPS, top 3, apagar, patrones, hipótesis, embudo, fatiga, aprendizaje del algoritmo, recomendaciones por impacto, las 8 respuestas obligatorias y playbook.
+
+COMUNICACIÓN
+Usa español simple, directo y accionable. Traduce jerga: costo por venta/conversación, regreso por cada $1, clics %, cuántas veces lo vio la misma persona. Cada conclusión debe citar evidencia real. No uses inseguridad corporal ni promesas médicas.`;
 
   const messages = [
     { role: "system", content: systemPrompt },
     {
       role: "user",
-      content: `Marca: ${JSON.stringify(brand)}\nFilas disponibles: ${rows.length}\nDatos: ${JSON.stringify(compactRows)}`,
+      content: `Cliente y contexto de marca: ${JSON.stringify(brand)}
+Reporte preparado y verificado por el servidor: ${JSON.stringify(prepared)}
+
+Genera el análisis completo. Si algún dato no existe, escribe "No disponible". Respeta exactamente los cálculos y decisiones del reporte preparado.`,
     },
   ];
 
@@ -414,7 +510,7 @@ REGLAS:
       body: JSON.stringify({
         model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini",
         temperature: 0.2,
-        max_tokens: 3500,
+        max_tokens: 7000,
         response_format: {
           type: "json_schema",
           json_schema: { name: "meta_creative_analysis", strict: true, schema },
@@ -445,7 +541,23 @@ REGLAS:
       );
     }
 
-    const data = await response.json();
+    const responseText = await response.text();
+    let data: {
+      choices?: Array<{
+        message?: { content?: string | Record<string, unknown>; refusal?: string };
+      }>;
+    };
+    try {
+      data = JSON.parse(responseText) as typeof data;
+    } catch {
+      console.error(
+        "meta-analysis provider returned non-JSON",
+        response.status,
+        responseText.slice(0, 300),
+      );
+      if (attempt === 0) continue;
+      throw new Error("El proveedor devolvió una respuesta incompleta.");
+    }
     const content = data.choices?.[0]?.message?.content;
     if (!content) {
       console.error(
@@ -459,12 +571,69 @@ REGLAS:
     }
 
     try {
-      return JSON.parse(content);
+      const parsed = parseStructuredJson(content) as MetaAgentAnalysis;
+      return {
+        ...parsed,
+        client:
+          String(parsed.client || brand.name || "Cliente").trim() || "Cliente",
+        campaign_type: prepared.campaignType,
+        primary_kpi: prepared.primaryKpi,
+        currency: prepared.currency,
+        period: prepared.period,
+        ranking: prepared.creatives.map((creative) => {
+          const narrative = parsed.ranking.find(
+            (item) =>
+              item.name.trim().toLowerCase() ===
+              creative.name.trim().toLowerCase(),
+          );
+          return {
+            name: creative.name,
+            mps: creative.mps,
+            decision: creative.decision,
+            performance:
+              narrative?.performance ||
+              (creative.dataStatus === "confiable"
+                ? creative.decision === "GANADOR"
+                  ? "Resultado rentable con muestra útil"
+                  : "Gasto sin eficiencia suficiente"
+                : creative.dataStatus),
+            spend:
+              narrative?.spend ||
+              `${prepared.currency} ${creative.spend.toFixed(2)}`,
+            results:
+              narrative?.results ||
+              new Intl.NumberFormat("es-MX").format(creative.results),
+            cost_per_result:
+              narrative?.cost_per_result ||
+              (creative.costPerResult === null
+                ? "No disponible"
+                : `${prepared.currency} ${creative.costPerResult.toFixed(2)}`),
+            ctr:
+              narrative?.ctr ||
+              (creative.ctr === null
+                ? "No disponible"
+                : `${creative.ctr.toFixed(2)}%`),
+            frequency:
+              narrative?.frequency ||
+              (creative.frequency === null
+                ? "No disponible"
+                : creative.frequency.toFixed(2)),
+            roas:
+              narrative?.roas ||
+              (creative.roas === null
+                ? "No disponible"
+                : `${creative.roas.toFixed(2)}x`),
+            evidence:
+              narrative?.evidence ||
+              "Cálculo verificado directamente desde el export.",
+          };
+        }),
+      };
     } catch (error) {
       console.error(
         "meta-analysis JSON parse error",
         error,
-        content.slice(0, 500),
+        String(content).slice(0, 500),
       );
     }
   }

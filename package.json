@@ -12,6 +12,7 @@
     "supabase:link": "npx supabase link --profile ana --project-ref fulnksqxioiqgtfamfon",
     "typecheck": "tsc --noEmit",
     "test:compose": "tsx scripts/test-compose.ts",
+    "test:meta-ads": "tsx scripts/test-meta-ads.ts",
     "test:static-selector": "tsx scripts/test-static-selector.ts",
     "start": "next start",
     "lint": "eslint"
