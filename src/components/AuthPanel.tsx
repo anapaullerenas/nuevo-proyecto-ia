@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
+import { readApiResponse } from "@/lib/http/api-response";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -29,27 +30,39 @@ export function AuthPanel({ mode }: { mode: Mode }) {
     const email = String(formData.get("email") || "");
 
     if (mode === "login") {
-      const response = await fetch("/api/auth/email-access", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const payload = (await response.json()) as {
-        direct?: boolean;
-        redirectTo?: string;
-        message?: string;
-        error?: string;
-      };
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 30_000);
+      try {
+        const response = await fetch("/api/auth/email-access", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+          signal: controller.signal,
+        });
+        const payload = await readApiResponse<{
+          direct?: boolean;
+          redirectTo?: string;
+          message?: string;
+        }>(response, "No pudimos validar tu acceso.");
 
-      setIsLoading(false);
-      if (response.ok && payload.direct) {
-        router.replace(payload.redirectTo || "/dashboard");
-        router.refresh();
-        return;
+        if (payload.direct) {
+          router.replace(payload.redirectTo || "/dashboard");
+          router.refresh();
+          return;
+        }
+        setMessage(payload.message || "No pudimos validar tu acceso.");
+      } catch (error) {
+        setMessage(
+          error instanceof DOMException && error.name === "AbortError"
+            ? "La validación tardó demasiado. Intenta nuevamente; si continúa, escríbenos con el correo que usaste."
+            : error instanceof Error
+              ? error.message
+              : "No pudimos validar tu acceso.",
+        );
+      } finally {
+        window.clearTimeout(timeout);
+        setIsLoading(false);
       }
-      setMessage(
-        payload.message || payload.error || "No pudimos validar tu acceso.",
-      );
       return;
     }
 

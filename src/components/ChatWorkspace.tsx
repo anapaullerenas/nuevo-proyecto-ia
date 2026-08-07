@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { readApiResponse } from "@/lib/http/api-response";
 
 const suggestions = [
   "¿Qué creativo producirías esta semana para vender más?",
@@ -87,8 +88,7 @@ export function ChatWorkspace({
 
     try {
       const response = await fetch(`/api/chat/conversations?id=${encodeURIComponent(id)}`);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo abrir la conversación.");
+      const data = await readApiResponse<{ messages?: ChatMessage[] }>(response, "No se pudo abrir la conversación.");
       setConversationId(id);
       setMessages(data.messages || []);
     } catch (error) {
@@ -106,8 +106,7 @@ export function ChatWorkspace({
 
     try {
       const response = await fetch(`/api/chat/conversations?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo eliminar la conversación.");
+      await readApiResponse<{ ok?: boolean }>(response, "No se pudo eliminar la conversación.");
 
       const remaining = conversations.filter((conversation) => conversation.id !== id);
       setConversations(remaining);
@@ -171,11 +170,7 @@ export function ChatWorkspace({
         const formData = new FormData();
         formData.append("audio", audioBlob, "nota.webm");
         const transcription = await fetch("/api/transcribe", { method: "POST", body: formData });
-        const transcriptionData = await transcription.json();
-
-        if (!transcription.ok) {
-          throw new Error(transcriptionData.error || "No se pudo transcribir el audio.");
-        }
+        const transcriptionData = await readApiResponse<{ text?: string }>(transcription, "No se pudo transcribir el audio.");
 
         finalText = [finalText, transcriptionData.text].filter(Boolean).join("\n\nAudio transcrito: ");
       }
@@ -198,8 +193,11 @@ export function ChatWorkspace({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message: finalText, conversationId }),
       });
-      const chatData = await chatResponse.json();
-      if (!chatResponse.ok) throw new Error(chatData.error || "No se pudo generar respuesta.");
+      const chatData = await readApiResponse<{
+        messageId?: string;
+        answer: string;
+        conversation: ChatConversation;
+      }>(chatResponse, "No se pudo generar respuesta.");
 
       setMessages((current) => [
         ...current,

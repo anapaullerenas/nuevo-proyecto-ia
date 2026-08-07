@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowLeft, Check, Clipboard, FileText, Lightbulb, Loader2, Pencil, Plus, Sparkles, Trash2, WandSparkles, X } from "lucide-react";
 import { ScriptAnalysis, ScriptAnalysisMode } from "@/lib/ai/script-analysis";
+import { readApiResponse } from "@/lib/http/api-response";
 
 type ScriptAnalysisResult = { score: number; verdict: string; analysis: ScriptAnalysis };
 
@@ -52,8 +53,7 @@ export function ScriptAnalysisWorkspace({ brandId, initialHistory }: { brandId: 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ brandId, mode, format, objective, text: sourceText }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo analizar el guion.");
+      const data = await readApiResponse<{ analysis: { id: string; score: number; verdict: string; analysis: ScriptAnalysis; created_at: string } }>(response, "No se pudo analizar el guion.");
       const saved = data.analysis as { id: string; score: number; verdict: string; analysis: ScriptAnalysis; created_at: string };
       const item: ScriptHistoryItem = { id: saved.id, name: saved.analysis.title, createdAt: saved.created_at, result: { score: saved.score, verdict: saved.verdict, analysis: saved.analysis } };
       setHistory((current) => [item, ...current]);
@@ -67,21 +67,27 @@ export function ScriptAnalysisWorkspace({ brandId, initialHistory }: { brandId: 
   async function rename(entry: ScriptHistoryItem) {
     const name = draftName.trim();
     if (name.length < 2) return;
-    const response = await fetch(`/api/creative-library/${entry.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
-    const data = await response.json();
-    if (!response.ok) { setError(data.error || "No se pudo cambiar el nombre."); return; }
-    setHistory((current) => current.map((item) => item.id === entry.id ? { ...item, name: data.name, result: { ...item.result, analysis: { ...item.result.analysis, title: data.name } } } : item));
-    if (result?.id === entry.id) setResult({ ...result, name: data.name, result: { ...result.result, analysis: { ...result.result.analysis, title: data.name } } });
-    setRenamingId(null); setDraftName("");
+    try {
+      const response = await fetch(`/api/creative-library/${entry.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
+      const data = await readApiResponse<{ name: string }>(response, "No se pudo cambiar el nombre.");
+      setHistory((current) => current.map((item) => item.id === entry.id ? { ...item, name: data.name, result: { ...item.result, analysis: { ...item.result.analysis, title: data.name } } } : item));
+      if (result?.id === entry.id) setResult({ ...result, name: data.name, result: { ...result.result, analysis: { ...result.result.analysis, title: data.name } } });
+      setRenamingId(null); setDraftName("");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo cambiar el nombre.");
+    }
   }
 
   async function remove(entry: ScriptHistoryItem) {
     if (!window.confirm(`¿Borrar “${entry.name}” y su análisis?`)) return;
-    const response = await fetch(`/api/creative-library/${entry.id}`, { method: "DELETE" });
-    const data = await response.json();
-    if (!response.ok) { setError(data.error || "No se pudo borrar el análisis."); return; }
-    setHistory((current) => current.filter((item) => item.id !== entry.id));
-    if (result?.id === entry.id) setResult(null);
+    try {
+      const response = await fetch(`/api/creative-library/${entry.id}`, { method: "DELETE" });
+      await readApiResponse<{ ok?: boolean }>(response, "No se pudo borrar el análisis.");
+      setHistory((current) => current.filter((item) => item.id !== entry.id));
+      if (result?.id === entry.id) setResult(null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo borrar el análisis.");
+    }
   }
 
   if (result) return <ScriptResult entry={result} onBack={() => setResult(null)} onNew={() => { setResult(null); setSourceText(""); setObjective(""); window.scrollTo({ top: 0, behavior: "smooth" }); }} />;

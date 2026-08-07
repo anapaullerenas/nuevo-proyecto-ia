@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Check, Clipboard, FileJson, Loader2, Sparkles } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { readApiResponse } from "@/lib/http/api-response";
 import type { WorkspaceBrand } from "@/lib/workspace";
 
 type ContentOwner = "owner" | "team" | "agency" | "mixed";
@@ -160,8 +161,7 @@ export function BrandOnboardingForm({ initialBrand, submitLabel = "Guardar marca
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ source: importText }),
         });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "No pudimos extraer la información de tu marca.");
+        const data = await readApiResponse<BrandImportPayload>(response, "No pudimos extraer la información de tu marca.");
         payload = data as BrandImportPayload;
       }
 

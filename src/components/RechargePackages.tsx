@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, CreditCard, Loader2, ShieldCheck } from "lucide-react";
 import { RECHARGE_PACKAGES } from "@/lib/recharge-packages";
+import { readApiResponse } from "@/lib/http/api-response";
 
 const packages = Object.entries(RECHARGE_PACKAGES).map(([id, pack]) => ({
   id,
@@ -39,8 +40,7 @@ export function RechargePackages() {
       attempts += 1;
       try {
         const response = await fetch(`/api/stripe/status?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "No pudimos confirmar el pago.");
+        const data = await readApiResponse<{ status: string; credits?: number }>(response, "No pudimos confirmar el pago.");
         if (data.status === "paid") {
           if (cancelled) return;
           setTone("success");
@@ -81,8 +81,8 @@ export function RechargePackages() {
         },
         body: JSON.stringify({ package: packageId }),
       });
-      const data = await response.json();
-      if (!response.ok || !data.url) throw new Error(data.error || "No pudimos abrir Stripe.");
+      const data = await readApiResponse<{ url?: string }>(response, "No pudimos abrir Stripe.");
+      if (!data.url) throw new Error("No pudimos abrir Stripe.");
       window.location.assign(data.url);
     } catch (error) {
       setTone("error");

@@ -188,9 +188,9 @@ async function enforceRequestLimit(
 ) {
   const now = Date.now();
   const rules: Record<string, { max: number; ms: number }> = {
-    chat: { max: 10, ms: 60_000 },
-    image: { max: 10, ms: 86_400_000 },
-    analysis: { max: 15, ms: 604_800_000 },
+    chat: { max: 20, ms: 60_000 },
+    image: { max: 20, ms: 10 * 60_000 },
+    analysis: { max: 20, ms: 60 * 60_000 },
   };
   const rule = rules[route];
   if (!rule) return;
@@ -210,7 +210,9 @@ async function enforceRequestLimit(
   if ((count || 0) >= rule.max)
     throw new CreditError(
       "rate_limit",
-      "Llegaste al límite temporal de esta acción. Intenta nuevamente más tarde.",
+      route === "image"
+        ? "Hay demasiadas generaciones seguidas. Espera 10 minutos e intenta nuevamente; tus créditos no se descontaron."
+        : "Hay demasiadas solicitudes seguidas. Espera unos minutos e intenta nuevamente; tus créditos no se descontaron.",
     );
   const { error: insertError } = await admin
     .from("request_events")

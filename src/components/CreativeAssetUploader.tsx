@@ -13,6 +13,13 @@ import {
   MAX_PERSISTED_CREATIVE_SIZE_LABEL,
 } from "@/lib/creative-upload-limits";
 import { CREDIT_COSTS } from "@/lib/credit-catalog";
+import {
+  canInlineAudio,
+  CREATIVE_FRAME_BUDGET_BYTES,
+  MAX_TRANSCRIPTION_SOURCE_BYTES,
+  totalFrameBytes,
+} from "@/lib/creative-request-budget";
+import { readApiResponse } from "@/lib/http/api-response";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getSupabaseEnv } from "@/lib/supabase/config";
 import styles from "./CreativeAssetUploader.module.css";
@@ -20,6 +27,7 @@ import styles from "./CreativeAssetUploader.module.css";
 type UploadItem = {
   id: string;
   assetId?: string;
+  storagePath?: string | null;
   name: string;
   file?: File;
   previewUrl?: string;
@@ -215,11 +223,7 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name }),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        setLibraryNotice({ text: data.error || "No se pudo cambiar el nombre.", tone: "error" });
-        return;
-      }
+      const data = await readApiResponse<{ name: string }>(response, "No se pudo cambiar el nombre.");
       setHistory((current) => current.map((item) => item.id === entry.id ? { ...item, name: data.name } : item));
       setSelectedHistory((current) => current?.id === entry.id ? { ...current, name: data.name } : current);
       setRenamingId(null);
@@ -235,11 +239,7 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
     if (!window.confirm(`¿Borrar “${cleanFileName(entry.name)}” y su análisis? Esta acción no se puede deshacer.`)) return;
     try {
       const response = await fetch(`/api/creative-library/${entry.id}`, { method: "DELETE" });
-      const data = await response.json();
-      if (!response.ok) {
-        setLibraryNotice({ text: data.error || "No se pudo borrar el creativo.", tone: "error" });
-        return;
-      }
+      await readApiResponse<{ ok?: boolean }>(response, "No se pudo borrar el creativo.");
       setHistory((current) => current.filter((item) => item.id !== entry.id));
       if (selectedHistory?.id === entry.id) setSelectedHistory(null);
       setLibraryNotice({ text: "Creativo eliminado de la biblioteca.", tone: "success" });
@@ -381,6 +381,7 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
             ? {
                 ...item,
                 assetId: insertedAsset?.id,
+                storagePath,
                 assetType,
                 status: insertError ? "error" : "listo",
                 analysisStatus: "idle",
@@ -437,18 +438,27 @@ export function CreativeAssetUploader({ brandId, initialHistory }: { brandId: st
       const requestBody = new FormData();
       requestBody.append("assetId", item.assetId);
       requestBody.append("frames", JSON.stringify(frames));
-      if (audioEvidence) {
+      const frameBytes = totalFrameBytes(frames);
+      if (audioEvidence && canInlineAudio(audioEvidence.file.size, frameBytes)) {
         requestBody.append("audio", audioEvidence.file, audioEvidence.file.name);
         requestBody.append("audioDurationSeconds", String(audioEvidence.durationSeconds));
+      } else if (
+        audioEvidence &&
+        (!item.storagePath || (item.file?.size || 0) > MAX_TRANSCRIPTION_SOURCE_BYTES)
+      ) {
+        throw new Error(
+          "Este video necesita una versión más corta o comprimida para analizar el audio completo. No se descontaron créditos.",
+        );
       }
 
       const response = await fetch("/api/creative-analysis", {
         method: "POST",
         body: requestBody,
       });
-      const data = await response.json();
-
-      if (!response.ok) throw new Error(data.error || "No se pudo analizar el creativo.");
+      const data = await readApiResponse<{ analysis: CreativeAnalysisResult }>(
+        response,
+        "No se pudo analizar el creativo.",
+      );
 
       setItems((current) =>
         current.map((currentItem) =>
@@ -1192,24 +1202,24 @@ async function extractVideoFrames(file: File) {
       0.2,
       0.8,
       1.6,
-      2.8,
       duration * 0.15,
       duration * 0.28,
       duration * 0.42,
       duration * 0.56,
       duration * 0.7,
-      duration * 0.82,
       duration * 0.92,
       duration * 0.98,
     ];
     const times = candidates
       .map((time) => Math.min(Math.max(time, 0), Math.max(duration - 0.1, 0)))
       .filter((time, index, list) => Number.isFinite(time) && list.findIndex((candidate) => Math.abs(candidate - time) < 0.25) === index)
-      .slice(0, 12);
+      .slice(0, 8);
 
     const frames: Array<{ image: string; timestamp: number }> = [];
     for (const time of times) {
-      frames.push({ image: await captureFrame(video, time), timestamp: time });
+      const candidate = { image: await captureFrame(video, time), timestamp: time };
+      if (frames.length >= 3 && totalFrameBytes([...frames, candidate]) > CREATIVE_FRAME_BUDGET_BYTES) break;
+      frames.push(candidate);
     }
 
     return frames;
@@ -1219,7 +1229,7 @@ async function extractVideoFrames(file: File) {
 }
 
 const MAX_TRANSCRIPTION_FILE_SIZE = 24 * 1024 * 1024;
-const TRANSCRIPTION_SAMPLE_RATE = 16_000;
+const TRANSCRIPTION_SAMPLE_RATE = 12_000;
 
 async function extractVideoAudio(file: File) {
   const audioContext = new AudioContext();
@@ -1380,7 +1390,7 @@ function captureFrame(video: HTMLVideoElement, time: number) {
     video.currentTime = Math.min(time, Math.max(video.duration - 0.1, 0));
     video.onseeked = () => {
       const canvas = document.createElement("canvas");
-      const width = Math.min(video.videoWidth || 720, 960);
+      const width = Math.min(video.videoWidth || 640, 640);
       const ratio = width / (video.videoWidth || width);
       canvas.width = width;
       canvas.height = Math.max(1, Math.round((video.videoHeight || 720) * ratio));
@@ -1390,7 +1400,7 @@ function captureFrame(video: HTMLVideoElement, time: number) {
         return;
       }
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.82));
+      resolve(canvas.toDataURL("image/jpeg", 0.68));
     };
     video.onerror = () => reject(new Error("No pude extraer frames del video."));
   });

@@ -19,6 +19,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
+import { readApiResponse } from "@/lib/http/api-response";
 
 type ProviderStatus =
   | "operational"
@@ -163,12 +164,11 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
       const response = await fetch("/api/admin/provider-health", {
         cache: "no-store",
       });
-      const result = (await response.json()) as {
+      const result = await readApiResponse<{
         providers?: ProviderHealth[];
-        error?: string;
-      };
-      if (!response.ok || !result.providers)
-        throw new Error(result.error || "No pudimos comprobar los proveedores.");
+      }>(response, "No pudimos comprobar los proveedores.");
+      if (!result.providers)
+        throw new Error("No pudimos comprobar los proveedores.");
       setProviders(result.providers);
     } catch (error) {
       setProviderError(
@@ -210,10 +210,14 @@ export function AdminConsole({ data }: { data: AdminDashboardData }) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const result = await response.json();
-    setBusy("");
-    if (!response.ok) return alert(result.error);
-    window.location.reload();
+    try {
+      await readApiResponse<{ ok?: boolean }>(response, "No se pudo completar la acción administrativa.");
+      window.location.reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "No se pudo completar la acción administrativa.");
+    } finally {
+      setBusy("");
+    }
   }
   function csv() {
     const head = [

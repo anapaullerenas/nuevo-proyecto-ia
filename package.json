@@ -14,6 +14,7 @@
     "test:compose": "tsx scripts/test-compose.ts",
     "test:meta-ads": "tsx scripts/test-meta-ads.ts",
     "test:static-selector": "tsx scripts/test-static-selector.ts",
+    "test:client-resilience": "tsx scripts/test-client-resilience.ts",
     "start": "next start",
     "lint": "eslint"
   },

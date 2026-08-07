@@ -31,6 +31,7 @@ import {
   type StyleReference,
 } from "@/components/ReferenceUploader";
 import { CREDIT_COSTS } from "@/lib/credit-catalog";
+import { readApiResponse } from "@/lib/http/api-response";
 import type { BrandEvidence, StaticEvidence } from "@/lib/static-format-catalog";
 
 type BrandAsset = {
@@ -297,9 +298,11 @@ export function StaticStudio({
           referenceAssetIds: directionMode === "reference" ? selectedReferenceIds : [],
         }),
       });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "No se pudo preparar el anuncio.");
+      const data = await readApiResponse<{
+        ficha: StaticBrief;
+        creativeId: string;
+        automaticSelection?: { label: string; reason: string } | null;
+      }>(response, "No se pudo preparar el anuncio.");
       setBrief(data.ficha);
       setCreativeId(data.creativeId);
       setRemainingProposals(0);
@@ -345,9 +348,10 @@ export function StaticStudio({
           useRawStyleReferences: false,
         }),
       });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "No se pudo generar la imagen.");
+      const data = await readApiResponse<{ statics?: GeneratedStatic[] }>(
+        response,
+        "No se pudo generar la imagen.",
+      );
       const created = (data.statics || []) as GeneratedStatic[];
       setGallery((current) => [...created, ...current]);
       setSelectedCreative(created[0] || null);
@@ -383,21 +387,28 @@ export function StaticStudio({
     )
       return;
     setMessage("");
-    const response = await fetch(`/api/static-library/${item.id}`, {
-      method: "DELETE",
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok)
-      return setMessage(data.error || "No se pudo borrar la pieza.");
-    setGallery((current) =>
-      current.filter((creative) => creative.id !== item.id),
-    );
-    if (selectedCreative?.id === item.id) {
-      setSelectedCreative(null);
-      setBrief(null);
-      setCreativeId(null);
+    try {
+      const response = await fetch(`/api/static-library/${item.id}`, {
+        method: "DELETE",
+      });
+      await readApiResponse<{ ok?: boolean }>(
+        response,
+        "No se pudo borrar la pieza.",
+      );
+      setGallery((current) =>
+        current.filter((creative) => creative.id !== item.id),
+      );
+      if (selectedCreative?.id === item.id) {
+        setSelectedCreative(null);
+        setBrief(null);
+        setCreativeId(null);
+      }
+      setMessage("La pieza se borró de la galería.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "No se pudo borrar la pieza.",
+      );
     }
-    setMessage("La pieza se borró de la galería.");
   }
 
   async function handleCorrection() {
@@ -414,9 +425,10 @@ export function StaticStudio({
           instruction: correction.trim(),
         }),
       });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "No se pudo corregir la imagen.");
+      const data = await readApiResponse<{ static: GeneratedStatic }>(
+        response,
+        "No se pudo corregir la imagen.",
+      );
       const edited = data.static as GeneratedStatic;
       setGallery((current) => [edited, ...current]);
       setSelectedCreative(edited);
