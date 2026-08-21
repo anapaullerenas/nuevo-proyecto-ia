@@ -362,7 +362,8 @@ export function StaticStudio({
       setRemainingProposals(pending);
       setVariantOffset((current) => current + 1);
       setMessage(
-        created[0]?.status === "needs_review"
+        created[0]?.status === "needs_review" ||
+          created[0]?.qa_report?.veredicto === "regenerar"
           ? `La pieza quedó visible, pero el control de calidad detectó: ${created[0]?.qa_report?.razon || "un problema que requiere revisión"}.`
           : pending > 0
           ? `Propuesta creada y guardada. Revísala antes de generar ${pending === 1 ? "la siguiente" : `las ${pending} restantes`}.`

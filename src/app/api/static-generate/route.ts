@@ -318,7 +318,9 @@ export async function POST(request: NextRequest) {
             generation_attempts: generationAttempts,
             qa_failure_reason: qa.veredicto === "regenerar" ? qa.razon : null,
           },
-          status: qa.veredicto === "regenerar" ? "needs_review" : "generated",
+          // QA details carry the review state; keep the persisted lifecycle status
+          // compatible with every deployed database revision.
+          status: "generated",
         })
         .select(
           "id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,status,qa_report,created_at",
