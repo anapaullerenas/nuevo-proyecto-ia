@@ -29,7 +29,7 @@ export default async function CrearEstaticosPage() {
       .select("id,storage_path,prompt,ficha,archetype,format,funnel_stage,quality,version,parent_id,status,qa_report,created_at")
       .eq("brand_id", workspace.activeBrand.id)
       .eq("owner_id", workspace.user.id)
-      .in("status", ["generated", "edited", "needs_review"])
+      .in("status", ["generated", "edited", "needs_review", "downloaded"])
       .order("created_at", { ascending: false })
       .limit(30),
     workspace.supabase

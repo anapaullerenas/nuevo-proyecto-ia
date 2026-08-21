@@ -14,10 +14,11 @@ import {
 } from "@/lib/ai/static-composer";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  authorizeCredits,
   chargeCredits,
   CREDIT_COSTS,
+  CreditError,
   creditErrorStatus,
-  refundCredits,
 } from "@/lib/credits";
 import { estimateCostUsd } from "@/lib/ai/provider-pricing";
 import {
@@ -186,9 +187,8 @@ export async function POST(request: NextRequest) {
     (quality === "high"
       ? CREDIT_COSTS.static_generate_high
       : CREDIT_COSTS.static_generate_medium);
-  let creditCharge;
   try {
-    creditCharge = await chargeCredits({
+    await authorizeCredits({
       userId: user.id,
       amount: creditAmount,
       reason:
@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
         brandAssetCount: (productAsset ? 1 : 0) + logoSources.length,
       });
 
-      let generatedImage = await generateImage({
+      const generatedImage = await generateImage({
         supabase,
         prompt,
         format: body.format,
@@ -253,13 +253,13 @@ export async function POST(request: NextRequest) {
         productAsset,
         styleReferences,
       });
-      let composition = await composeGeneratedImage(
+      const composition = await composeGeneratedImage(
         generatedImage,
         variantFicha,
         logoSources,
       );
-      let image = composition.image;
-      let qa = await inspectStaticImage({
+      const image = composition.image;
+      const qa = await inspectStaticImage({
         supabase,
         image,
         productAsset,
@@ -268,33 +268,9 @@ export async function POST(request: NextRequest) {
         textVerification: composition.verification,
         composeError: composition.composeError,
       });
-      let generationAttempts = 1;
-      while (qa.veredicto === "regenerar" && generationAttempts < 3) {
-        generationAttempts += 1;
-        generatedImage = await generateImage({
-          supabase,
-          prompt: `${prompt}\n\nREGENERACIÓN ${generationAttempts - 1} DE 2 OBLIGATORIA TRAS QA: ${qa.razon}. Corrige exactamente este problema sin cambiar el producto ni el mensaje.`,
-          format: body.format,
-          quality,
-          productAsset,
-          styleReferences,
-        });
-        composition = await composeGeneratedImage(
-          generatedImage,
-          variantFicha,
-          logoSources,
-        );
-        image = composition.image;
-        qa = await inspectStaticImage({
-          supabase,
-          image,
-          productAsset,
-          format: body.format,
-          ficha: variantFicha,
-          textVerification: composition.verification,
-          composeError: composition.composeError,
-        });
-      }
+      // Always persist the first completed result. Automatic retries can outlive
+      // the server request and used to leave the user with neither image nor credit.
+      const generationAttempts = 1;
 
       const storagePath = `${user.id}/${brand.id}/static-${Date.now()}-${crypto.randomUUID()}.png`;
       const buffer = Buffer.from(image, "base64");
@@ -306,10 +282,6 @@ export async function POST(request: NextRequest) {
           upsert: false,
         });
       if (uploadError) throw new Error(uploadError.message);
-
-      const { data: signed } = await supabase.storage
-        .from("creative-assets")
-        .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
 
       const { data: saved, error: saveError } = await supabase
         .from("static_creatives")
@@ -353,7 +325,61 @@ export async function POST(request: NextRequest) {
         )
         .single();
 
-      if (saveError) throw new Error(saveError.message);
+      if (saveError || !saved) {
+        await supabase.storage.from("creative-assets").remove([storagePath]);
+        throw new Error(saveError?.message || "No se pudo guardar la imagen.");
+      }
+
+      try {
+        const perImageCost =
+          quality === "high"
+            ? CREDIT_COSTS.static_generate_high
+            : CREDIT_COSTS.static_generate_medium;
+        const creditCharge = await chargeCredits({
+          userId: user.id,
+          amount: perImageCost,
+          reason:
+            quality === "high" ? "static_generate_high" : "static_generate_medium",
+          brandId: brand.id,
+          provider: "openai",
+          model: `gpt-image-2-${quality}`,
+          images: 1,
+          costUsd: estimateCostUsd({
+            provider: "openai",
+            model: `gpt-image-2-${quality}`,
+            images: 1,
+          }),
+        });
+        await supabase
+          .from("static_creatives")
+          .update({
+            metadata: {
+              qa,
+              compose_error: composition.composeError,
+              text_verification: composition.verification,
+              format_reference: staticFormatReferencePayload(
+                variantFicha.arquetipo,
+              ),
+              generation_attempts: generationAttempts,
+              qa_failure_reason: qa.veredicto === "regenerar" ? qa.razon : null,
+              credit_operation_id: creditCharge.operationId,
+            },
+          })
+          .eq("id", saved.id)
+          .eq("owner_id", user.id);
+      } catch (error) {
+        await supabase
+          .from("static_creatives")
+          .delete()
+          .eq("id", saved.id)
+          .eq("owner_id", user.id);
+        await supabase.storage.from("creative-assets").remove([storagePath]);
+        throw error;
+      }
+
+      const { data: signed } = await supabase.storage
+        .from("creative-assets")
+        .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
 
       results.push({
         ...saved,
@@ -363,25 +389,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ statics: results });
   } catch (error) {
-    const refunded =
-      !creditCharge.charged ||
-      (await refundCredits(
-        user.id,
-        creditCharge.amount,
-        quality === "high" ? "static_generate_high" : "static_generate_medium",
-        brand.id,
-        creditCharge.operationId,
-      ));
     console.error("static generation failed", error);
     const failure = imageGenerationFailure(error);
+    const creditStatus = creditErrorStatus(error);
     return NextResponse.json(
       {
-        error: refunded
-          ? failure.message
-          : "No pudimos generar la imagen ni confirmar la devolución automática. Escríbenos para revisarlo con el historial de tu cuenta.",
+        error: error instanceof CreditError ? error.message : failure.message,
         code: failure.code,
       },
-      { status: failure.status },
+      { status: creditStatus === 500 ? failure.status : creditStatus },
     );
   }
 }
