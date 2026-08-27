@@ -31,7 +31,7 @@ import {
   type StyleReference,
 } from "@/components/ReferenceUploader";
 import { CREDIT_COSTS } from "@/lib/credit-catalog";
-import { readApiResponse } from "@/lib/http/api-response";
+import { ApiResponseError, readApiResponse } from "@/lib/http/api-response";
 import type { BrandEvidence, StaticEvidence } from "@/lib/static-format-catalog";
 
 type BrandAsset = {
@@ -370,10 +370,16 @@ export function StaticStudio({
           : "Propuesta creada y guardada en la galería.",
       );
     } catch (error) {
+      const errorLabel =
+        error instanceof ApiResponseError
+          ? `IMG-${error.status}${error.code ? `-${error.code}` : ""}`
+          : "IMG-NET";
       setMessage(
-        error instanceof Error
-          ? error.message
-          : "No se pudo generar la imagen.",
+        `${
+          error instanceof Error
+            ? error.message
+            : "No se pudo generar la imagen."
+        } Código: ${errorLabel}.`,
       );
     } finally {
       setBusy(null);
